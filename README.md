@@ -1,5 +1,7 @@
 # Tbps_CRC
-A SytemVerilog implementation of Cyclic Redundancy Check runs at up to Terabits per second
+A SytemVerilog implementation of Cyclic Redundancy Check runs at up to Terabits per second. 
+
+**Zenodo DOI of this repository: 10.5281/zenodo.7226144**.
 
 ## Core HDL code for CRC calculation
 The core code of Tbps CRC is located in the `core_src` directory. There are 3 files in the folder: `crc.sv` contains the SystemVerilog module, which computes the CRC without the byte-enabled feature; `crc_byteEn.sv` contains the byte-enabled version of the SystemVerilog module; `crc.svh` contains SystemVerilog constant functions that run at elaboration (pre-synthesis) time.
