@@ -29,10 +29,11 @@ module crc_byteEn_top(
         .XOR_OUT      (`XOR_OUT      ),
         .REFIN        (`REFIN        ),
         .REFOUT       (`REFOUT       )
-    ) u_crc_gen_byteEn(
+    ) u_crc_gen (
     	.clk         (clk             ),
         .rst         (rst_reg         ),
         .din         (din_reg         ),
+        .byteEn      (byteEn_reg      ),
         .dlast       (dlast_reg       ),
         .flitEn      (flitEn_reg      ),
         .crc_out     (crc_out_wire    ),

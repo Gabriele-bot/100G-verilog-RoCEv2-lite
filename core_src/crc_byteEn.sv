@@ -140,17 +140,16 @@ module crc_gen_byteEn #
             end
         end
     end
-
 //input signal pipelining logic
     always_comb begin
         crc_rev_en_pipe_wire = {$clog2(DWIDTH/8){1'b0}};
-        for (int i = 0; i < $clog2(DWIDTH/8); i++) begin
-            for (int j = 0; j < 2**i; j++)
-                crc_rev_en_pipe_wire[i] = crc_rev_en_pipe_wire[i] | (~byteEn[DWIDTH/8-1-DWIDTH/8/2**(i+1)-j*(DWIDTH/8/2**i)] & byteEn[DWIDTH/8-1-j*(DWIDTH/8/2**i)]);
+
+        for (int i = 0; i < DWIDTH/8; i++) begin
+            crc_rev_en_pipe_wire = crc_rev_en_pipe_wire + {~byteEn[i]};
         end
     end
     always_ff @(posedge clk) begin
-        crc_rev_en_pipe_reg[0] <= crc_rev_en_pipe_wire;
+        crc_rev_en_pipe_reg[0] <= {<<{crc_rev_en_pipe_wire}};
         dlast_reg[0] <= dlast;
         flitEn_reg[0] <= flitEn;
         for (int i = 1; i <= PIPE_LVL; i++) begin

@@ -35,9 +35,9 @@ proc timeout_warning {} {
     puts "routing timeout, skipping"
 }
 
-foreach name {"CRC5-USB" "CRC8-Bluetooth" "CRC10-CDMA2000" "CRC16-IBM" "CRC32-Ethernet" "CRC64-ECMA"} poly {"5'h05" "8'hA7" "10'h3D9" "16'h8005" "32'h04C11DB7" "64'h42F0E1EBA9EA3693"} crc_width {5 8 10 16 32 64} init_hex {"5'b0" "8'b0" "10'b0" "16'b0" "32'hffffffff" "64'b0"} xorout {"5'b0" "8'b0" "10'b0" "16'b0" "32'hffffffff" "64'b0"} refin {"1'b0" "1'b0" "1'b0" "1'b0" "1'b1" "1'b0"} refout {"1'b0" "1'b0" "1'b0" "1'b0" "1'b1" "1'b0"} {
-    set pipe_lvl 1
-    foreach bus_width {4096} {
+foreach name {"CRC5-USB" "CRC16-IBM" "CRC32-Ethernet" "CRC64-ECMA"} poly {"5'h05" "16'h8005" "32'h04C11DB7" "64'h42F0E1EBA9EA3693"} crc_width {5 16 32 64} init_hex {"5'b0" "16'b0" "32'hffffffff" "64'b0"} xorout {"5'b0" "16'b0" "32'hffffffff" "64'b0"} refin {"1'b0" "1'b0" "1'b1" "1'b0"} refout {"1'b0" "1'b0" "1'b1" "1'b0"} {
+    foreach bus_width {64 512 2048 8192} pipe_lvl_start {0 0 1 2} {
+        set pipe_lvl $pipe_lvl_start
         puts "run poly: $name, bus width: $bus_width"
         set slack_met 0
         set init 1
@@ -95,17 +95,18 @@ foreach name {"CRC5-USB" "CRC8-Bluetooth" "CRC10-CDMA2000" "CRC16-IBM" "CRC32-Et
         }
         report_timing_summary -nworst 10 -file $log_dir/${file_prefix}timing_${name}_${bus_width}_${pipe_lvl}.log
         report_utilization -cells [get_cells u_crc_gen] -file $log_dir/${file_prefix}resource_${name}_${bus_width}.log
+        regexp {CLB[ ]+\|[ ]+([0-9]+)} [report_utilization -cells [get_cells u_crc_gen] -return_string] matched clbs
         regexp {CLB LUTs[ ]+\|[ ]+([0-9]+)} [report_utilization -cells [get_cells u_crc_gen] -return_string] matched luts
         regexp {CLB Registers[ ]+\|[ ]+([0-9]+)} [report_utilization -cells [get_cells u_crc_gen] -return_string] matched ffs
         set throughput [format "%.1f" [expr $bus_width/2.0]]
         if {$byteEn} {
-            set latency [format "%.1f" [expr 2*($pipe_lvl+2+log($bus_width/8)/log(2)]]
+            set latency [format "%.1f" [expr 2*($pipe_lvl+2+log($bus_width/8)/log(2))]]
         } else {
             set latency [format "%.1f" [expr 2*($pipe_lvl+1)]]
         }
-        puts "$name,$poly,$bus_width:$pipe_lvl,$throughput,$latency,$luts,$ffs"
+        puts "$name,$poly,$bus_width:$pipe_lvl,$throughput,$latency,$clbs,$luts,$ffs"
         set result_f [open $result_csv a]
-        puts $result_f "$name,$poly,$bus_width,$pipe_lvl,$throughput,$latency,$luts,$ffs"
+        puts $result_f "$name,$poly,$bus_width,$pipe_lvl,$throughput,$latency,$clbs,$luts,$ffs"
         close $result_f
         close_project
     }

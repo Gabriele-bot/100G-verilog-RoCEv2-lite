@@ -136,7 +136,7 @@ function bit [$clog2(DWIDTH/8)-1:0][CRC_WIDTH-1:0][CRC_WIDTH-1:0] get_revert_tab
         for (int j = 0; j < CRC_WIDTH; j++) begin
             table_old[j][j] = 1'b1;
         end
-        for (int j = 0; j < DWIDTH/(2**(i+1)); j++) begin
+        for (int j = 0; j < 8*2**($clog2(DWIDTH/8)-1-i); j++) begin
             revert_table[i][CRC_WIDTH-1] = table_old[0];
             for (int k = 0; k < CRC_WIDTH-1; k++) begin
                 if (CRC_POLY[k+1])

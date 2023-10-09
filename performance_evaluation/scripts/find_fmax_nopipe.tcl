@@ -103,7 +103,7 @@ foreach name {"CRC5-USB" "CRC8-Bluetooth" "CRC10-CDMA2000" "CRC16-IBM" "CRC32-Et
         }
         set throughput [format "%.1f" [expr $bus_width*$fmax/1000.0]]
         if {$byteEn} {
-            set latency [format "%.1f" [expr (1000.0/$fmax)*(2+log($bus_width/8)/log(2)]]
+            set latency [format "%.1f" [expr (1000.0/$fmax)*(2+log($bus_width/8)/log(2))]]
         } else {
             set latency [format "%.1f" [expr 1000.0/$fmax]]
         }
