@@ -28,7 +28,7 @@ The summarized results can be found under /performance_evaluation/outputs.
 
 **The default configuration of the test is based on Xilinx's Alveo U250. User should modify the `config.mk` and the files under `constraints` for a different target board.**
 
-##References
+## References
 To cite this work, reference the following paper:
 
 Q. Clark Shen, J. C. Vega and P. Chow, "Parallel CRC On An FPGA At Terabit Speeds," 2022 International Conference on Field-Programmable Technology (ICFPT), Hong Kong, 2022, pp. 1-6, doi: 10.1109/ICFPT56656.2022.9974233.
