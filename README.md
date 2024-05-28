@@ -59,3 +59,6 @@ For example with `DATA=0110` we obatin `0101`
 
 ## VHDL block
 Coming soon
+
+
+The complete explanation can be found [here](http://www.ee.unb.ca/cgi-bin/tervo/polygen2.pl?d=4&p=10001&s=1&c=1&a=0&g=1)
