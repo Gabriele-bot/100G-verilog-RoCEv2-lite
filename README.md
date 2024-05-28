@@ -1,6 +1,6 @@
 # CRC32 VHDL block
 
-## Computation (exaple with crc4 and data width=4)
+## Computation (example with crc4 and data width=4)
 For a CRC4 and data width=4 a generator matrix needs to be 4x8.  
 
 ### Poly Matrix
