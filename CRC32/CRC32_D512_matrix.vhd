@@ -46,6 +46,10 @@ architecture RTL of CRC32_D512_matrix is
     signal partial_crc_data : partial_crc_t;
 
 begin
+    
+    assert CRC_POLY(0) = '1'
+    report "Polynomyal must end with 1"
+    severity FAILURE;
 
     data <= data_in;
     keep <= keep_in;
