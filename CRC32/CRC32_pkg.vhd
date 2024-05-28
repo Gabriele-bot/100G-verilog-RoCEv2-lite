@@ -3,6 +3,10 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package CRC32_pkg is
+    
+    -- +============================================+
+    -- |             !LITTLE ENDIAN!                |
+    -- +============================================+
 
     constant CRC32_POLY  : std_logic_vector(31 downto 0) := X"04C11DB7";
     constant CRC32C_POLY : std_logic_vector(31 downto 0) := X"1EDC6F41";
@@ -37,45 +41,9 @@ package CRC32_pkg is
     function gen_matrix_array(matrix : in matrix_32x32_t; n : integer)
     return gen_matrix_array_t;
 
-    -- +============================================+
-    -- |              LITTLE ENDIAN                 |
-    -- +============================================+
-    constant MATRIX_LE_IDX0 : matrix_32x32_t := (
-        0  => X"04d101df",
-        1  => X"09a203be",
-        2  => X"1344077d",
-        3  => X"26880efa",
-        4  => X"4d101df4",
-        5  => X"9a203be9",
-        6  => X"3091760d",
-        7  => X"6122ec1a",
-        8  => X"c245d835",
-        9  => X"805ab1b5",
-        10 => X"046462b5",
-        11 => X"08c8c56a",
-        12 => X"11918ad4",
-        13 => X"232315a9",
-        14 => X"46462b53",
-        15 => X"8c8c56a6",
-        16 => X"1dc9ac92",
-        17 => X"3b935924",
-        18 => X"7726b249",
-        19 => X"ee4d6493",
-        20 => X"d84bc8f9",
-        21 => X"b446902d",
-        22 => X"6c5c2184",
-        23 => X"d8b84309",
-        24 => X"b5a187cc",
-        25 => X"6f920e46",
-        26 => X"df241c8c",
-        27 => X"ba9938c7",
-        28 => X"71e37051",
-        29 => X"e3c6e0a3",
-        30 => X"c35cc098",
-        31 => X"826880ef"
-    );
-
-    constant CRC_MATRIX_EXP_ARRAY : gen_matrix_array_t(15 downto 0) := gen_matrix_array(MATRIX_LE_IDX0, 16);
+    
+    constant MATRIX_CRC32_LE_IDX0 : matrix_32x32_t := get_check_matrix(CRC32_POLY);
+    constant CRC32_MATRIX_EXP_ARRAY : gen_matrix_array_t(15 downto 0) := gen_matrix_array(MATRIX_CRC32_LE_IDX0, 16);
 
     subtype crc32_word_t is std_logic_vector(31 downto 0);
 
@@ -87,8 +55,8 @@ package body CRC32_pkg is
     return matrix_32x32_t is
         variable matrix_transp : matrix_32x32_t;
     begin
-        outer_loop : for i in 0 to MATRIX_LE_IDX0'high loop
-            inner_loop : for j in 0 to MATRIX_LE_IDX0'high loop
+        outer_loop : for i in 0 to matrix'high loop
+            inner_loop : for j in 0 to matrix'high loop
                 matrix_transp(j)(i) := matrix(i)(j);
             end loop;
         end loop;
@@ -99,7 +67,7 @@ package body CRC32_pkg is
     return std_logic_vector is
         variable prod : std_logic_vector(vector'high downto 0);
     begin
-        gen_prod_l : for i in 0 to MATRIX_LE_IDX0'high loop
+        gen_prod_l : for i in 0 to matrix'high loop
             prod(i) := xor (matrix(i) and vector);
         end loop;
         return prod;
@@ -111,8 +79,8 @@ package body CRC32_pkg is
         variable matrix_transposed : matrix_32x32_t;
     begin
         matrix_transposed := matrix_transpose(matrix_2);
-        outer_loop : for i in 0 to MATRIX_LE_IDX0'high loop
-            inner_loop : for j in 0 to MATRIX_LE_IDX0'high loop
+        outer_loop : for i in 0 to matrix_1'high loop
+            inner_loop : for j in 0 to matrix_transposed'high loop
                 matrix_prod(i)(j) := xor (matrix_1(i) and matrix_transposed(j));
             end loop;
         end loop;
