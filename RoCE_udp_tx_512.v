@@ -162,8 +162,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
     reg [23:0] roce_bth_dest_qp_reg = 24'd0;
     reg        roce_bth_ack_req_reg = 1'd0;
 
-    reg [23:0] roce_reth_v_addr_reg = 63'd0;
-    reg [23:0] roce_reth_r_key_reg  = 32'd0;
+    reg [63:0] roce_reth_v_addr_reg = 64'd0;
+    reg [31:0] roce_reth_r_key_reg  = 32'd0;
     reg [31:0] roce_reth_length_reg = 32'd0;
 
     //reg [15:0] udp_source_port_reg = 16'd0;
@@ -423,8 +423,6 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
             shift_roce_payload_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[511:288];
             shift_roce_payload_axis_tkeep[27:0] = save_roce_payload_axis_tkeep_reg[63:36];
         end
-
-
         if (shift_roce_payload_extra_cycle_reg) begin
             shift_roce_payload_bth_axis_tdata[511:96]   = 416'd0;
             shift_roce_payload_bth_axis_tkeep[63:12]    = 52'd0;
@@ -459,7 +457,6 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                 shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] == 0));
                 shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:36] == 0));
             end
-
         end else begin
             shift_roce_payload_bth_axis_tdata[511:96]   = s_roce_payload_axis_tdata[415:0];
             shift_roce_payload_bth_axis_tkeep[63:12]    = s_roce_payload_axis_tkeep[51:0];
@@ -518,20 +515,23 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                 s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                 s_roce_reth_ready_next = !m_udp_hdr_valid_next;
 
-                s_roce_payload_axis_tready_next = 1'b1;
+                //s_roce_payload_axis_tready_next = 1'b0;
+                s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
                 shift_roce_payload_late_header_next = 1'b0;
 
                 //roce_header_length_bits_int = 8'd0;
 
                 flush_save = 1'b0;
-                transfer_in_save = 1'b1;
+                //transfer_in_save = 1'b1;
 
                 if (s_roce_bth_ready && s_roce_bth_valid &&  ~s_roce_reth_valid) begin
                     store_bth = 1'b1;
                     s_roce_bth_ready_next = 1'b0;
                     m_udp_hdr_valid_next = 1'b1;
                     state_next = STATE_WRITE_BTH;
-                    if (m_udp_payload_axis_tready_int_reg) begin
+                    s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
+                    if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
+                        transfer_in_save = 1'b1;
                         m_udp_payload_axis_tvalid_int = 1'b1;
                         m_udp_payload_axis_tdata_int[ 7: 0]  = s_roce_bth_op_code[7:0];
                         m_udp_payload_axis_tdata_int[8]      = 1'b0; // Solicited Event
@@ -591,7 +591,9 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     s_roce_reth_ready_next = 1'b0;
                     m_udp_hdr_valid_next = 1'b1;
                     state_next = STATE_WRITE_BTH_RETH;
-                    if (m_udp_payload_axis_tready_int_reg) begin
+                    s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
+                    if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
+                        transfer_in_save = 1'b1;
                         m_udp_payload_axis_tvalid_int = 1'b1;
                         m_udp_payload_axis_tdata_int[ 7: 0]    = s_roce_bth_op_code[7:0];
                         m_udp_payload_axis_tdata_int[8]        = 1'b0; // Solicited Event
@@ -662,6 +664,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                                 state_next = STATE_WRITE_PAYLOAD;
                             end
                         end
+                        
 
                     end
                 end else if (shift_roce_payload_axis_tvalid && !s_roce_bth_valid) begin
@@ -688,6 +691,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     //m_udp_hdr_valid_next = 1'b1;
                     state_next = STATE_WRITE_BTH;
                     if (m_udp_payload_axis_tready_int_reg) begin
+                        transfer_in_save = 1'b1;
                         m_udp_payload_axis_tvalid_int = 1'b1;
                         m_udp_payload_axis_tdata_int[ 7: 0]  = s_roce_bth_op_code[7:0];
                         m_udp_payload_axis_tdata_int[8]      = 1'b0; // Solicited Event
@@ -748,6 +752,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     //m_udp_hdr_valid_next = 1'b1;
                     state_next = STATE_WRITE_BTH_RETH;
                     if (m_udp_payload_axis_tready_int_reg) begin
+                        transfer_in_save = 1'b1;
                         m_udp_payload_axis_tvalid_int = 1'b1;
                         m_udp_payload_axis_tdata_int[ 7: 0]    = s_roce_bth_op_code[7:0];
                         m_udp_payload_axis_tdata_int[8]        = 1'b0; // Solicited Event
@@ -789,7 +794,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                         s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
                         roce_header_length_bits_int = 8'd224;
                         roce_header_length_bytes_int = 5'd28;
-
+                        
                         word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) - 16'd8; // udp hdr
 
                         //state_next = STATE_WRITE_PAYLOAD;
@@ -817,6 +822,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                                 state_next = STATE_WRITE_PAYLOAD;
                             end
                         end
+                        
+                        
 
                     end
                 end else begin
@@ -843,7 +850,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     m_udp_payload_axis_tdata_int[47: 40]   = roce_bth_dest_qp_reg[23:16];
                     m_udp_payload_axis_tdata_int[55: 48]   = roce_bth_dest_qp_reg[15:8];
                     m_udp_payload_axis_tdata_int[63: 56]   = roce_bth_dest_qp_reg[7:0];
-                    m_udp_payload_axis_tdata_int[64]       = roce_bth_dest_qp_reg;
+                    m_udp_payload_axis_tdata_int[64]       = roce_bth_ack_req_reg;
                     m_udp_payload_axis_tdata_int[71: 65]   = 7'b0; // Reserved
                     m_udp_payload_axis_tdata_int[79: 72]   = roce_bth_psn_reg[23:16];
                     m_udp_payload_axis_tdata_int[87: 80]   = roce_bth_psn_reg[15:8];
@@ -856,6 +863,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     roce_header_length_bytes_int = 5'd12;
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
+                    
+                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) - 16'd8; // udp hdr
 
                     if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
                         // have entire payload
@@ -887,9 +896,12 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
             end
             STATE_WRITE_BTH_RETH: begin
                 s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+                //s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
                 // write bth and reth state
-                if (m_udp_payload_axis_tready_int_reg) begin
+                //if (m_udp_payload_axis_tready_int_reg ) begin
+                if (s_roce_payload_axis_tready && s_roce_payload_axis_tvalid) begin
                     // word transfer out
+                    transfer_in_save = 1'b1;
                     m_udp_payload_axis_tvalid_int = 1'b1;
                     m_udp_payload_axis_tdata_int[7: 0]    = roce_bth_op_code_reg[7:0];
                     m_udp_payload_axis_tdata_int[8]        = 1'b0; // Solicited Event
@@ -930,6 +942,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                     roce_header_length_bytes_int = 5'd28;
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
+                    
+                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) - 16'd8; // udp hdr
 
                     if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
                         // have entire payload
@@ -937,6 +951,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
                         if (shift_roce_payload_axis_tlast) begin
                             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                             s_roce_payload_axis_tready_next = 1'b0;
+                            m_udp_payload_axis_tlast_int = 1'b1;
                             state_next = STATE_IDLE;
                         end else begin
                             store_last_word = 1'b1;

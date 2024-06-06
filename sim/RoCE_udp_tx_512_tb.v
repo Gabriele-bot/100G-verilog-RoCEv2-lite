@@ -34,6 +34,9 @@ module RoCE_udp_tx_512_tb();
     wire s_roce_payload_axis_tuser;
     wire s_roce_payload_axis_tready;
 
+    wire s_roce_payload_axis_tvalid_1;
+    reg  s_roce_payload_axis_tvalid_2;
+
     reg [511:0] s_axis_tdata;
     reg [63:0] s_axis_tkeep;
     reg s_axis_tvalid;
@@ -56,12 +59,12 @@ module RoCE_udp_tx_512_tb();
     reg [23:0] s_roce_bth_dest_qp = 24'd16;
     reg        s_roce_bth_ack_req = 1'd1;
 
-    reg [63:0] s_roce_reth_v_addr = 63'd12435;
+    reg [63:0] s_roce_reth_v_addr = 64'd12435;
     reg [31:0] s_roce_reth_r_key = 32'd233;
     reg [31:0] s_roce_reth_length = 32'd444;
 
-    reg [47:0] s_eth_dest_mac = 48'd12452112311;
-    reg [47:0] s_eth_src_mac = 48'd231876543;
+    reg [47:0] s_eth_dest_mac = 48'd124521111;
+    reg [47:0] s_eth_src_mac = 48'd2318743;
     reg [15:0] s_eth_type = 16'd123;
     reg [ 3:0] s_ip_version = 4'd2;
     reg [ 3:0] s_ip_ihl = 4'd2;
@@ -77,12 +80,12 @@ module RoCE_udp_tx_512_tb();
     reg [31:0] s_ip_dest_ip = 32'd3214;
     reg [15:0] s_udp_source_port = 16'd2321;
     reg [15:0] s_udp_dest_port = 16'd123;
-    reg [15:0] s_udp_length = 16'd64;
+    reg [15:0] s_udp_length = 16'd1400;
     reg [15:0] s_udp_checksum = 16'd0;
 
     reg[63:0] word_counter = 64'd0;
     reg[32:0] random_value = 32'd0;
-    
+
     reg enable_input;
 
     wire busy;
@@ -91,7 +94,7 @@ module RoCE_udp_tx_512_tb();
     integer i;
     integer j;
     integer k;
-    
+
     function [15:0] keep2count;
         input [63:0] k;
         casez (k)
@@ -234,7 +237,7 @@ module RoCE_udp_tx_512_tb();
             default : count2keep =    64'b1111111111111111111111111111111111111111111111111111111111111111;
         endcase
     endfunction
-    
+
 
     // ==========================================================================
     // ==                                  DUT                                 ==
@@ -282,7 +285,7 @@ module RoCE_udp_tx_512_tb();
         .s_roce_payload_axis_tlast(s_roce_payload_axis_tlast),
         .s_roce_payload_axis_tuser(1'b0),
         .m_udp_hdr_valid(),
-        .m_udp_hdr_ready(),
+        .m_udp_hdr_ready(1'b1),
         .m_eth_dest_mac(),
         .m_eth_src_mac(),
         .m_eth_type(),
@@ -320,8 +323,13 @@ module RoCE_udp_tx_512_tb();
     assign s_roce_payload_axis_tlast = (word_counter+64+28+8 >= s_udp_length) ? 1'b1 : 1'b0;
     assign s_roce_payload_axis_tuser = s_axis_tuser;
 
-    assign s_roce_bth_valid = s_roce_bth_valid_reg;
-    assign s_roce_reth_valid = s_roce_reth_valid_reg;
+    assign s_roce_payload_axis_tvalid_1 = s_roce_payload_axis_tvalid;
+    always @(posedge clk) begin
+        s_roce_payload_axis_tvalid_2 <= s_roce_payload_axis_tvalid_1;
+    end
+
+    assign s_roce_bth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
+    assign s_roce_reth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
 
     assign m_udp_payload_axis_tready = m_axis_tready;
 
@@ -343,7 +351,7 @@ module RoCE_udp_tx_512_tb();
 
         s_roce_bth_valid_reg <= 1'b0;
         s_roce_reth_valid_reg <= 1'b0;
-        
+
         enable_input <= 1'b0;
 
 
@@ -373,28 +381,35 @@ module RoCE_udp_tx_512_tb();
                     s_roce_bth_valid_reg <= 1'b0;
                     s_roce_reth_valid_reg <= 1'b0;
                     s_axis_tvalid <= 1'b1;
+                    m_axis_tready <= 1'b1;
+                end
+
+                #(1 * C_CLK_PERIOD) begin
+                    s_roce_bth_valid_reg <= 1'b0;
+                    s_roce_reth_valid_reg <= 1'b0;
+                    s_axis_tvalid <= 1'b1;
                     m_axis_tready <= 1'b0;
                 end
 
                 #(1 * C_CLK_PERIOD) begin
                     s_roce_bth_valid_reg <= 1'b0;
                     s_roce_reth_valid_reg <= 1'b0;
-                    s_axis_tvalid <= 1'b1;
-                    m_axis_tready <= 1'b1;
-                end
-
-                #(1 * C_CLK_PERIOD) begin
-                    s_roce_bth_valid_reg <= 1'b0;
-                    s_roce_reth_valid_reg <= 1'b0;
                     s_axis_tvalid <= 1'b0;
-                    m_axis_tready <= 1'b1;
+                    m_axis_tready <= 1'b0;
                 end
-
+                
                 #(1 * C_CLK_PERIOD) begin
                     s_roce_bth_valid_reg <= 1'b0;
                     s_roce_reth_valid_reg <= 1'b0;
                     s_axis_tvalid <= 1'b1;
                     m_axis_tready <= 1'b1;
+                end
+
+                #(4 * C_CLK_PERIOD) begin
+                    s_roce_bth_valid_reg <= 1'b0;
+                    s_roce_reth_valid_reg <= 1'b0;
+                    s_axis_tvalid <= 1'b1;
+                    m_axis_tready <= 1'b0;
                 end
 
                 //#(1 * C_CLK_PERIOD) begin
@@ -435,7 +450,12 @@ module RoCE_udp_tx_512_tb();
             word_counter <= 0;
         end
         if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tready )begin
-            word_counter <= word_counter + 64;
+            if ((word_counter+8+28 <= s_udp_length)) begin
+                word_counter <= word_counter + 64;
+                random_value <= $random;
+            end
+        end else if (word_counter+8+28 >= s_udp_length) begin
+            word_counter <= 0;
             random_value <= $random;
         end
     end
