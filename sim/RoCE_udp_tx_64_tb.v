@@ -26,6 +26,13 @@ module RoCE_udp_tx_64_tb();
     wire m_udp_payload_axis_tlast;
     wire m_udp_payload_axis_tuser;
     wire m_udp_payload_axis_tready;
+    
+    wire [63:0] m_udp_payload_axis_icrc_tdata;
+    wire [7:0] m_udp_payload_axis_icrc_tkeep;
+    wire m_udp_payload_axis_icrc_tvalid;
+    wire m_udp_payload_axis_icrc_tlast;
+    wire m_udp_payload_axis_icrc_tuser;
+    wire m_udp_payload_axis_icrc_tready;
 
     wire [63:0] s_roce_payload_axis_tdata;
     wire [7:0] s_roce_payload_axis_tkeep;
@@ -80,7 +87,7 @@ module RoCE_udp_tx_64_tb();
     reg [31:0] s_ip_dest_ip = 32'd3214;
     reg [15:0] s_udp_source_port = 16'd2321;
     reg [15:0] s_udp_dest_port = 16'd123;
-    reg [15:0] s_udp_length = 16'd1400;
+    reg [15:0] s_udp_length = 16'd128;
     reg [15:0] s_udp_checksum = 16'd0;
 
     reg[63:0] word_counter = 64'd0;
@@ -113,15 +120,16 @@ module RoCE_udp_tx_64_tb();
     function [7:0] count2keep;
         input [3:0] k;
         case (k)
-            4'd0: count2keep = 8'b00000000;
-            4'd1: count2keep = 8'b00000001;
-            4'd2: count2keep = 8'b00000011;
-            4'd3: count2keep = 8'b00000111;
-            4'd4: count2keep = 8'b00001111;
-            4'd5: count2keep = 8'b00011111;
-            4'd6: count2keep = 8'b00111111;
-            4'd7: count2keep = 8'b01111111;
-            4'd8: count2keep = 8'b11111111;
+            4'd0: count2keep     = 8'b00000000;
+            4'd1: count2keep     = 8'b00000001;
+            4'd2: count2keep     = 8'b00000011;
+            4'd3: count2keep     = 8'b00000111;
+            4'd4: count2keep     = 8'b00001111;
+            4'd5: count2keep     = 8'b00011111;
+            4'd6: count2keep     = 8'b00111111;
+            4'd7: count2keep     = 8'b01111111;
+            4'd8: count2keep     = 8'b11111111;
+            default : count2keep = 8'b11111111;
         endcase
     endfunction
 
@@ -202,12 +210,33 @@ module RoCE_udp_tx_64_tb();
         .busy(busy),
         .error_payload_early_termination(error_payload_early_termination)
     );
+    
+    axis_RoCE_icrc_insert_64 #(
+        .ENABLE_PADDING(0),
+        .MIN_FRAME_LENGTH(64)
+    ) axis_RoCE_icrc_insert_64_instance(
+        .clk(clk),
+        .rst(~resetn),
+        .s_axis_tdata(m_udp_payload_axis_tdata),
+        .s_axis_tkeep(m_udp_payload_axis_tkeep),
+        .s_axis_tvalid(m_udp_payload_axis_tvalid),
+        .s_axis_tready(m_udp_payload_axis_tready),
+        .s_axis_tlast(m_udp_payload_axis_tlast),
+        .s_axis_tuser(m_udp_payload_axis_tuser),
+        .m_axis_tdata(m_udp_payload_axis_icrc_tdata),
+        .m_axis_tkeep(m_udp_payload_axis_icrc_tkeep),
+        .m_axis_tvalid(m_udp_payload_axis_icrc_tvalid),
+        .m_axis_tready(m_udp_payload_axis_icrc_tready),
+        .m_axis_tlast(m_udp_payload_axis_icrc_tlast),
+        .m_axis_tuser(m_udp_payload_axis_icrc_tuser),
+        .busy(busy)
+    );
 
 
     //assign s_roce_payload_axis_tdata = s_axis_tdata;
     assign s_roce_payload_axis_tkeep = s_roce_payload_axis_tlast ? count2keep(s_udp_length-word_counter-28-8) : {8{1'b1}};
     assign s_roce_payload_axis_tvalid = ((word_counter+8+28 <= s_udp_length) ? 1'b1 : 1'b0) && enable_input;
-    assign s_roce_payload_axis_tlast = (word_counter+64+28+8 >= s_udp_length) ? 1'b1 : 1'b0;
+    assign s_roce_payload_axis_tlast = (word_counter+8+28+8 >= s_udp_length) ? 1'b1 : 1'b0;
     assign s_roce_payload_axis_tuser = s_axis_tuser;
 
     assign s_roce_payload_axis_tvalid_1 = s_roce_payload_axis_tvalid;
@@ -218,7 +247,7 @@ module RoCE_udp_tx_64_tb();
     assign s_roce_bth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
     assign s_roce_reth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
 
-    assign m_udp_payload_axis_tready = m_axis_tready;
+    assign m_udp_payload_axis_icrc_tready = m_axis_tready;
 
     // Clock generation.
     always begin
