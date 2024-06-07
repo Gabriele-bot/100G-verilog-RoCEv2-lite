@@ -53,6 +53,10 @@ module RoCE_udp_tx_64
     input wire [63:0]   s_roce_reth_v_addr,
     input wire [31:0]   s_roce_reth_r_key,
     input wire [31:0]   s_roce_reth_length,
+    // IMMD
+    input wire          s_roce_immdh_valid,
+    output wire         s_roce_immdh_ready,
+    input wire [31:0]   s_roce_immdh_data,
     // udp, ip, eth
     input  wire [47:0]  s_eth_dest_mac,
     input  wire [47:0]  s_eth_src_mac,
@@ -105,8 +109,8 @@ module RoCE_udp_tx_64
     output wire [15:0]  m_udp_dest_port,
     output wire [15:0]  m_udp_length,
     output wire [15:0]  m_udp_checksum,
-    output wire [63:0] m_udp_payload_axis_tdata,
-    output wire [7:0]  m_udp_payload_axis_tkeep,
+    output wire [63:0]  m_udp_payload_axis_tdata,
+    output wire [7:0]   m_udp_payload_axis_tkeep,
     output wire         m_udp_payload_axis_tvalid,
     input  wire         m_udp_payload_axis_tready,
     output wire         m_udp_payload_axis_tlast,
@@ -161,14 +165,16 @@ interface.
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
     localparam [1:0]
-    HEADER_BTH = 2'd0,
-    HEADER_BTH_RETH = 2'd1;
+    HEADER_BTH            = 2'd0,
+    HEADER_BTH_RETH       = 2'd1,
+    HEADER_BTH_RETH_IMMDH = 2'd2;
 
     reg [1:0] header_type = HEADER_BTH;
 
     // datapath control signals
     reg store_roce_bth;
     reg store_roce_reth;
+    reg store_roce_immdh;
     reg store_last_word;
 
     reg [5:0] hdr_ptr_reg = 6'd0, hdr_ptr_next;
@@ -176,6 +182,7 @@ interface.
 
     reg flush_save;
     reg transfer_in_save;
+    reg pass_through;
 
     reg [19:0] hdr_sum_temp;
     reg [19:0] hdr_sum_reg = 20'd0, hdr_sum_next;
@@ -193,6 +200,8 @@ interface.
     reg [31:0] roce_reth_r_key_reg  = 32'd0;
     reg [31:0] roce_reth_length_reg = 32'd0;
 
+    reg [31:0] roce_immdh_data_reg = 32'd0;
+
     //reg [15:0] udp_source_port_reg = 16'd0;
     //reg [15:0] udp_dest_port_reg   = 16'd0;
     //reg [15:0] udp_length_reg      = 16'd0;
@@ -200,6 +209,7 @@ interface.
 
     reg s_roce_bth_ready_reg = 1'b0, s_roce_bth_ready_next;
     reg s_roce_reth_ready_reg = 1'b0, s_roce_reth_ready_next;
+    reg s_roce_immdh_ready_reg = 1'b0, s_roce_immdh_ready_next;
     reg s_roce_payload_axis_tready_reg = 1'b0, s_roce_payload_axis_tready_next;
 
     //reg s_udp_hdr_ready_reg = 1'b0, s_udp_hdr_ready_next;
@@ -235,6 +245,7 @@ interface.
     reg save_roce_payload_axis_tlast_reg = 1'b0;
     reg save_roce_payload_axis_tuser_reg = 1'b0;
 
+
     reg [63:0] shift_roce_payload_axis_tdata;
     reg [7:0] shift_roce_payload_axis_tkeep;
     reg shift_roce_payload_axis_tvalid;
@@ -254,6 +265,7 @@ interface.
 
     assign s_roce_bth_ready = s_roce_bth_ready_reg;
     assign s_roce_reth_ready = s_roce_reth_ready_reg;
+    assign s_roce_immdh_ready = s_roce_immdh_ready_reg;
     assign s_roce_payload_axis_tready = s_roce_payload_axis_tready_reg;
 
     assign m_udp_hdr_valid = m_udp_hdr_valid_reg;
@@ -338,6 +350,7 @@ interface.
 
         s_roce_bth_ready_next = 1'b0;
         s_roce_reth_ready_next = 1'b0;
+        s_roce_immdh_ready_next = 1'b0;
         s_roce_payload_axis_tready_next = 1'b0;
 
         store_roce_bth = 1'b0;
@@ -347,6 +360,7 @@ interface.
 
         flush_save = 1'b0;
         transfer_in_save = 1'b0;
+        pass_through     = 1'b0;
 
         hdr_ptr_next = hdr_ptr_reg;
         word_count_next = word_count_reg;
@@ -371,13 +385,19 @@ interface.
                 flush_save = 1'b1;
                 s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                 s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                 if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid) begin
                     header_type = HEADER_BTH;
                     store_roce_bth = 1'b1;
-                end else if ( s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid) begin
+                end else if ( s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid && ~s_roce_immdh_valid) begin
                     header_type = HEADER_BTH_RETH;
                     store_roce_bth = 1'b1;
                     store_roce_reth = 1'b1;
+                end else if ( s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid && s_roce_immdh_ready && s_roce_immdh_valid) begin
+                    header_type = HEADER_BTH_RETH_IMMDH;
+                    store_roce_bth = 1'b1;
+                    store_roce_reth = 1'b1;
+                    store_roce_immdh = 1'b1;
                 end else begin
                     header_type = HEADER_BTH;
                     store_roce_bth = 1'b1;
@@ -385,19 +405,9 @@ interface.
 
                 if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid) begin
 
-                    /*
-                    hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
-                    s_ip_length +
-                    s_ip_identification +
-                    {s_ip_flags, s_ip_fragment_offset} +
-                    {s_ip_ttl, s_ip_protocol} +
-                    s_ip_source_ip[31:16] +
-                    s_ip_source_ip[15: 0] +
-                    s_ip_dest_ip[31:16] +
-                    s_ip_dest_ip[15: 0];
-                    */
                     s_roce_bth_ready_next = 1'b0;
                     s_roce_reth_ready_next = 1'b0;
+                    s_roce_immdh_ready_next = 1'b0;
                     m_udp_hdr_valid_next = 1'b1;
 
 
@@ -428,19 +438,9 @@ interface.
                     end
                 end else if (s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid) begin
 
-                    /*
-                    hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
-                    s_ip_length +
-                    s_ip_identification +
-                    {s_ip_flags, s_ip_fragment_offset} +
-                    {s_ip_ttl, s_ip_protocol} +
-                    s_ip_source_ip[31:16] +
-                    s_ip_source_ip[15: 0] +
-                    s_ip_dest_ip[31:16] +
-                    s_ip_dest_ip[15: 0];
-                    */
                     s_roce_bth_ready_next = 1'b0;
                     s_roce_reth_ready_next = 1'b0;
+                    s_roce_immdh_ready_next = 1'b0;
                     m_udp_hdr_valid_next = 1'b1;
 
 
@@ -465,9 +465,6 @@ interface.
                         m_udp_payload_axis_tdata_int[64]     = s_roce_bth_ack_req;
                         m_udp_payload_axis_tkeep_int = 8'hff;
                         hdr_ptr_next = 6'd8;
-                        if (header_type == HEADER_BTH) begin
-                            state_next = STATE_WRITE_HEADER_LAST;
-                        end
                     end
 
                     state_next = STATE_WRITE_HEADER;
@@ -481,6 +478,8 @@ interface.
                     word_count_next = m_udp_length_reg - 8 - 12;
                 end else if (header_type == HEADER_BTH_RETH) begin
                     word_count_next = m_udp_length_reg - 8 - 12 - 16;
+                end else if (header_type == HEADER_BTH_RETH_IMMDH) begin
+                    word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
                 end else begin
                     word_count_next = m_udp_length_reg - 8 - 12;
                 end
@@ -530,8 +529,32 @@ interface.
                             m_udp_payload_axis_tdata_int[55: 48] = roce_reth_r_key_reg[15:8];
                             m_udp_payload_axis_tdata_int[63: 56] = roce_reth_r_key_reg[7:0];
                             m_udp_payload_axis_tkeep_int = 8'hff;
+                            if (header_type == HEADER_BTH_RETH) begin
+                                s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
+                                state_next = STATE_WRITE_HEADER_LAST;
+                            end
+                        end
+                        6'h18: begin
+                            m_udp_payload_axis_tdata_int[7: 0]   = roce_reth_length_reg[31:24];
+                            m_udp_payload_axis_tdata_int[15: 8]  = roce_reth_length_reg[23:16];
+                            m_udp_payload_axis_tdata_int[23: 16] = roce_reth_length_reg[15:8];
+                            m_udp_payload_axis_tdata_int[31: 24] = roce_reth_length_reg[7:0];
+                            m_udp_payload_axis_tdata_int[39: 32] = roce_immdh_data_reg[31:24];
+                            m_udp_payload_axis_tdata_int[47: 40] = roce_immdh_data_reg[23:16];
+                            m_udp_payload_axis_tdata_int[55: 48] = roce_immdh_data_reg[15:8];
+                            m_udp_payload_axis_tdata_int[63: 56] = roce_immdh_data_reg[7:0];
+                            m_udp_payload_axis_tkeep_int = 8'hff;
                             s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-                            state_next = STATE_WRITE_HEADER_LAST;
+                            if (m_udp_length_reg <= 8 + 12 + 16 + 4) begin
+                                //no payload actually
+                                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+                                s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                                s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
+                                s_roce_payload_axis_tready_next = 1'b0;
+                                state_next = STATE_IDLE;
+                            end else begin
+                                state_next = STATE_WRITE_PAYLOAD;
+                            end
                         end
                     endcase
                 end else begin
@@ -569,6 +592,7 @@ interface.
                         if (shift_roce_payload_axis_tlast) begin
                             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                             s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                            s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                             s_roce_payload_axis_tready_next = 1'b0;
                             state_next = STATE_IDLE;
                         end else begin
@@ -594,13 +618,21 @@ interface.
             end
             STATE_WRITE_PAYLOAD: begin
                 // write payload
-                s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+                if (header_type == HEADER_BTH_RETH_IMMDH) begin
+                    s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
-                m_udp_payload_axis_tdata_int = shift_roce_payload_axis_tdata;
-                m_udp_payload_axis_tkeep_int = shift_roce_payload_axis_tkeep;
-                m_udp_payload_axis_tlast_int = shift_roce_payload_axis_tlast;
-                m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
+                    m_udp_payload_axis_tdata_int = s_roce_payload_axis_tdata;
+                    m_udp_payload_axis_tkeep_int = s_roce_payload_axis_tkeep;
+                    m_udp_payload_axis_tlast_int = s_roce_payload_axis_tlast;
+                    m_udp_payload_axis_tuser_int = s_roce_payload_axis_tuser;
+                end else begin
+                    s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
 
+                    m_udp_payload_axis_tdata_int = shift_roce_payload_axis_tdata;
+                    m_udp_payload_axis_tkeep_int = shift_roce_payload_axis_tkeep;
+                    m_udp_payload_axis_tlast_int = shift_roce_payload_axis_tlast;
+                    m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
+                end
                 store_last_word = 1'b1;
 
                 if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
@@ -621,6 +653,7 @@ interface.
                             flush_save = 1'b1;
                             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                             s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                            s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                             state_next = STATE_IDLE;
                         end else begin
                             m_udp_payload_axis_tvalid_int = 1'b0;
@@ -635,6 +668,7 @@ interface.
                             flush_save = 1'b1;
                             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                             s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                            s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                             state_next = STATE_IDLE;
                         end else begin
                             state_next = STATE_WRITE_PAYLOAD;
@@ -658,6 +692,7 @@ interface.
                     if (shift_roce_payload_axis_tlast) begin
                         s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                         s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                        s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                         s_roce_payload_axis_tready_next = 1'b0;
                         m_udp_payload_axis_tvalid_int = 1'b1;
                         state_next = STATE_IDLE;
@@ -677,6 +712,7 @@ interface.
                     if (shift_roce_payload_axis_tlast) begin
                         s_roce_bth_ready_next = !m_udp_hdr_valid_next;
                         s_roce_reth_ready_next = !m_udp_hdr_valid_next;
+                        s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
                         s_roce_payload_axis_tready_next = 1'b0;
                         state_next = STATE_IDLE;
                     end else begin
@@ -705,12 +741,13 @@ interface.
 
             s_roce_bth_ready_reg <= s_roce_bth_ready_next;
             s_roce_reth_ready_reg <= s_roce_reth_ready_next;
+            s_roce_immdh_ready_reg <= s_roce_immdh_ready_next;
 
             s_roce_payload_axis_tready_reg <= s_roce_payload_axis_tready_next;
 
             m_udp_hdr_valid_reg <= m_udp_hdr_valid_next;
 
-            busy_reg <= state_next != STATE_IDLE;
+            busy_reg <= (state_next != STATE_IDLE) ? 1'b1 : 1'b0;
 
             error_payload_early_termination_reg <= error_payload_early_termination_next;
 
@@ -760,6 +797,8 @@ interface.
             roce_reth_v_addr_reg = s_roce_reth_v_addr;
             roce_reth_r_key_reg  = s_roce_reth_r_key;
             roce_reth_length_reg = s_roce_reth_length;
+
+            roce_immdh_data_reg = s_roce_immdh_data;
 
         end
 

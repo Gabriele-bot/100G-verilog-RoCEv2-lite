@@ -26,7 +26,14 @@ module RoCE_udp_tx_64_tb();
     wire m_udp_payload_axis_tlast;
     wire m_udp_payload_axis_tuser;
     wire m_udp_payload_axis_tready;
-    
+
+    wire [63:0] m_udp_payload_axis_masked_tdata;
+    wire [7:0] m_udp_payload_axis_masked_tkeep;
+    wire m_udp_payload_axis_masked_tvalid;
+    wire m_udp_payload_axis_masked_tlast;
+    wire m_udp_payload_axis_masked_tuser;
+    wire m_udp_payload_axis_masked_tready;
+
     wire [63:0] m_udp_payload_axis_icrc_tdata;
     wire [7:0] m_udp_payload_axis_icrc_tkeep;
     wire m_udp_payload_axis_icrc_tvalid;
@@ -54,11 +61,14 @@ module RoCE_udp_tx_64_tb();
 
     wire s_roce_bth_valid;
     wire s_roce_reth_valid;
+    wire s_roce_immdh_valid;
 
     reg s_roce_bth_valid_reg;
     wire s_roce_bth_ready;
     reg s_roce_reth_valid_reg;
     wire s_roce_reth_ready;
+    reg s_roce_immdh_valid_reg;
+    wire s_roce_immdh_ready;
 
     reg [ 7:0] s_roce_bth_op_code = 8'd2;
     reg [15:0] s_roce_bth_p_key = 16'd4552;
@@ -69,6 +79,8 @@ module RoCE_udp_tx_64_tb();
     reg [63:0] s_roce_reth_v_addr = 64'd12435;
     reg [31:0] s_roce_reth_r_key = 32'd233;
     reg [31:0] s_roce_reth_length = 32'd444;
+
+    reg [31:0] s_roce_immdh_data = 32'd5555;
 
     reg [47:0] s_eth_dest_mac = 48'd124521111;
     reg [47:0] s_eth_src_mac = 48'd2318743;
@@ -154,6 +166,9 @@ module RoCE_udp_tx_64_tb();
         .s_roce_reth_v_addr(s_roce_reth_v_addr),
         .s_roce_reth_r_key(s_roce_reth_r_key),
         .s_roce_reth_length(s_roce_reth_length),
+        .s_roce_immdh_valid(s_roce_immdh_valid),
+        .s_roce_immdh_ready(s_roce_immdh_ready),
+        .s_roce_immdh_data(s_roce_immdh_data),
         .s_eth_dest_mac(s_eth_dest_mac),
         .s_eth_src_mac(s_eth_src_mac),
         .s_eth_type(s_eth_type),
@@ -207,14 +222,13 @@ module RoCE_udp_tx_64_tb();
         .m_udp_payload_axis_tready(m_udp_payload_axis_tready),
         .m_udp_payload_axis_tlast(m_udp_payload_axis_tlast),
         .m_udp_payload_axis_tuser(m_udp_payload_axis_tuser),
-        .busy(busy),
+        .busy(),
         .error_payload_early_termination(error_payload_early_termination)
     );
-    
-    axis_RoCE_icrc_insert_64 #(
-        .ENABLE_PADDING(0),
-        .MIN_FRAME_LENGTH(64)
-    ) axis_RoCE_icrc_insert_64_instance(
+
+    axis_mask_fields_icrc #(
+    .DATA_WIDTH(64)
+    ) axis_mask_fields_icrc_instance(
         .clk(clk),
         .rst(~resetn),
         .s_axis_tdata(m_udp_payload_axis_tdata),
@@ -223,13 +237,33 @@ module RoCE_udp_tx_64_tb();
         .s_axis_tready(m_udp_payload_axis_tready),
         .s_axis_tlast(m_udp_payload_axis_tlast),
         .s_axis_tuser(m_udp_payload_axis_tuser),
+        .m_axis_tdata(m_udp_payload_axis_masked_tdata),
+        .m_axis_tkeep(m_udp_payload_axis_masked_tkeep),
+        .m_axis_tvalid(m_udp_payload_axis_masked_tvalid),
+        .m_axis_tready(m_udp_payload_axis_masked_tready),
+        .m_axis_tlast(m_udp_payload_axis_masked_tlast),
+        .m_axis_tuser(m_udp_payload_axis_masked_tuser)
+    );
+
+    axis_RoCE_icrc_insert_64 #(
+        .ENABLE_PADDING(0),
+        .MIN_FRAME_LENGTH(64)
+    ) axis_RoCE_icrc_insert_64_instance(
+        .clk(clk),
+        .rst(~resetn),
+        .s_axis_tdata(m_udp_payload_axis_masked_tdata),
+        .s_axis_tkeep(m_udp_payload_axis_masked_tkeep),
+        .s_axis_tvalid(m_udp_payload_axis_masked_tvalid),
+        .s_axis_tready(m_udp_payload_axis_masked_tready),
+        .s_axis_tlast(m_udp_payload_axis_masked_tlast),
+        .s_axis_tuser(m_udp_payload_axis_masked_tuser),
         .m_axis_tdata(m_udp_payload_axis_icrc_tdata),
         .m_axis_tkeep(m_udp_payload_axis_icrc_tkeep),
         .m_axis_tvalid(m_udp_payload_axis_icrc_tvalid),
         .m_axis_tready(m_udp_payload_axis_icrc_tready),
         .m_axis_tlast(m_udp_payload_axis_icrc_tlast),
         .m_axis_tuser(m_udp_payload_axis_icrc_tuser),
-        .busy(busy)
+        .busy()
     );
 
 
@@ -246,6 +280,7 @@ module RoCE_udp_tx_64_tb();
 
     assign s_roce_bth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
     assign s_roce_reth_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
+    assign s_roce_immdh_valid = (s_roce_payload_axis_tvalid_1 && ~s_roce_payload_axis_tvalid_2) ? 1'b1 : 1'b0;
 
     assign m_udp_payload_axis_icrc_tready = m_axis_tready;
 
@@ -267,6 +302,7 @@ module RoCE_udp_tx_64_tb();
 
         s_roce_bth_valid_reg <= 1'b0;
         s_roce_reth_valid_reg <= 1'b0;
+        s_roce_immdh_valid_reg <= 1'b0;
 
         enable_input <= 1'b0;
 
@@ -282,6 +318,7 @@ module RoCE_udp_tx_64_tb();
         #(1 * C_CLK_PERIOD) begin
             s_roce_bth_valid_reg <= 1'b1;
             s_roce_reth_valid_reg <= 1'b1;
+            s_roce_immdh_valid_reg <= 1'b1;
             s_axis_tvalid <= 1'b1;
             enable_input <= 1'b1;
         end
@@ -313,7 +350,7 @@ module RoCE_udp_tx_64_tb();
                     s_axis_tvalid <= 1'b0;
                     m_axis_tready <= 1'b0;
                 end
-                
+
                 #(1 * C_CLK_PERIOD) begin
                     s_roce_bth_valid_reg <= 1'b0;
                     s_roce_reth_valid_reg <= 1'b0;

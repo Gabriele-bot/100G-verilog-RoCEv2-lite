@@ -27,6 +27,13 @@ module RoCE_udp_tx_512_tb();
     wire m_udp_payload_axis_tuser;
     wire m_udp_payload_axis_tready;
     
+    wire [511:0] m_udp_payload_axis_masked_tdata;
+    wire [63:0] m_udp_payload_axis_masked_tkeep;
+    wire m_udp_payload_axis_masked_tvalid;
+    wire m_udp_payload_axis_masked_tlast;
+    wire m_udp_payload_axis_masked_tuser;
+    wire m_udp_payload_axis_masked_tready;
+    
     wire [511:0] m_udp_payload_axis_icrc_tdata;
     wire [63:0] m_udp_payload_axis_icrc_tkeep;
     wire m_udp_payload_axis_icrc_tvalid;
@@ -323,10 +330,9 @@ module RoCE_udp_tx_512_tb();
         .error_payload_early_termination(error_payload_early_termination)
     );
     
-    axis_RoCE_icrc_insert_512 #(
-        .ENABLE_PADDING(0),
-        .MIN_FRAME_LENGTH(64)
-    ) axis_RoCE_icrc_insert_512_instance(
+    axis_mask_fields_icrc #(
+        .DATA_WIDTH(512)
+    ) axis_mask_fields_icrc_instance(
         .clk(clk),
         .rst(~resetn),
         .s_axis_tdata(m_udp_payload_axis_tdata),
@@ -335,6 +341,26 @@ module RoCE_udp_tx_512_tb();
         .s_axis_tready(m_udp_payload_axis_tready),
         .s_axis_tlast(m_udp_payload_axis_tlast),
         .s_axis_tuser(m_udp_payload_axis_tuser),
+        .m_axis_tdata(m_udp_payload_axis_masked_tdata),
+        .m_axis_tkeep(m_udp_payload_axis_masked_tkeep),
+        .m_axis_tvalid(m_udp_payload_axis_masked_tvalid),
+        .m_axis_tready(m_udp_payload_axis_masked_tready),
+        .m_axis_tlast(m_udp_payload_axis_masked_tlast),
+        .m_axis_tuser(m_udp_payload_axis_masked_tuser)
+    );
+    
+    axis_RoCE_icrc_insert_512 #(
+        .ENABLE_PADDING(0),
+        .MIN_FRAME_LENGTH(64)
+    ) axis_RoCE_icrc_insert_512_instance(
+        .clk(clk),
+        .rst(~resetn),
+        .s_axis_tdata(m_udp_payload_axis_masked_tdata),
+        .s_axis_tkeep(m_udp_payload_axis_masked_tkeep),
+        .s_axis_tvalid(m_udp_payload_axis_masked_tvalid),
+        .s_axis_tready(m_udp_payload_axis_masked_tready),
+        .s_axis_tlast(m_udp_payload_axis_masked_tlast),
+        .s_axis_tuser(m_udp_payload_axis_masked_tuser),
         .m_axis_tdata(m_udp_payload_axis_icrc_tdata),
         .m_axis_tkeep(m_udp_payload_axis_icrc_tkeep),
         .m_axis_tvalid(m_udp_payload_axis_icrc_tvalid),
