@@ -62,7 +62,7 @@ module axis_mask_fields_icrc #
     always @* begin
 
         steps_next = steps_reg;
-        
+
         upper_index = DATA_WIDTH*(steps_reg+1);
 
         if (s_axis_tvalid && s_axis_tready && s_axis_tlast) begin
