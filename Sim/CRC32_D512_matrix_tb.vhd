@@ -69,38 +69,7 @@ begin
 
         -----------------------------------------------------------------------------------------------------------
     begin
-        --if (rst = '1') then
-        --    v_data_row_counter := 0;
-        --    v_data_read        := (others => -1);
-        --------------------------------------
-        --elsif (rising_edge(clk)) then
-        --
-        --    if (ena = '1' and not file_in_end) then         -- external enable signal
-        --
-        --        data_in  <= (others => '0');
-        --        keep_in  <= (others => '0');
-        --        valid_in <= '1';
-        --
-        --        for i in 0 to 15 loop
-        --            -- read from input file in "row" variable;
-        --            if (not endfile(test_vector)) then
-        --                v_data_row_counter := v_data_row_counter + 1;
-        --                readline(test_vector, row);
-        --
-        --                for kk in 1 to NUM_COL loop
-        --                    read(row, v_data_read(kk));
-        --                end loop;
-        --                
-        --                data_in(32 * (i + 1) - 1 downto 32 * i) <= std_logic_vector(to_unsigned(v_data_read(1), 32));
-        --                keep_in(4 * (i + 1) - 1 downto 4 * i)   <= X"F";
-        --
-        --            else
-        --                file_in_end <= true;
-        --                valid_in    <= '0';
-        --            end if;
-        --        end loop;
-        --    end if;
-        --end if;
+        
         if (rst = '1') then
             v_data_row_counter := 0;
             v_data_read        := -1;

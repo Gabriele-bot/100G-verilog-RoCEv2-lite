@@ -6,6 +6,9 @@ use work.CRC32_pkg.all;
 
 entity CRC32_D512_matrix_pipeline is
     generic(
+        DATA_WIDTH     : integer                       := 512;
+        CRC_POLY       : std_logic_vector(31 downto 0) := CRC32_POLY;
+        CRC_INIT       : std_logic_vector(31 downto 0) := X"FFFFFFFF";
         REVERSE_INPUT  : boolean                       := FALSE;
         REVERSE_RESULT : boolean                       := FALSE;
         FINXOR         : std_logic_vector(31 downto 0) := X"00000000"
@@ -13,9 +16,9 @@ entity CRC32_D512_matrix_pipeline is
     port(
         clk           : in  std_logic;
         rst           : in  std_logic;
-        crcIn         : in  std_logic_vector(31 downto 0); -- It needs to be fed 1 clock cycle before the expected output
-        data_in       : in  std_logic_vector(511 downto 0);
-        keep_in       : in  std_logic_vector(63 downto 0);
+        rst_crc       : in  std_logic;
+        data_in       : in  std_logic_vector(DATA_WIDTH - 1 downto 0);
+        keep_in       : in  std_logic_vector(DATA_WIDTH / 8 - 1 downto 0);
         valid_in      : in  std_logic;
         crcOut        : out std_logic_vector(31 downto 0);
         valid_crc_out : out std_logic
@@ -24,34 +27,68 @@ end entity CRC32_D512_matrix_pipeline;
 
 architecture RTL of CRC32_D512_matrix_pipeline is
 
-    constant LATENCY : natural := 16;
+    constant LATENCY : natural := DATA_WIDTH / 32;
+
+    constant CRC32_POLY_MATRIX  : matrix_32x64_t := get_poly_matrix(CRC_POLY);
+    constant CRC32_GEN_MATRIX   : matrix_32x64_t := get_generator_matrix(CRC_POLY);
+    constant CRC32_CHECK_MATRIX : matrix_32x32_t := get_check_matrix(CRC_POLY);
+
+    constant MATRIX_ARRAY : gen_matrix_array_t := gen_matrix_array(CRC32_CHECK_MATRIX, 16);
 
     signal out_partial_crc : crc32_word_t;
     signal out_crc         : crc32_word_t;
 
-    signal valid_shreg : std_logic_vector(LATENCY downto 0);
+    signal valid_shreg : std_logic_vector(LATENCY downto 0) := (others => '0');
 
-    type keep_pipeline_stage_t is array (LATENCY downto 0) of std_logic_vector(63 downto 0);
-    signal keep_shreg : keep_pipeline_stage_t;
+    type keep_pipeline_stage_t is array (LATENCY downto 0) of std_logic_vector(DATA_WIDTH / 8 - 1 downto 0);
+    signal keep_shreg : keep_pipeline_stage_t := (others => (others => '0'));
 
-    signal data : std_logic_vector(511 downto 0);
+    signal data : std_logic_vector(DATA_WIDTH - 1 downto 0);
 
-    type partial_crc_t is array (15 downto 0) of crc32_word_t;
-    signal partial_crc_data : partial_crc_t;
-    signal partial_crc_seed : partial_crc_t;
+    type partial_crc_t is array (LATENCY downto 0) of crc32_word_t;
+    signal partial_crc_data      : partial_crc_t;
+    signal partial_crc_init_seed : partial_crc_t;
+    signal partial_crc_last_seed : partial_crc_t;
+    signal crc_seed              : crc32_word_t;
 
-    type crc_pipeline_stage_t is array (7 downto 0) of crc32_word_t;
+    type crc_pipeline_stage_t is array (LATENCY downto 0) of crc32_word_t;
     signal crc_stage : crc_pipeline_stage_t;
 
-    type data_pipeline_stage_t is array (8 downto 0) of std_logic_vector(511 downto 0);
+    type data_pipeline_stage_t is array (LATENCY downto 0) of std_logic_vector(DATA_WIDTH - 1 downto 0);
     signal data_stage : data_pipeline_stage_t;
+
+    signal test_in_value : std_logic_vector(31 downto 0);
+
+    signal keep_block_number : integer range 1 to DATA_WIDTH / 32;
 
 begin
 
+    gen_keep_to_block : if DATA_WIDTH = 512 generate
+        process(clk) is
+        begin
+            if rising_edge(clk) then
+                if valid_shreg(LATENCY - 2) then
+                    keep_block_number <= keep2blocknumber_64(keep_shreg(LATENCY - 2));
+                end if;
+            end if;
+        end process;
+    elsif DATA_WIDTH = 64 generate
+        process(clk) is
+        begin
+            if rising_edge(clk) then
+                if valid_shreg(LATENCY - 2) then
+                    keep_block_number <= keep2blocknumber_8(keep_shreg(LATENCY - 2));
+                end if;
+            end if;
+        end process;
+    else generate
+        keep_block_number <= 0;
+    end generate;
+
     --TODO REVERSE also keep!!!
     everse_in_g : if REVERSE_INPUT generate
-        reverse_g : for i in 0 to 511 generate
-            data(i) <= data_in(511 - i);
+        reverse_g : for i in 0 to DATA_WIDTH - 1 generate
+            data(i) <= data_in(DATA_WIDTH - 1 - i);
         end generate;
     else generate
         data <= data_in;
@@ -81,41 +118,78 @@ begin
         end if;
     end process;
 
-    process(clk)
+    test_in_value <= data_stage(0)(31 downto 0);
+
+    crc_stage_0 : process(clk)
     begin
         if rising_edge(clk) then
-            if keep_shreg(0)(3 downto 0) = X"F" then
-                crc_stage(0) <= matrix_vector_mul(CRC_MATRIX_EXP_ARRAY(0), data_stage(0)(31 downto 0));
-            else                        --this shuld never happen
+            if keep_shreg(0)(3 downto 0) = X"F" and keep_shreg(0)(7 downto 4) = X"F" then
+                crc_stage(0) <= matrix_vector_mul(MATRIX_ARRAY(0), data_stage(0)(31 downto 0));
+            else                        --this shuld never happen for valid data words
                 crc_stage(0) <= (others => '0');
             end if;
         end if;
     end process;
-    
-    -- this is not clocked !!!
-    gen_crc_seed_matrix_vector_mul_g : for i in 0 to 15 generate
-        process(crcIn) is
-        begin
-            partial_crc_seed(15 - i) <= matrix_vector_mul(CRC_MATRIX_EXP_ARRAY(i), crcIn);
-        end process;
+
+    gen_mid_block : if LATENCY >= 3 generate
+        gen_crc_stage_g : for i in 1 to LATENCY - 2 generate
+            process(clk)
+                variable data_xor_crc : crc32_word_t;
+            begin
+                if rising_edge(clk) then
+                    if keep_shreg(i)((i + 1) * 4 - 1 downto (i) * 4) = X"F" then
+                        data_xor_crc := data_stage(i)((i + 1) * 32 - 1 downto i * 32) xor crc_stage(i - 1);
+                        crc_stage(i) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc);
+                    else
+                        crc_stage(i) <= crc_stage(i - 1);
+                    end if;
+                end if;
+            end process;
+        end generate;
     end generate;
 
-    gen_crc_stage_g : for i in 1 to 14 generate
-        process(clk)
+    gen_last_block : if LATENCY >= 2 generate
+        crc_stage_last : process(clk)
             variable data_xor_crc : crc32_word_t;
         begin
             if rising_edge(clk) then
-                if keep_shreg(i)((i + 1) * 4 - 1 downto (i) * 4) = X"F" and keep_shreg(i)((i + 2) * 4 - 1 downto (i+1) * 4) = X"0"  then
-                    data_xor_crc := data_stage(i)((i + 1) * 32 - 1 downto i * 32) xor crc_stage(i-1);
-                    crc_stage(i) <= matrix_vector_mul(CRC_MATRIX_EXP_ARRAY(0), data_xor_crc) xor partial_crc_seed(i);
-                elsif keep_shreg(i)((i + 1) * 4 - 1 downto (i) * 4) = X"F" and keep_shreg(i)((i + 2) * 4 - 1 downto (i+1) * 4) = X"F"then
-                    data_xor_crc := data_stage(i)((i + 1) * 32 - 1 downto i * 32) xor crc_stage(i-1);
-                    crc_stage(i) <= matrix_vector_mul(CRC_MATRIX_EXP_ARRAY(0), data_xor_crc);
-                else
-                    crc_stage(i) <= crc_stage(i-1);
+                if keep_shreg(LATENCY - 1)(LATENCY * 4 - 1 downto (LATENCY - 1) * 4) = X"F" then
+                    data_xor_crc           := data_stage(LATENCY - 1)((LATENCY) * 32 - 1 downto (LATENCY - 1) * 32) xor crc_stage(LATENCY - 2);
+                    crc_stage(LATENCY - 1) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc) xor crc_seed;
+                else                    --this shuld never happen
+                    crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 2) xor crc_seed;
                 end if;
             end if;
         end process;
     end generate;
+
+    out_crc  <= crc_stage(LATENCY - 1);
+    -- this is not clocked !!!
+    -- compute every stage of the init crc out
+    gen_crc_seed_matrix_vector_mul_g : for i in 0 to LATENCY - 1 generate
+        partial_crc_init_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), CRC_INIT);
+        partial_crc_last_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), out_crc);
+    end generate;
+    crc_seed <= partial_crc_init_seed(keep_block_number - 1) when rst_crc or not valid_crc_out else partial_crc_last_seed(keep_block_number - 1);
+    --process(clk) is
+    --begin
+    --    if rising_edge(clk) then
+    --        if rst_crc or not valid_crc_out then
+    --            partial_crc_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), CRC_INIT);
+    --        else
+    --            partial_crc_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), out_crc);
+    --        end if;
+    --    end if;
+    --end process;
+
+    reverse_out_g : if REVERSE_RESULT generate
+        reverse_g : for i in 0 to 31 generate
+            crcOut(i) <= out_crc(31 - i) xor FINXOR(31 - i);
+        end generate;
+    else generate
+        crcOut <= out_crc xor FINXOR;
+    end generate;
+
+    valid_crc_out <= valid_shreg(valid_shreg'high);
 
 end architecture RTL;
