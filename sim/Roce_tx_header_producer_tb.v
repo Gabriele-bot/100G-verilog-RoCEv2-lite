@@ -106,7 +106,7 @@ module Roce_tx_header_producer_tb ();
   reg                             [63:0] word_counter = 64'd0;
   reg                             [32:0] random_value = 32'd0;
 
-  reg                             [15:0] dma_length = 16'd3200;
+  reg                             [31:0] dma_length = 32'd32000;
 
   reg                                    enable_input;
 
@@ -159,6 +159,12 @@ module Roce_tx_header_producer_tb ();
   ) Roce_tx_header_producer_instance (
       .clk(clk),
       .rst(~resetn),
+      .s_dma_length(dma_length),
+      .s_rem_qpn(24'd16),
+      .s_rem_psn(24'd123456),
+      .s_r_key(32'hFEEDBEEF),
+      .s_rem_ip_addr(32'h0BD40116),
+      .s_rem_addr(48'h12345678),
       .s_axis_tdata(s_payload_axis_tdata),
       .s_axis_tkeep(s_payload_axis_tkeep),
       .s_axis_tvalid(s_payload_axis_tvalid),
@@ -210,8 +216,8 @@ module Roce_tx_header_producer_tb ();
 
   //assign s_roce_payload_axis_tdata = s_axis_tdata;
   assign s_payload_axis_tkeep  = s_payload_axis_tlast ? count2keep(word_counter) : {8{1'b1}};
-  assign s_payload_axis_tvalid = ((word_counter  <= dma_length + 16) ? 1'b1 : 1'b0) && enable_input;
-  assign s_payload_axis_tlast  = (word_counter >= dma_length) ? 1'b1 : 1'b0;
+  assign s_payload_axis_tvalid = ((word_counter + 8  <= dma_length) ? 1'b1 : 1'b0) && enable_input;
+  assign s_payload_axis_tlast  = (word_counter + 8 >= dma_length) ? 1'b1 : 1'b0;
   assign s_payload_axis_tuser  = s_axis_tuser;
 
 
