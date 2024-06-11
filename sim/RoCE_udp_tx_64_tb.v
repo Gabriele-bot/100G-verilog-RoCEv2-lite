@@ -18,7 +18,7 @@ module RoCE_udp_tx_64_tb();
     // ==========================================================================
     // Simulation (DUT inputs and outputs).
     reg clk;
-    reg resetn;
+    reg rst;
 
     wire [63:0] m_udp_payload_axis_tdata;
     wire [7:0] m_udp_payload_axis_tkeep;

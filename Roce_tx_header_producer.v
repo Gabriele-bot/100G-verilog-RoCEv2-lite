@@ -3,7 +3,8 @@
 
 
 module Roce_tx_header_producer #(
-    parameter DATA_WIDTH = 64
+    parameter DATA_WIDTH = 64,
+    parameter PMTU = 12'd2048
 ) (
     input wire clk,
     input wire rst,
@@ -101,12 +102,18 @@ module Roce_tx_header_producer #(
   localparam [31:0] LOC_IP_ADDR = 32'hD1D40116;
   localparam [15:0] LOC_UDP_PORT = 16'h0123;
   localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
-  localparam [15:0] PMTU = 16'd2048;
 
 
   reg roce_bth_valid_next, roce_bth_valid_reg;
   reg roce_reth_valid_next, roce_reth_valid_reg;
   reg roce_immdh_valid_next, roce_immdh_valid_reg;
+
+  reg [DATA_WIDTH   - 1:0] m_roce_payload_axis_tdata_int;
+  reg [DATA_WIDTH/8 - 1:0] m_roce_payload_axis_tkeep_int;
+  reg                      m_roce_payload_axis_tvalid_int;
+  reg                      m_roce_payload_axis_tready_int;
+  reg                      m_roce_payload_axis_tlast_int;
+  reg                      m_roce_payload_axis_tuser_int;
 
 
   reg [7:0] roce_bth_op_code_next, roce_bth_op_code_reg;
@@ -142,7 +149,7 @@ module Roce_tx_header_producer #(
   reg [15:0] udp_checksum_next, udp_checksum_reg;
 
 
-  reg [170:0] qp_info = {{64{1'b0}}, 32'h11223344, 24'h012345, 24'h543210, 24'h000016, 3'b010};
+  reg [170:0] qp_info;
   //assign qp_info[2:0]     = 3'b010;  //qp_state
   //assign qp_info[26:3]    = 24'h000016;  //loc_qpn
   //assign qp_info[50:27]   = 24'h543210;  //rem_psn
@@ -150,13 +157,13 @@ module Roce_tx_header_producer #(
   //assign qp_info[106:52]  = 32'h11223344;  //r_key
   //assign qp_info[170:107] = 64'h000000000000;  //vaddr
 
-  reg [154:0] qp_conn = {ROCE_UDP_PORT, 32'h0BD40116, 24'h000016, 24'h000017};
+  reg [154:0] qp_conn;
   //assign qp_conn[23:0]  = 24'h000017;  //loc_qpn
   //assign qp_conn[47:24] = 24'h000016;  //rem_qpn
   //assign qp_conn[79:48] = 32'h0BD40116;  //rem_ip_addr
   //assign qp_conn[95:80] = ROCE_UDP_PORT;  //rem_udp_port
 
-  reg [79:0] tx_metadata = {48'h001122334455, 32'd16};
+  reg [79:0] tx_metadata;
   //assign tx_metadata[31:0]  = 32'd3200;  //dma_length
   //assign tx_metadata[79:32] = 48'h001122334455;  //rem_addr
 
@@ -173,7 +180,7 @@ module Roce_tx_header_producer #(
   reg [DATA_WIDTH - 1:0] axis_tdata_reg;
   reg [DATA_WIDTH/8 - 1:0] axis_tkeep_reg;
   reg axis_tvalid_reg;
-  reg axis_tready_reg = 1'b0;
+  reg axis_tready_reg = 1'b0, axis_tready_next;
   reg axis_tlast_reg;
   reg axis_tuser_reg;
 
@@ -189,11 +196,15 @@ module Roce_tx_header_producer #(
 
     state_next = STATE_IDLE;
 
+    axis_tready_next = 1'b0;
+
     case (state_reg)
       STATE_IDLE: begin
         roce_bth_valid_next     = 1'b0;
         roce_reth_valid_next    = 1'b0;
         roce_immdh_valid_next   = 1'b0;
+
+        axis_tready_next        = 1'b1;
 
 
         eth_dest_mac_next       = 48'h0;
@@ -226,6 +237,10 @@ module Roce_tx_header_producer #(
         roce_immdh_data_next    = 32'h0;
 
         if (s_axis_tready && s_axis_tvalid) begin
+          m_roce_payload_axis_tdata_int  <= s_axis_tdata;
+          m_roce_payload_axis_tkeep_int  <= s_axis_tkeep;
+          m_roce_payload_axis_tvalid_int <= s_axis_tvalid;
+          m_roce_payload_axis_tlast_int  <= s_axis_tlast;
           if (tx_metadata[31:0] <= PMTU) begin
             state_next <= STATE_ONLY;
           end else begin
@@ -241,11 +256,14 @@ module Roce_tx_header_producer #(
         roce_reth_valid_next  = first_axi_frame;
         roce_immdh_valid_next = 1'b0;
 
+        axis_tready_next      = m_roce_payload_axis_tready;
+
         ip_source_ip_next     = LOC_IP_ADDR;
         ip_dest_ip_next       = qp_conn[79:48];
 
         udp_source_port_next  = LOC_UDP_PORT;
-        udp_length_next       = PMTU + 12 + 16 + 8;
+        udp_length_next       = PMTU + 12 + 16 + 8 + 4;
+        // PMTU + BTH + RETH + UDP HEADER + ICRC
 
         roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
         roce_bth_p_key_next   = 16'hFFFF;
@@ -257,6 +275,10 @@ module Roce_tx_header_producer #(
         roce_reth_length_next = tx_metadata[31:0];
         roce_immdh_data_next  = 32'hDEADBEEF;
 
+        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
+        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
+        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
+        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
 
         if (m_roce_payload_axis_tready && m_roce_payload_axis_tvalid) begin
           if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
@@ -274,7 +296,16 @@ module Roce_tx_header_producer #(
         roce_reth_valid_next  = 1'b0;
         roce_immdh_valid_next = 1'b0;
 
-        udp_length_next       = PMTU + 12 + 8;  //no RETH
+        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
+        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
+        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
+        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+
+        axis_tready_next      = m_roce_payload_axis_tready;
+
+        udp_length_next       = PMTU + 12 + 8 + 4;  //no RETH
+        
+        // PMTU + BTH + UDP HEADER + ICRC
 
         roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
         roce_bth_psn_next     = curr_psn;
@@ -289,14 +320,23 @@ module Roce_tx_header_producer #(
       end
       STATE_LAST: begin
 
-        state_next = state_reg;
+        state_next            = state_reg;
 
-        roce_bth_valid_next = first_axi_frame;
-        roce_reth_valid_next = 1'b0;
+        roce_bth_valid_next   = first_axi_frame;
+        roce_reth_valid_next  = 1'b0;
         roce_immdh_valid_next = 1'b0;
 
+        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
+        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
+        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
+        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+
+        axis_tready_next = m_roce_payload_axis_tready;
+
         if (first_axi_frame) begin
-          udp_length_next = remaining_length + 12 + 8;  // no reth
+          udp_length_next = remaining_length + 12 + 8 + 4;  // no reth
+          // remaining length + BTH + UDP HEADER + ICRC
+          
         end
         roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
         roce_bth_psn_next     = curr_psn;
@@ -317,12 +357,20 @@ module Roce_tx_header_producer #(
         roce_reth_valid_next  = first_axi_frame;
         roce_immdh_valid_next = 1'b0;
 
+        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
+        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
+        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
+        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+
+        axis_tready_next      = m_roce_payload_axis_tready;
+
         ip_source_ip_next     = LOC_IP_ADDR;
         ip_dest_ip_next       = qp_conn[79:48];
 
         udp_source_port_next  = LOC_UDP_PORT;
-        udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8;
-
+        udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8 + 4; 
+        // dma length (less than PMTU) + BTH + RETH + UDP HEADER + ICRC
+        
         roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
         roce_bth_p_key_next   = 16'hFFFF;
         roce_bth_psn_next     = curr_psn;
@@ -341,6 +389,11 @@ module Roce_tx_header_producer #(
       end
       STATE_ERROR: begin
         state_next = state_reg;
+        m_roce_payload_axis_tdata_int  <= {DATA_WIDTH{1'b0}};
+        m_roce_payload_axis_tkeep_int  <= {DATA_WIDTH / 8{1'b0}};
+        m_roce_payload_axis_tvalid_int <= 1'b0;
+        m_roce_payload_axis_tlast_int  <= 1'b0;
+        axis_tready_next = 1'b0;
         if (rst) begin
           state_next = STATE_IDLE;
         end
@@ -385,6 +438,9 @@ module Roce_tx_header_producer #(
 
     if (rst) begin
       state_reg <= STATE_IDLE;
+      qp_info = 171'h0;
+      qp_conn = 155'h0;
+      tx_metadata = 80'h0;
     end else begin
       state_reg <= state_next;
 
@@ -485,17 +541,30 @@ module Roce_tx_header_producer #(
   assign m_udp_checksum       = udp_checksum_reg;
 
   always @(posedge clk) begin
-    axis_tdata_reg <= s_axis_tdata;
-    axis_tvalid_reg <= s_axis_tvalid;
-    axis_tkeep_reg <= s_axis_tkeep;
-    axis_tlast_reg <= s_axis_tlast;
-    axis_tuser_reg <= s_axis_tuser;
+    if (s_axis_tvalid && s_axis_tready) begin
+      axis_tdata_reg  <= s_axis_tdata;
+      axis_tvalid_reg <= s_axis_tvalid;
+      axis_tkeep_reg  <= s_axis_tkeep;
+      axis_tlast_reg  <= s_axis_tlast;
+      axis_tuser_reg  <= s_axis_tuser;
+    end
 
-    m_axis_tdata_reg <= axis_tdata_reg;
-    m_axis_tvalid_reg <= axis_tvalid_reg;
-    m_axis_tkeep_reg <= axis_tkeep_reg;
-    m_axis_tlast_reg <= axis_tlast_reg | last_axi_frame;
-    m_axis_tuser_reg <= axis_tuser_reg;
+    axis_tready_reg <= axis_tready_next;
+
+    if (s_axis_tvalid && s_axis_tready) begin
+        /*
+      m_axis_tdata_reg  <= m_roce_payload_axis_tdata_int;
+      m_axis_tvalid_reg <= m_roce_payload_axis_tvalid_int;
+      m_axis_tkeep_reg  <= m_roce_payload_axis_tkeep_int;
+      m_axis_tlast_reg  <= m_roce_payload_axis_tlast_int | last_axi_frame;
+      m_axis_tuser_reg  <= m_roce_payload_axis_tuser_int;
+      */
+      m_axis_tdata_reg  <= s_axis_tdata;
+      m_axis_tvalid_reg <= s_axis_tvalid;
+      m_axis_tkeep_reg  <= s_axis_tkeep;
+      m_axis_tlast_reg  <= s_axis_tlast | last_axi_frame;
+      m_axis_tuser_reg  <= s_axis_tuser;
+    end
   end
 
   assign m_roce_payload_axis_tdata = m_axis_tdata_reg;
@@ -504,7 +573,8 @@ module Roce_tx_header_producer #(
   assign m_roce_payload_axis_tlast = m_axis_tlast_reg;
   assign m_roce_payload_axis_tuser = m_axis_tuser_reg;
 
-  assign s_axis_tready = m_roce_payload_axis_tready;
+  //assign s_axis_tready = m_roce_payload_axis_tready;
+  assign s_axis_tready = axis_tready_next;
 
 
 endmodule
