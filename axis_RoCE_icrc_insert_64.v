@@ -66,18 +66,6 @@ module axis_RoCE_icrc_insert_64 #(
 
   reg [1:0] state_reg = STATE_IDLE, state_next;
 
-  reg  [63:0] s_axis_not_masked_tdata_1;
-  reg  [ 7:0] s_axis_not_masked_tkeep_1;
-  reg         s_axis_not_masked_tvalid_1;
-  reg         s_axis_not_masked_tlast_1;
-  reg         s_axis_not_masked_tuser_1;
-
-  reg  [63:0] s_axis_not_masked_tdata_2;
-  reg  [ 7:0] s_axis_not_masked_tkeep_2;
-  reg         s_axis_not_masked_tvalid_2;
-  reg         s_axis_not_masked_tlast_2;
-  reg         s_axis_not_masked_tuser_2;
-
   wire [63:0] axis_to_mask_tdata;
   wire [ 7:0] axis_to_mask_tkeep;
   wire        axis_to_mask_tvalid;
@@ -92,6 +80,7 @@ module axis_RoCE_icrc_insert_64 #(
   wire        axis_masked_tuser;
   wire        axis_masked_tready;
 
+  wire [63:0] axis_not_masked_tdata;
 
   // datapath control signals
   reg         reset_crc;
@@ -163,12 +152,13 @@ module axis_RoCE_icrc_insert_64 #(
       .s_axis_tready(axis_to_mask_tready),
       .s_axis_tlast(axis_to_mask_tlast),
       .s_axis_tuser(axis_to_mask_tuser),
-      .m_axis_tdata(axis_masked_tdata),
-      .m_axis_tkeep(axis_masked_tkeep),
-      .m_axis_tvalid(axis_masked_tvalid),
-      .m_axis_tready(axis_masked_tready),
-      .m_axis_tlast(axis_masked_tlast),
-      .m_axis_tuser(axis_masked_tuser)
+      .m_axis_masked_tdata(axis_masked_tdata),
+      .m_axis_masked_tkeep(axis_masked_tkeep),
+      .m_axis_masked_tvalid(axis_masked_tvalid),
+      .m_axis_masked_tready(axis_masked_tready),
+      .m_axis_masked_tlast(axis_masked_tlast),
+      .m_axis_masked_tuser(axis_masked_tuser),
+      .m_axis_not_masked_tdata(axis_not_masked_tdata)
   );
 
   lfsr #(
@@ -422,17 +412,17 @@ module axis_RoCE_icrc_insert_64 #(
         frame_ptr_next = 16'd0;
         reset_crc = 1'b1;
 
-        m_axis_tdata_int = s_axis_not_masked_tdata_1;
-        m_axis_tkeep_int = s_axis_not_masked_tkeep_1;
-        m_axis_tvalid_int = s_axis_not_masked_tvalid_1;
+        m_axis_tdata_int = axis_not_masked_tdata;
+        m_axis_tkeep_int = axis_masked_tkeep;
+        m_axis_tvalid_int = axis_masked_tvalid;
         m_axis_tlast_int = 1'b0;
         m_axis_tuser_int = 1'b0;
 
         icrc_s_tdata = s_axis_tdata_masked;
         icrc_s_tkeep = axis_masked_tkeep;
 
-        icrc_s_tdata_not_masked = s_axis_not_masked_tdata_1;
-        icrc_s_tkeep_not_masked = s_axis_not_masked_tkeep_1;
+        icrc_s_tdata_not_masked = axis_not_masked_tdata;
+        icrc_s_tkeep_not_masked = axis_masked_tkeep;
 
         if (axis_masked_tready && axis_masked_tvalid) begin
           reset_crc = 1'b0;
@@ -507,17 +497,17 @@ module axis_RoCE_icrc_insert_64 #(
         // transfer payload
         s_axis_tready_next = m_axis_tready_int_early;
 
-        m_axis_tdata_int = s_axis_not_masked_tdata_1;
-        m_axis_tkeep_int = s_axis_not_masked_tkeep_1;
-        m_axis_tvalid_int = s_axis_not_masked_tvalid_1;
+        m_axis_tdata_int = axis_not_masked_tdata;
+        m_axis_tkeep_int = axis_masked_tkeep;
+        m_axis_tvalid_int = axis_masked_tvalid;
         m_axis_tlast_int = 1'b0;
         m_axis_tuser_int = 1'b0;
 
         icrc_s_tdata = s_axis_tdata_masked;
         icrc_s_tkeep = axis_masked_tkeep;
 
-        icrc_s_tdata_not_masked = s_axis_not_masked_tdata_1;
-        icrc_s_tkeep_not_masked = s_axis_not_masked_tkeep_1;
+        icrc_s_tdata_not_masked = axis_not_masked_tdata;
+        icrc_s_tkeep_not_masked = axis_masked_tkeep;
 
 
         if (axis_masked_tready && axis_masked_tvalid) begin
@@ -687,38 +677,6 @@ module axis_RoCE_icrc_insert_64 #(
 
     last_cycle_tdata_reg <= last_cycle_tdata_next;
     last_cycle_tkeep_reg <= last_cycle_tkeep_next;
-  end
-
-  always @(posedge clk) begin
-    if (rst) begin
-
-      s_axis_not_masked_tdata_1  <= {64{1'b0}};
-      s_axis_not_masked_tkeep_1  <= {8{1'b0}};
-      s_axis_not_masked_tvalid_1 <= 1'b0;
-      s_axis_not_masked_tlast_1  <= 1'b0;
-      s_axis_not_masked_tuser_1  <= 1'b0;
-
-      s_axis_not_masked_tdata_2  <= {64{1'b0}};
-      s_axis_not_masked_tkeep_2  <= {8{1'b0}};
-      s_axis_not_masked_tvalid_2 <= 1'b0;
-      s_axis_not_masked_tlast_2  <= 1'b0;
-      s_axis_not_masked_tuser_2  <= 1'b0;
-
-    end else begin
-
-      s_axis_not_masked_tdata_1  <= s_axis_tdata;
-      s_axis_not_masked_tkeep_1  <= s_axis_tkeep;
-      s_axis_not_masked_tvalid_1 <= s_axis_tvalid;
-      s_axis_not_masked_tlast_1  <= s_axis_tlast;
-      s_axis_not_masked_tuser_1  <= s_axis_tuser;
-
-      s_axis_not_masked_tdata_2  <= s_axis_not_masked_tdata_1;
-      s_axis_not_masked_tkeep_2  <= s_axis_not_masked_tkeep_1;
-      s_axis_not_masked_tvalid_2 <= s_axis_not_masked_tvalid_1;
-      s_axis_not_masked_tlast_2  <= s_axis_not_masked_tlast_1;
-      s_axis_not_masked_tuser_2  <= s_axis_not_masked_tuser_1;
-
-    end
   end
 
   // output datapath logic

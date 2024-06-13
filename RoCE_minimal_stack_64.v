@@ -59,7 +59,7 @@ module RoCE_minimal_stack_64 #(
 
 );
 
-  reg  [31:0] dma_length_reg;
+  reg  [31:0] dma_length_reg = 32'd0;
   reg         start_1;
   reg         start_2;
 
@@ -124,6 +124,9 @@ module RoCE_minimal_stack_64 #(
 
   wire [31:0] roce_immdh_data;
 
+  wire        udp_hdr_valid_int;
+  reg m_udp_hdr_valid_1, m_udp_hdr_valid_2;
+
   wire [47:0] eth_dest_mac;
   wire [47:0] eth_src_mac;
   wire [15:0] eth_type;
@@ -144,7 +147,7 @@ module RoCE_minimal_stack_64 #(
   wire [15:0] udp_length;
   wire [15:0] udp_checksum;
 
-  reg  [63:0] word_counter;
+  reg  [63:0] word_counter = {64{1'b1}} - 8;
 
   function [3:0] keep2count;
     input [7:0] k;
@@ -184,12 +187,13 @@ module RoCE_minimal_stack_64 #(
 
   always @(posedge clk) begin
     if (rst) begin
-      word_counter <= {64{1'b1}} - 8;
+      word_counter   <= {64{1'b1}} - 8;
+      dma_length_reg <= 32'd0;
     end else begin
       start_1 <= start_transfer;
       start_2 <= start_1;
       if (s_payload_axis_tvalid && s_payload_axis_tready) begin
-        if ((word_counter <= dma_length_reg)) begin
+        if ((word_counter <= dma_transfer_length)) begin
           word_counter <= word_counter + 8;
         end
       end else if (~start_1 && start_transfer) begin
@@ -213,12 +217,11 @@ module RoCE_minimal_stack_64 #(
   assign s_payload_axis_tuser = 1'b0;
 
   Roce_tx_header_producer #(
-      .DATA_WIDTH(DATA_WIDTH),
-      .PMTU(12'd2048)
+      .DATA_WIDTH(DATA_WIDTH)
   ) Roce_tx_header_producer_instance (
       .clk                       (clk),
       .rst                       (rst),
-      .s_dma_length              (dma_length_reg),
+      .s_dma_length              (dma_transfer_length),
       .s_rem_qpn                 (rem_qpn),
       .s_rem_psn                 (rem_psn),
       .s_r_key                   (r_key),
@@ -269,7 +272,8 @@ module RoCE_minimal_stack_64 #(
       .m_roce_payload_axis_tvalid(m_roce_payload_axis_tvalid),
       .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
       .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
-      .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser)
+      .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
+      .pmtu(13'd2048)
   );
 
   RoCE_udp_tx_64 RoCE_udp_tx_64_instance (
@@ -315,7 +319,7 @@ module RoCE_minimal_stack_64 #(
       .s_roce_payload_axis_tready     (m_roce_payload_axis_tready),
       .s_roce_payload_axis_tlast      (m_roce_payload_axis_tlast),
       .s_roce_payload_axis_tuser      (m_roce_payload_axis_tuser),
-      .m_udp_hdr_valid                (m_udp_hdr_valid),
+      .m_udp_hdr_valid                (udp_hdr_valid_int),
       .m_udp_hdr_ready                (m_udp_hdr_ready),
       .m_eth_dest_mac                 (m_eth_dest_mac),
       .m_eth_src_mac                  (m_eth_src_mac),
@@ -346,6 +350,12 @@ module RoCE_minimal_stack_64 #(
       .busy                           (busy),
       .error_payload_early_termination(error_payload_early_termination)
   );
+  always @(posedge clk) begin
+    m_udp_hdr_valid_1 <= udp_hdr_valid_int;
+    m_udp_hdr_valid_2 <= m_udp_hdr_valid_1;
+  end
+
+  assign m_udp_hdr_valid = m_udp_hdr_valid_2;
 
 
   axis_RoCE_icrc_insert_64 #(

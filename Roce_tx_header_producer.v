@@ -3,8 +3,7 @@
 
 
 module Roce_tx_header_producer #(
-    parameter DATA_WIDTH = 64,
-    parameter PMTU = 12'd2048
+    parameter DATA_WIDTH = 64
 ) (
     input wire clk,
     input wire rst,
@@ -77,7 +76,9 @@ module Roce_tx_header_producer #(
     output wire                      m_roce_payload_axis_tvalid,
     input  wire                      m_roce_payload_axis_tready,
     output wire                      m_roce_payload_axis_tlast,
-    output wire                      m_roce_payload_axis_tuser
+    output wire                      m_roce_payload_axis_tuser,
+    // config
+    input  wire [              12:0] pmtu
 
 );
   localparam [7:0]
@@ -90,17 +91,18 @@ module Roce_tx_header_producer #(
     RC_RDMA_ACK           = 8'h11;
 
   localparam [2:0]
-    STATE_IDLE   = 3'd0,
-    STATE_FIRST  = 3'd1,
-    STATE_MIDDLE = 3'd2,
-    STATE_LAST   = 3'd3,
-    STATE_ONLY   = 3'd4,
-    STATE_ERROR  = 3'd5;
+    STATE_IDLE               = 3'd0,
+    STATE_FIRST              = 3'd1,
+    STATE_MIDDLE             = 3'd2,
+    STATE_LAST               = 3'd3,
+    STATE_ONLY               = 3'd4,
+    STATE_WRITE_PAYLOAD_LAST = 3'd5,
+    STATE_ERROR              = 3'd6;
 
   reg [2:0] state_reg, state_next;
 
-  localparam [31:0] LOC_IP_ADDR = 32'hD1D40116;
-  localparam [15:0] LOC_UDP_PORT = 16'h0123;
+  localparam [31:0] LOC_IP_ADDR = {8'd11, 8'd1, 8'd212, 8'd10};
+  localparam [15:0] LOC_UDP_PORT = 16'h2123;
   localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
 
@@ -114,6 +116,10 @@ module Roce_tx_header_producer #(
   reg                      m_roce_payload_axis_tready_int;
   reg                      m_roce_payload_axis_tlast_int;
   reg                      m_roce_payload_axis_tuser_int;
+
+  reg m_roce_bth_valid_reg = 1'b0, m_roce_bth_valid_next;
+  reg m_roce_reth_valid_reg = 1'b0, m_roce_reth_valid_next;
+  reg m_roce_immdh_valid_reg = 1'b0, m_roce_immdh_valid_next;
 
 
   reg [7:0] roce_bth_op_code_next, roce_bth_op_code_reg;
@@ -163,49 +169,61 @@ module Roce_tx_header_producer #(
   //assign qp_conn[79:48] = 32'h0BD40116;  //rem_ip_addr
   //assign qp_conn[95:80] = ROCE_UDP_PORT;  //rem_udp_port
 
-  reg [79:0] tx_metadata;
+  reg [ 79:0] tx_metadata;
   //assign tx_metadata[31:0]  = 32'd3200;  //dma_length
   //assign tx_metadata[79:32] = 48'h001122334455;  //rem_addr
 
-  reg [31:0] remaining_length;
-  reg [13:0] packet_inst_length;  // MAX 16384
+  reg [31:0] remaining_length_next, remaining_length_reg;
+  reg [13:0] packet_inst_length_next, packet_inst_length_reg;  // MAX 16384
+  reg [31:0] total_packet_inst_length_next, total_packet_inst_length_reg;
 
-  reg [23:0] curr_psn;
+  reg [23:0] psn_next, psn_reg;
 
-  reg [2:0] axis_valid_shreg;
+  reg  [               2:0] axis_valid_shreg;
 
-  reg first_axi_frame;
-  reg last_axi_frame;
+  wire                      first_axi_frame;
+  wire                      last_axi_frame;
 
-  reg [DATA_WIDTH - 1:0] axis_tdata_reg;
-  reg [DATA_WIDTH/8 - 1:0] axis_tkeep_reg;
-  reg axis_tvalid_reg;
-  reg axis_tready_reg = 1'b0, axis_tready_next;
-  reg axis_tlast_reg;
-  reg axis_tuser_reg;
+  reg  [  DATA_WIDTH - 1:0] last_word_data_reg = {DATA_WIDTH{1'b0}};
+  reg  [DATA_WIDTH/8 - 1:0] last_word_keep_reg = {DATA_WIDTH / 8{1'b0}};
 
-  reg [DATA_WIDTH - 1:0] m_axis_tdata_reg;
-  reg [DATA_WIDTH/8 - 1:0] m_axis_tkeep_reg;
-  reg m_axis_tvalid_reg;
-  reg m_axis_tready_reg = 1'b0;
-  reg m_axis_tlast_reg;
-  reg m_axis_tuser_reg;
+
+  // internal datapath
+  reg  [  DATA_WIDTH - 1:0] m_axis_tdata_int;
+  reg  [DATA_WIDTH/8 - 1:0] m_axis_tkeep_int;
+  reg                       m_axis_tvalid_int;
+  reg                       m_axis_tready_int_reg = 1'b0;
+  reg                       m_axis_tlast_int;
+  reg                       m_axis_tuser_int;
+  wire                      m_axis_tready_int_early;
+
+  reg                       s_axis_tready_next;
+  reg                       s_axis_tready_reg;
+
+  assign s_axis_tready = s_axis_tready_reg;
+
+  // datapath control signals
+  reg store_last_word;
+
 
 
   always @* begin
 
-    state_next = STATE_IDLE;
+    state_next                    = STATE_IDLE;
 
-    axis_tready_next = 1'b0;
+    s_axis_tready_next            = 1'b0;
+
+    roce_bth_valid_next           = roce_bth_valid_reg && !m_roce_bth_ready;
+    roce_reth_valid_next          = roce_reth_valid_reg && !m_roce_reth_ready;
+    roce_immdh_valid_next         = roce_immdh_valid_reg && !m_roce_immdh_ready;
+
+    remaining_length_next         = remaining_length_reg;
+    packet_inst_length_next       = packet_inst_length_reg;
+    total_packet_inst_length_next = total_packet_inst_length_reg;
+
 
     case (state_reg)
       STATE_IDLE: begin
-        roce_bth_valid_next     = 1'b0;
-        roce_reth_valid_next    = 1'b0;
-        roce_immdh_valid_next   = 1'b0;
-
-        axis_tready_next        = 1'b1;
-
 
         eth_dest_mac_next       = 48'h0;
         eth_src_mac_next        = 48'h0;
@@ -236,164 +254,313 @@ module Roce_tx_header_producer #(
         roce_reth_length_next   = 16'h0;
         roce_immdh_data_next    = 32'h0;
 
+        m_axis_tdata_int  <= s_axis_tdata;
+        m_axis_tkeep_int  <= s_axis_tkeep;
+        m_axis_tvalid_int <= s_axis_tvalid;
+        m_axis_tlast_int  <= s_axis_tlast;
+        m_axis_tuser_int  <= s_axis_tuser;
+        //m_axis_tlast_int  <= s_axis_tlast;
+
+        s_axis_tready_next = 1'b1;
+
         if (s_axis_tready && s_axis_tvalid) begin
-          m_roce_payload_axis_tdata_int  <= s_axis_tdata;
-          m_roce_payload_axis_tkeep_int  <= s_axis_tkeep;
-          m_roce_payload_axis_tvalid_int <= s_axis_tvalid;
-          m_roce_payload_axis_tlast_int  <= s_axis_tlast;
-          if (tx_metadata[31:0] <= PMTU) begin
+          remaining_length_next = s_dma_length - DATA_WIDTH / 8;
+          packet_inst_length_next = DATA_WIDTH / 8;
+          total_packet_inst_length_next = DATA_WIDTH / 8;
+          if (s_dma_length <= pmtu) begin
             state_next <= STATE_ONLY;
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b1;
+            roce_immdh_valid_next = 1'b0;
+            // TODO add option for immediate 
+
+            ip_source_ip_next     = LOC_IP_ADDR;
+            ip_dest_ip_next       = qp_conn[79:48];
+
+            udp_source_port_next  = LOC_UDP_PORT;
+            udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8 + 4;
+            // dma length (less than PMTU) + BTH + RETH + UDP HEADER + ICRC
+
+            roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
+            roce_bth_p_key_next   = 16'hFFFF;
+            roce_bth_psn_next     = qp_info[74:51];
+            roce_bth_dest_qp_next = qp_conn[47:24];
+            roce_bth_ack_req_next = 1'b0;
+            roce_reth_v_addr_next = qp_info[154:107];
+            roce_reth_r_key_next  = qp_info[106:52];
+            roce_reth_length_next = tx_metadata[31:0];
+            roce_immdh_data_next  = 32'hDEADBEEF;
+
+            psn_next              = qp_info[74:51];
           end else begin
             state_next <= STATE_FIRST;
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b1;
+            roce_immdh_valid_next = 1'b0;
+
+            ip_source_ip_next     = LOC_IP_ADDR;
+            ip_dest_ip_next       = qp_conn[79:48];
+
+            udp_source_port_next  = LOC_UDP_PORT;
+            udp_length_next       = pmtu + 12 + 16 + 8 + 4;
+            // PMTU + BTH + RETH + UDP HEADER + ICRC
+
+            roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
+            roce_bth_p_key_next   = 16'hFFFF;
+            roce_bth_psn_next     = qp_info[74:51];
+            roce_bth_dest_qp_next = qp_conn[47:24];
+            roce_bth_ack_req_next = 1'b0;
+            roce_reth_v_addr_next = qp_info[154:107];
+            roce_reth_r_key_next  = qp_info[106:52];
+            roce_reth_length_next = tx_metadata[31:0];
+            roce_immdh_data_next  = 32'hDEADBEEF;
+
+            psn_next              = qp_info[74:51];
           end
+
         end
       end
       STATE_FIRST: begin
 
-        state_next            = state_reg;
+        state_next = state_reg;
 
-        roce_bth_valid_next   = first_axi_frame;
-        roce_reth_valid_next  = first_axi_frame;
-        roce_immdh_valid_next = 1'b0;
 
-        axis_tready_next      = m_roce_payload_axis_tready;
+        m_axis_tdata_int  <= s_axis_tdata;
+        m_axis_tkeep_int  <= s_axis_tkeep;
+        m_axis_tvalid_int <= s_axis_tvalid;
+        m_axis_tlast_int  <= packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+        m_axis_tuser_int  <= s_axis_tuser;
+        //m_axis_tlast_int  <= s_axis_tlast;
 
-        ip_source_ip_next     = LOC_IP_ADDR;
-        ip_dest_ip_next       = qp_conn[79:48];
+        s_axis_tready_next = m_axis_tready_int_early;
 
-        udp_source_port_next  = LOC_UDP_PORT;
-        udp_length_next       = PMTU + 12 + 16 + 8 + 4;
-        // PMTU + BTH + RETH + UDP HEADER + ICRC
-
-        roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
-        roce_bth_p_key_next   = 16'hFFFF;
-        roce_bth_psn_next     = curr_psn;
-        roce_bth_dest_qp_next = qp_conn[47:24];
-        roce_bth_ack_req_next = 1'b0;
-        roce_reth_v_addr_next = qp_info[154:107];
-        roce_reth_r_key_next  = qp_info[106:52];
-        roce_reth_length_next = tx_metadata[31:0];
-        roce_immdh_data_next  = 32'hDEADBEEF;
-
-        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
-        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
-        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
-        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
-
-        if (m_roce_payload_axis_tready && m_roce_payload_axis_tvalid) begin
-          if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
+        if (s_axis_tready && s_axis_tvalid) begin
+          remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
+          //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
+          if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg <= pmtu) begin
+            packet_inst_length_next = 14'd0;
             state_next <= STATE_LAST;
-          end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b0;
+            roce_immdh_valid_next = 1'b0;
+
+            if (roce_bth_valid_next) begin
+              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
+              // remaining length + BTH + UDP HEADER + ICRC
+            end
+            roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
+            roce_bth_psn_next     = psn_reg + 1;
+
+            psn_next              = psn_reg + 1;
+
+            //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
+          end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg > pmtu) begin
+            packet_inst_length_next = 14'd0;
             state_next <= STATE_MIDDLE;
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b0;
+            roce_immdh_valid_next = 1'b0;
+
+            udp_length_next       = pmtu + 12 + 8 + 4;  //no RETH
+            // PMTU + BTH + UDP HEADER + ICRC
+
+            roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
+            roce_bth_psn_next     = psn_reg + 1;
+
+            psn_next              = psn_reg + 1;
           end
         end
       end
       STATE_MIDDLE: begin
 
-        state_next            = state_reg;
+        state_next = state_reg;
 
-        roce_bth_valid_next   = first_axi_frame;
-        roce_reth_valid_next  = 1'b0;
-        roce_immdh_valid_next = 1'b0;
+        m_axis_tdata_int  <= s_axis_tdata;
+        m_axis_tkeep_int  <= s_axis_tkeep;
+        m_axis_tvalid_int <= s_axis_tvalid;
+        m_axis_tlast_int  <= packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+        m_axis_tuser_int  <= s_axis_tuser;
 
-        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
-        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
-        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
-        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+        s_axis_tready_next = m_axis_tready_int_early;
 
-        axis_tready_next      = m_roce_payload_axis_tready;
-
-        udp_length_next       = PMTU + 12 + 8 + 4;  //no RETH
-        
-        // PMTU + BTH + UDP HEADER + ICRC
-
-        roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
-        roce_bth_psn_next     = curr_psn;
 
         if (s_axis_tready && s_axis_tvalid) begin
-          if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
+          remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
+          //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
+          if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg <= pmtu) begin
+            packet_inst_length_next = 14'd0;
             state_next <= STATE_LAST;
-          end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b0;
+            roce_immdh_valid_next = 1'b0;
+
+            if (roce_bth_valid_next) begin
+              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
+              // remaining length + BTH + UDP HEADER + ICRC
+            end
+            roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
+            roce_bth_psn_next     = psn_reg + 1;
+
+            psn_next              = psn_reg + 1;
+
+            //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
+          end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg > pmtu) begin
+            packet_inst_length_next = 14'd0;
             state_next <= STATE_MIDDLE;
+            roce_bth_valid_next   = 1'b1;
+            roce_reth_valid_next  = 1'b0;
+            roce_immdh_valid_next = 1'b0;
+
+            udp_length_next       = pmtu + 12 + 8 + 4;  //no RETH
+            // PMTU + BTH + UDP HEADER + ICRC
+
+            roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
+            roce_bth_psn_next     = psn_reg + 1;
+
+            psn_next              = psn_reg + 1;
           end
         end
       end
       STATE_LAST: begin
 
-        state_next            = state_reg;
+        state_next = state_reg;
 
-        roce_bth_valid_next   = first_axi_frame;
-        roce_reth_valid_next  = 1'b0;
-        roce_immdh_valid_next = 1'b0;
+        m_axis_tdata_int  <= s_axis_tdata;
+        m_axis_tkeep_int  <= s_axis_tkeep;
+        m_axis_tvalid_int <= s_axis_tvalid;
+        m_axis_tlast_int  <= s_axis_tlast;
+        m_axis_tuser_int  <= s_axis_tuser;
 
-        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
-        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
-        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
-        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+        s_axis_tready_next = m_axis_tready_int_early;
 
-        axis_tready_next = m_roce_payload_axis_tready;
-
-        if (first_axi_frame) begin
-          udp_length_next = remaining_length + 12 + 8 + 4;  // no reth
-          // remaining length + BTH + UDP HEADER + ICRC
-          
-        end
-        roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
-        roce_bth_psn_next     = curr_psn;
+        store_last_word = 1'b1;
 
         if (s_axis_tready && s_axis_tvalid) begin
-          if (remaining_length - DATA_WIDTH / 8 == 0) begin
-            state_next <= STATE_IDLE;
-          end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
+
+          if (remaining_length_reg <= 8) begin
+            // have entire payload
+            if (s_axis_tlast) begin
+              if (keep2count(s_axis_tkeep) < remaining_length_reg[4:0]) begin
+                // end of frame, but length does not match
+                m_axis_tuser_int = 1'b1;
+              end
+              s_axis_tready_next = 1'b0;
+              state_next = STATE_IDLE;
+            end else begin
+              m_axis_tvalid_int = 1'b0;
+              state_next = STATE_WRITE_PAYLOAD_LAST;
+            end
+          end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg > pmtu) begin
+            packet_inst_length_next = 14'd0;
+            total_packet_inst_length_next = 32'd0;
             state_next <= STATE_ERROR;
+          end else begin
+            if (s_axis_tlast) begin
+              // end of frame, but length does not match
+              m_axis_tuser_int = 1'b1;
+              s_axis_tready_next = 1'b0;
+              state_next = STATE_IDLE;
+            end
           end
+
+          remaining_length_next <= remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next <= packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next <= total_packet_inst_length_reg + DATA_WIDTH / 8;
+          //if (remaining_length - DATA_WIDTH / 8 == 0) begin
+
         end
       end
       STATE_ONLY: begin
 
-        state_next            = state_reg;
+        state_next = state_reg;
 
-        roce_bth_valid_next   = first_axi_frame;
-        roce_reth_valid_next  = first_axi_frame;
-        roce_immdh_valid_next = 1'b0;
+        m_axis_tdata_int  <= s_axis_tdata;
+        m_axis_tkeep_int  <= s_axis_tkeep;
+        m_axis_tvalid_int <= s_axis_tvalid;
+        m_axis_tlast_int  <= s_axis_tlast;
+        m_axis_tuser_int  <= s_axis_tuser;
 
-        m_roce_payload_axis_tdata_int  <= axis_tdata_reg;
-        m_roce_payload_axis_tkeep_int  <= axis_tkeep_reg;
-        m_roce_payload_axis_tvalid_int <= axis_tvalid_reg;
-        m_roce_payload_axis_tlast_int  <= axis_tlast_reg;
+        s_axis_tready_next = m_axis_tready_int_early;
 
-        axis_tready_next      = m_roce_payload_axis_tready;
-
-        ip_source_ip_next     = LOC_IP_ADDR;
-        ip_dest_ip_next       = qp_conn[79:48];
-
-        udp_source_port_next  = LOC_UDP_PORT;
-        udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8 + 4; 
-        // dma length (less than PMTU) + BTH + RETH + UDP HEADER + ICRC
-        
-        roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
-        roce_bth_p_key_next   = 16'hFFFF;
-        roce_bth_psn_next     = curr_psn;
-        roce_bth_dest_qp_next = qp_conn[47:24];
-        roce_bth_ack_req_next = 1'b0;
-        roce_reth_v_addr_next = qp_info[154:107];
-        roce_reth_r_key_next  = qp_info[106:52];
-        roce_reth_length_next = tx_metadata[31:0];
-        roce_immdh_data_next  = 32'hDEADBEEF;
+        store_last_word = 1'b1;
 
         if (s_axis_tready && s_axis_tvalid) begin
-          if (packet_inst_length + DATA_WIDTH / 8 >= roce_reth_length_next) begin
-            state_next <= STATE_IDLE;
+
+          if (remaining_length_reg <= 8) begin
+            // have entire payload
+            if (s_axis_tlast) begin
+              if (keep2count(s_axis_tkeep) < remaining_length_reg[4:0]) begin
+                // end of frame, but length does not match
+                m_axis_tuser_int = 1'b1;
+              end
+              s_axis_tready_next = 1'b0;
+              state_next = STATE_IDLE;
+            end else begin
+              m_axis_tvalid_int = 1'b0;
+              state_next = STATE_WRITE_PAYLOAD_LAST;
+            end
+          end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg > pmtu) begin
+            packet_inst_length_next = 14'd0;
+            total_packet_inst_length_next = 32'd0;
+            state_next <= STATE_ERROR;
+          end else begin
+            if (s_axis_tlast) begin
+              // end of frame, but length does not match
+              m_axis_tuser_int = 1'b1;
+              s_axis_tready_next = 1'b0;
+              state_next = STATE_IDLE;
+            end
           end
+
+          remaining_length_next <= remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next <= packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next <= total_packet_inst_length_reg + DATA_WIDTH / 8;
+          //if (remaining_length - DATA_WIDTH / 8 == 0) begin
+
+        end
+      end
+
+      STATE_WRITE_PAYLOAD_LAST: begin
+        state_next = state_reg;
+
+        m_axis_tdata_int <= last_word_data_reg;
+        m_axis_tkeep_int <= last_word_keep_reg;
+        m_axis_tlast_int <= s_axis_tlast;
+        m_axis_tuser_int <= s_axis_tuser;
+
+        s_axis_tready_next = m_axis_tready_int_early;
+
+        if (s_axis_tready && s_axis_tvalid) begin
+          if (s_axis_tlast) begin
+            s_axis_tready_next = 1'b0;
+            m_axis_tvalid_int = 1'b1;
+            packet_inst_length_next = 14'd0;
+            total_packet_inst_length_next = 32'd0;
+            state_next <= STATE_IDLE;
+          end else begin
+            remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
+            packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
+            total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
+            state_next <= STATE_WRITE_PAYLOAD_LAST;
+          end
+        end else begin
+          remaining_length_next = remaining_length_reg;
+          packet_inst_length_next = packet_inst_length_reg;
+          total_packet_inst_length_next = total_packet_inst_length_reg;
+          state_next <= STATE_WRITE_PAYLOAD_LAST;
         end
       end
       STATE_ERROR: begin
         state_next = state_reg;
-        m_roce_payload_axis_tdata_int  <= {DATA_WIDTH{1'b0}};
-        m_roce_payload_axis_tkeep_int  <= {DATA_WIDTH / 8{1'b0}};
-        m_roce_payload_axis_tvalid_int <= 1'b0;
-        m_roce_payload_axis_tlast_int  <= 1'b0;
-        axis_tready_next = 1'b0;
+        m_axis_tdata_int  <= {DATA_WIDTH{1'b0}};
+        m_axis_tkeep_int  <= {DATA_WIDTH / 8{1'b0}};
+        m_axis_tvalid_int <= 1'b0;
+        m_axis_tlast_int  <= 1'b0;
+        s_axis_tready_next = 1'b0;
         if (rst) begin
           state_next = STATE_IDLE;
         end
@@ -401,39 +568,37 @@ module Roce_tx_header_producer #(
     endcase
   end
 
-  //assign first_axi_frame = (packet_inst_length < DATA_WIDTH / 8) ? 1'b1 : 1'b0;
-  //assign last_axi_frame  = (packet_inst_length + DATA_WIDTH / 8 == PMTU) ? 1'b1 : 1'b0;
+  assign first_axi_frame = 1'b0;
+  assign last_axi_frame  = 1'b0;
+  /*
   always @(posedge clk) begin
     first_axi_frame <= (packet_inst_length < DATA_WIDTH / 8) ? 1'b1 : 1'b0;
     last_axi_frame  <= (packet_inst_length + DATA_WIDTH / 8 == PMTU) ? 1'b1 : 1'b0;
   end
-
+  
   always @(posedge clk) begin
-    if (state_next == STATE_IDLE) begin
-      remaining_length   <= tx_metadata[31:0];
+    if (rst) begin
       packet_inst_length <= 14'd0;
+      total_packet_inst_length <= 14'd0;
     end else begin
-      if (packet_inst_length + DATA_WIDTH / 8 == PMTU) begin
-        packet_inst_length <= 14'd0;
-      end else if (s_axis_tready && s_axis_tvalid) begin
-        remaining_length   <= remaining_length - DATA_WIDTH / 8;
-        packet_inst_length <= packet_inst_length + DATA_WIDTH / 8;
-      end
-    end
-  end
-
-  always @(posedge clk) begin
-    if (state_next == STATE_IDLE) begin
-      curr_psn <= qp_info[74:51];  // loc psn
-    end else begin
-      if (s_axis_tready && s_axis_tvalid) begin
-        if (packet_inst_length + DATA_WIDTH / 8 >= PMTU) begin
-          curr_psn <= curr_psn + 1;
+      if (s_axis_tvalid && s_axis_tready) begin
+        if (packet_inst_length + DATA_WIDTH / 8 == PMTU) begin
+          packet_inst_length <= 14'd0;
+          total_packet_inst_length <= total_packet_inst_length + DATA_WIDTH / 8;
+        end else if (packet_inst_length + DATA_WIDTH / 8 != PMTU && s_axis_tlast) begin
+          packet_inst_length <= 14'd0;
+          total_packet_inst_length <= 14'd0;
+        end else begin
+          packet_inst_length <= packet_inst_length + DATA_WIDTH / 8;
+          total_packet_inst_length <= total_packet_inst_length + DATA_WIDTH / 8;
         end
       end
     end
   end
 
+  assign remaining_length = s_dma_length - total_packet_inst_length - DATA_WIDTH / 8;
+
+*/
   always @(posedge clk) begin
 
     if (rst) begin
@@ -441,8 +606,25 @@ module Roce_tx_header_producer #(
       qp_info = 171'h0;
       qp_conn = 155'h0;
       tx_metadata = 80'h0;
+
+      remaining_length_reg <= {32{1'b1}};
+      packet_inst_length_reg <= 14'd0;
+      total_packet_inst_length_reg <= 32'd0;
+
     end else begin
       state_reg <= state_next;
+
+      s_axis_tready_reg <= s_axis_tready_next;
+
+      m_roce_bth_valid_reg <= m_roce_bth_valid_next;
+      m_roce_reth_valid_reg <= m_roce_reth_valid_next;
+      m_roce_immdh_valid_reg <= m_roce_immdh_valid_next;
+
+      remaining_length_reg <= remaining_length_next;
+      packet_inst_length_reg <= packet_inst_length_next;
+      total_packet_inst_length_reg <= total_packet_inst_length_next;
+
+      psn_reg <= psn_next;
 
       qp_info = {{64{1'b0}}, s_r_key, s_rem_psn, s_rem_qpn, 24'h000016, 3'b010};
       //assign qp_info[2:0]     = 3'b010;  //qp_state
@@ -499,6 +681,13 @@ module Roce_tx_header_producer #(
       udp_dest_port_reg      <= udp_dest_port_next;
       udp_length_reg         <= udp_length_next;
       udp_checksum_reg       <= udp_checksum_next;
+
+
+    end
+
+    if (store_last_word) begin
+      last_word_data_reg <= m_axis_tdata_int;
+      last_word_keep_reg <= m_axis_tkeep_int;
     end
 
   end
@@ -540,41 +729,100 @@ module Roce_tx_header_producer #(
   assign m_udp_length         = udp_length_reg;
   assign m_udp_checksum       = udp_checksum_reg;
 
-  always @(posedge clk) begin
-    if (s_axis_tvalid && s_axis_tready) begin
-      axis_tdata_reg  <= s_axis_tdata;
-      axis_tvalid_reg <= s_axis_tvalid;
-      axis_tkeep_reg  <= s_axis_tkeep;
-      axis_tlast_reg  <= s_axis_tlast;
-      axis_tuser_reg  <= s_axis_tuser;
-    end
 
-    axis_tready_reg <= axis_tready_next;
+  // output datapath logic
+  reg [   DATA_WIDTH - 1:0] m_axis_tdata_reg = 64'd0;
+  reg [DATA_WIDTH / 8 -1:0] m_axis_tkeep_reg = 8'd0;
+  reg m_axis_tvalid_reg = 1'b0, m_axis_tvalid_next;
+  reg                       m_axis_tlast_reg = 1'b0;
+  reg                       m_axis_tuser_reg = 1'b0;
 
-    if (s_axis_tvalid && s_axis_tready) begin
-        /*
-      m_axis_tdata_reg  <= m_roce_payload_axis_tdata_int;
-      m_axis_tvalid_reg <= m_roce_payload_axis_tvalid_int;
-      m_axis_tkeep_reg  <= m_roce_payload_axis_tkeep_int;
-      m_axis_tlast_reg  <= m_roce_payload_axis_tlast_int | last_axi_frame;
-      m_axis_tuser_reg  <= m_roce_payload_axis_tuser_int;
-      */
-      m_axis_tdata_reg  <= s_axis_tdata;
-      m_axis_tvalid_reg <= s_axis_tvalid;
-      m_axis_tkeep_reg  <= s_axis_tkeep;
-      m_axis_tlast_reg  <= s_axis_tlast | last_axi_frame;
-      m_axis_tuser_reg  <= s_axis_tuser;
-    end
-  end
+  reg [   DATA_WIDTH - 1:0] m_axis_not_masked_tdata_reg = 64'd0;
+
+  reg [   DATA_WIDTH - 1:0] temp_m_axis_tdata_reg = 64'd0;
+  reg [DATA_WIDTH / 8 -1:0] temp_m_axis_tkeep_reg = 8'd0;
+  reg temp_m_axis_tvalid_reg = 1'b0, temp_m_axis_tvalid_next;
+  reg temp_m_axis_tlast_reg = 1'b0;
+  reg temp_m_axis_tuser_reg = 1'b0;
+
+  // datapath control
+  reg store_axis_int_to_output;
+  reg store_axis_int_to_temp;
+  reg store_axis_temp_to_output;
 
   assign m_roce_payload_axis_tdata = m_axis_tdata_reg;
-  assign m_roce_payload_axis_tvalid = m_axis_tvalid_reg;
   assign m_roce_payload_axis_tkeep = m_axis_tkeep_reg;
+  assign m_roce_payload_axis_tvalid = m_axis_tvalid_reg;
   assign m_roce_payload_axis_tlast = m_axis_tlast_reg;
   assign m_roce_payload_axis_tuser = m_axis_tuser_reg;
 
-  //assign s_axis_tready = m_roce_payload_axis_tready;
-  assign s_axis_tready = axis_tready_next;
+
+  // enable ready input next cycle if output is ready or if both output registers are empty
+  assign m_axis_tready_int_early = m_roce_payload_axis_tready || (!temp_m_axis_tvalid_reg && !m_axis_tvalid_reg);
+
+  always @* begin
+    // transfer sink ready state to source
+    m_axis_tvalid_next = m_axis_tvalid_reg;
+    temp_m_axis_tvalid_next = temp_m_axis_tvalid_reg;
+
+    store_axis_int_to_output = 1'b0;
+    store_axis_int_to_temp = 1'b0;
+    store_axis_temp_to_output = 1'b0;
+
+    if (m_axis_tready_int_reg) begin
+      // input is ready
+      if (m_roce_payload_axis_tready || !m_axis_tvalid_reg) begin
+        // output is ready or currently not valid, transfer data to output
+        m_axis_tvalid_next = m_axis_tvalid_int;
+        store_axis_int_to_output = 1'b1;
+      end else begin
+        // output is not ready, store input in temp
+        temp_m_axis_tvalid_next = m_axis_tvalid_int;
+        store_axis_int_to_temp  = 1'b1;
+      end
+    end else if (m_roce_payload_axis_tready) begin
+      // input is not ready, but output is ready
+      m_axis_tvalid_next = temp_m_axis_tvalid_reg;
+      temp_m_axis_tvalid_next = 1'b0;
+      store_axis_temp_to_output = 1'b1;
+    end
+  end
+
+  always @(posedge clk) begin
+    m_axis_tvalid_reg <= m_axis_tvalid_next;
+    m_axis_tready_int_reg <= m_axis_tready_int_early;
+    temp_m_axis_tvalid_reg <= temp_m_axis_tvalid_next;
+
+    // datapath
+    if (store_axis_int_to_output) begin
+      m_axis_tdata_reg <= m_axis_tdata_int;
+      m_axis_tkeep_reg <= m_axis_tkeep_int;
+      m_axis_tlast_reg <= m_axis_tlast_int;
+      m_axis_tuser_reg <= m_axis_tuser_int;
+
+
+    end else if (store_axis_temp_to_output) begin
+      m_axis_tdata_reg <= temp_m_axis_tdata_reg;
+      m_axis_tkeep_reg <= temp_m_axis_tkeep_reg;
+      m_axis_tlast_reg <= temp_m_axis_tlast_reg;
+      m_axis_tuser_reg <= temp_m_axis_tuser_reg;
+
+    end
+
+    if (store_axis_int_to_temp) begin
+      temp_m_axis_tdata_reg <= m_axis_tdata_int;
+      temp_m_axis_tkeep_reg <= m_axis_tkeep_int;
+      temp_m_axis_tlast_reg <= m_axis_tlast_int;
+      temp_m_axis_tuser_reg <= m_axis_tuser_int;
+
+    end
+
+    if (rst) begin
+      m_axis_tvalid_reg <= 1'b0;
+      m_axis_tready_int_reg <= 1'b0;
+      temp_m_axis_tvalid_reg <= 1'b0;
+    end
+  end
 
 
 endmodule
