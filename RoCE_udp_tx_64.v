@@ -468,17 +468,17 @@ interface.
       STATE_WRITE_HEADER: begin
         // write header
         if (header_type == HEADER_BTH) begin
-          // UDP length - UDP header - BTH  - ICRC + half frame
-          word_count_next = m_udp_length_reg - 8 - 12 - 4 + 4;
+          // UDP length - UDP header - BTH  - half frame
+          word_count_next = m_udp_length_reg - 8 - 12 - 4;
         end else if (header_type == HEADER_BTH_RETH) begin
-          // UDP length - UDP header - BTH - RETH - ICRC + half frame
-          word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4 + 4;
+          // UDP length - UDP header - BTH - RETH + half frame
+          word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
         end else if (header_type == HEADER_BTH_RETH_IMMDH) begin
-          // UDP length - UDP header - BTH - RETH - IMMDH - ICRC
-          word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4 - 4;
+          // UDP length - UDP header - BTH - RETH - IMMDH
+          word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
         end else begin
-          // UDP length - UDP header - BTH  - ICRC + half frame
-          word_count_next = m_udp_length_reg - 8 - 12 - 4 + 4;
+          // UDP length - UDP header - BTH  + half frame
+          word_count_next = m_udp_length_reg - 8 - 12 - 4;
         end
         if (m_udp_payload_axis_tready_int_reg) begin
           hdr_ptr_next = hdr_ptr_reg + 6'd8;
@@ -583,17 +583,17 @@ interface.
           m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
           word_count_next = word_count_reg - 16'd8;
           if (header_type == HEADER_BTH) begin
-            // UDP length - UDP header - BTH  - ICRC + half frame
-            word_count_next = m_udp_length_reg - 8 - 12 - 4 - 4;
+            // UDP length - UDP header - BTH  - half frame
+            word_count_next = m_udp_length_reg - 8 - 12 - 4;
           end else if (header_type == HEADER_BTH_RETH) begin
-            // UDP length - UDP header - BTH - RETH - ICRC + half frame
-            word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4 - 4;
+            // UDP length - UDP header - BTH - RETH + half frame
+            word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
           end else if (header_type == HEADER_BTH_RETH_IMMDH) begin
-            // UDP length - UDP header - BTH - RETH - IMMDH - ICRC
-            word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4 - 12;
+            // UDP length - UDP header - BTH - RETH - IMMDH
+            word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
           end else begin
-            // UDP length - UDP header - BTH  - ICRC + half frame
-            word_count_next = m_udp_length_reg - 8 - 12 - 4 -4;
+            // UDP length - UDP header - BTH  + half frame
+            word_count_next = m_udp_length_reg - 8 - 12 - 4;
           end
 
           if (keep2count(m_udp_payload_axis_tkeep_int) >= word_count_reg) begin

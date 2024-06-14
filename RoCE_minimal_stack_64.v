@@ -273,7 +273,7 @@ module RoCE_minimal_stack_64 #(
       .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
       .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
       .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
-      .pmtu(13'd2048)
+      .pmtu                      (13'd2048)
   );
 
   RoCE_udp_tx_64 RoCE_udp_tx_64_instance (
@@ -319,7 +319,7 @@ module RoCE_minimal_stack_64 #(
       .s_roce_payload_axis_tready     (m_roce_payload_axis_tready),
       .s_roce_payload_axis_tlast      (m_roce_payload_axis_tlast),
       .s_roce_payload_axis_tuser      (m_roce_payload_axis_tuser),
-      .m_udp_hdr_valid                (udp_hdr_valid_int),
+      .m_udp_hdr_valid                (m_udp_hdr_valid),
       .m_udp_hdr_ready                (m_udp_hdr_ready),
       .m_eth_dest_mac                 (m_eth_dest_mac),
       .m_eth_src_mac                  (m_eth_src_mac),
@@ -341,15 +341,16 @@ module RoCE_minimal_stack_64 #(
       .m_udp_dest_port                (m_udp_dest_port),
       .m_udp_length                   (m_udp_length),
       .m_udp_checksum                 (m_udp_checksum),
-      .m_udp_payload_axis_tdata       (m_udp_payload_axis_not_masked_tdata),
-      .m_udp_payload_axis_tkeep       (m_udp_payload_axis_not_masked_tkeep),
-      .m_udp_payload_axis_tvalid      (m_udp_payload_axis_not_masked_tvalid),
-      .m_udp_payload_axis_tready      (m_udp_payload_axis_not_masked_tready),
-      .m_udp_payload_axis_tlast       (m_udp_payload_axis_not_masked_tlast),
-      .m_udp_payload_axis_tuser       (m_udp_payload_axis_not_masked_tuser),
+      .m_udp_payload_axis_tdata       (m_udp_payload_axis_tdata),
+      .m_udp_payload_axis_tkeep       (m_udp_payload_axis_tkeep),
+      .m_udp_payload_axis_tvalid      (m_udp_payload_axis_tvalid),
+      .m_udp_payload_axis_tready      (m_udp_payload_axis_tready),
+      .m_udp_payload_axis_tlast       (m_udp_payload_axis_tlast),
+      .m_udp_payload_axis_tuser       (m_udp_payload_axis_tuser),
       .busy                           (busy),
       .error_payload_early_termination(error_payload_early_termination)
   );
+  /*
   always @(posedge clk) begin
     m_udp_hdr_valid_1 <= udp_hdr_valid_int;
     m_udp_hdr_valid_2 <= m_udp_hdr_valid_1;
@@ -357,7 +358,7 @@ module RoCE_minimal_stack_64 #(
 
   assign m_udp_hdr_valid = m_udp_hdr_valid_2;
 
-
+  
   axis_RoCE_icrc_insert_64 #(
       .ENABLE_PADDING  (0),
       .MIN_FRAME_LENGTH(64)
@@ -370,15 +371,15 @@ module RoCE_minimal_stack_64 #(
       .s_axis_tready(m_udp_payload_axis_not_masked_tready),
       .s_axis_tlast(m_udp_payload_axis_not_masked_tlast),
       .s_axis_tuser(m_udp_payload_axis_not_masked_tuser),
-      .m_axis_tdata(m_udp_payload_axis_tdata),
-      .m_axis_tkeep(m_udp_payload_axis_tkeep),
+      .m_axis_tdata (m_udp_payload_axis_tdata),
+      .m_axis_tkeep (m_udp_payload_axis_tkeep),
       .m_axis_tvalid(m_udp_payload_axis_tvalid),
       .m_axis_tready(m_udp_payload_axis_tready),
-      .m_axis_tlast(m_udp_payload_axis_tlast),
-      .m_axis_tuser(m_udp_payload_axis_tuser),
+      .m_axis_tlast (m_udp_payload_axis_tlast),
+      .m_axis_tuser (m_udp_payload_axis_tuser),
       .busy()
   );
-
+*/
 endmodule
 
 `resetall

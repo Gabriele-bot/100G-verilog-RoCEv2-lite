@@ -278,8 +278,8 @@ module Roce_tx_header_producer #(
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
-            udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8 + 4;
-            // dma length (less than PMTU) + BTH + RETH + UDP HEADER + ICRC
+            udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8;
+            // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
 
             roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
             roce_bth_p_key_next   = 16'hFFFF;
@@ -302,8 +302,8 @@ module Roce_tx_header_producer #(
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
-            udp_length_next       = pmtu + 12 + 16 + 8 + 4;
-            // PMTU + BTH + RETH + UDP HEADER + ICRC
+            udp_length_next       = pmtu + 12 + 16 + 8;
+            // PMTU + BTH + RETH + UDP HEADER
 
             roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
             roce_bth_p_key_next   = 16'hFFFF;
@@ -347,8 +347,8 @@ module Roce_tx_header_producer #(
             roce_immdh_valid_next = 1'b0;
 
             if (roce_bth_valid_next) begin
-              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
-              // remaining length + BTH + UDP HEADER + ICRC
+              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
+              // remaining length + BTH + UDP HEADER
             end
             roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
             roce_bth_psn_next     = psn_reg + 1;
@@ -363,8 +363,8 @@ module Roce_tx_header_producer #(
             roce_reth_valid_next  = 1'b0;
             roce_immdh_valid_next = 1'b0;
 
-            udp_length_next       = pmtu + 12 + 8 + 4;  //no RETH
-            // PMTU + BTH + UDP HEADER + ICRC
+            udp_length_next       = pmtu + 12 + 8;  //no RETH
+            // PMTU + BTH + UDP HEADER
 
             roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
             roce_bth_psn_next     = psn_reg + 1;
@@ -399,8 +399,8 @@ module Roce_tx_header_producer #(
             roce_immdh_valid_next = 1'b0;
 
             if (roce_bth_valid_next) begin
-              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
-              // remaining length + BTH + UDP HEADER + ICRC
+              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
+              // remaining length + BTH + UDP HEADER 
             end
             roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
             roce_bth_psn_next     = psn_reg + 1;
@@ -415,8 +415,8 @@ module Roce_tx_header_producer #(
             roce_reth_valid_next  = 1'b0;
             roce_immdh_valid_next = 1'b0;
 
-            udp_length_next       = pmtu + 12 + 8 + 4;  //no RETH
-            // PMTU + BTH + UDP HEADER + ICRC
+            udp_length_next       = pmtu + 12 + 8;  //no RETH
+            // PMTU + BTH + UDP HEADER
 
             roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
             roce_bth_psn_next     = psn_reg + 1;
