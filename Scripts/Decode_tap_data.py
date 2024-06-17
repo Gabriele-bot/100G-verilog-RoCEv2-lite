@@ -3,6 +3,7 @@ import numpy as np
 import sys
 import socket
 
+
 from ipaddress import ip_address, IPv4Address
 
 
@@ -297,72 +298,116 @@ class RoCEFrame(object):
 
         self.roce_icrc = struct.unpack('<L', icrc_value)[0]
 
+class RoCEStream(object):
+
+    def __init__(self, data_stream):
+        self.data_stream = data_stream
+        self.exp_psn = 0
+        self.measured_data_legth = 0
+        self.sim_data_legth = 0
+        self.received_r_key = 0
+
+    def decode_Roce_stream(self, DEBUG_OUT = False):
+        icrc_errors  = 0
+        psn_errors   = 0
+        length_error = False
+        for data in self.data_stream:
+            Eth_frame_data = EthFrame(raw_frame=data)
+            Eth_frame_data.decode_eth_frame()
+            if Eth_frame_data.eth_type == 0x0800:
+                if DEBUG_OUT:
+                    print('IP packet recieved!')
+                IP_frame_data = IPFrame(raw_frame=Eth_frame_data.payload)
+                IP_frame_data.decode_ip_frame()
+                if DEBUG_OUT:
+                    print('Source IP : ', IPv4Address(IP_frame_data.ip_source_ip))
+                    print('Dest IP   : ', IPv4Address(IP_frame_data.ip_dest_ip))
+                if IP_frame_data.ip_protocol == 0x11:
+                    if DEBUG_OUT:
+                        print('UDP packet recieved!')
+                    UDP_frame_data = UDPFrame(raw_frame=IP_frame_data.payload)
+                    UDP_frame_data.decode_udp_frame()
+                    if DEBUG_OUT:
+                        print('Source PORT : ', UDP_frame_data.udp_source_port)
+                        print('Dest PORT   : ', UDP_frame_data.udp_dest_port)
+                    if UDP_frame_data.udp_dest_port == 4791:
+                        RoCE_frame_data = RoCEFrame(raw_ip_frame=IP_frame_data.raw_frame, raw_frame=UDP_frame_data.payload)
+                        RoCE_frame_data.decode_BTH()
+                        RoCE_frame_data.decode_icrc()
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                            self.exp_psn = RoCE_frame_data.roce_bth_psn
+                        else:
+                            self.exp_psn = self.exp_psn + 1
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                            RoCE_frame_data.decode_RETH()
+                            self.sim_data_legth = RoCE_frame_data.roce_reth_dma_length
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY:
+                            self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4
+                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                            self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4 - 4
+                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_MIDDLE or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST:
+                            self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4
+                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD:
+                            self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4 - 4
+                        self.received_r_key = RoCE_frame_data.roce_reth_rkey
+                        SW_icrc = RoCE_frame_data.compute_sw_icrc()
+                        if DEBUG_OUT:
+                            print('RoCE packet recieved!')
+                            print('OP CODE = ', RoCE_frame_data.OP_codes[RoCE_frame_data.roce_bth_opcode])
+                            print('QUEUE PAIR NUMBER = ', RoCE_frame_data.roce_bth_dest_qp)
+                            print('Recieved PSN = ', RoCE_frame_data.roce_bth_psn)
+                            print('Expected PSN = ', self.exp_psn)
+                            if self.exp_psn != RoCE_frame_data.roce_bth_psn:
+                                print('Wrong PSN!')
+                            print('SIM ICRC = ', hex(RoCE_frame_data.roce_icrc))
+                            print('SW ICRC  = ', hex(SW_icrc))
+                            if SW_icrc != RoCE_frame_data.roce_icrc:
+                                print('Software ICRC does not match recieved one!')
+                            else:
+                                print('Good ICRC!')
+                            print('Measured length= ', self.measured_data_legth)
+                            if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or Eth_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                                if self.sim_data_legth != self.measured_data_legth:
+                                    print('DMA Length does not match!')
+                                print('RETH DMA length= ', self.sim_data_legth)
+                                print('Measured length= ', self.measured_data_legth)
+                                print('Remote key= ', hex(self.received_r_key))
+                        if self.exp_psn != RoCE_frame_data.roce_bth_psn:
+                            psn_errors += 1
+                        if SW_icrc != RoCE_frame_data.roce_icrc:
+                            icrc_errors += 1
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or Eth_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                            if self.sim_data_legth != self.measured_data_legth:
+                                length_error = True
+
+        return icrc_errors, psn_errors, length_error
+
 
 Exp_psn = 0
 Measured_data_legth = 0
 Sim_data_legth = 0
+Received_r_key = 0
+
+data_stream = []
 
 
 ETH_P_ALL = 3  # not defined in socket module, sadly...
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
 s.bind(("tap0", 0))
-while True:
-    data = s.recv(4096)
-    print('------------------------START OF PACKET---------------------')
-    Eth_frame_data = EthFrame(raw_frame=data)
-    Eth_frame_data.decode_eth_frame()
-    if Eth_frame_data.eth_type == 0x0800:
+try:
+    while True:
+        data = s.recv(4096)
+        data_stream.append(data)
+        #print('------------------------START OF PACKET---------------------')
 
-        print('IP packet recieved!')
-        IP_frame_data = IPFrame(raw_frame=Eth_frame_data.payload)
-        IP_frame_data.decode_ip_frame()
-        print('Source IP : ', IPv4Address(IP_frame_data.ip_source_ip))
-        print('Dest IP   : ', IPv4Address(IP_frame_data.ip_dest_ip))
-        if IP_frame_data.ip_protocol == 0x11:
-            print('UDP packet recieved!')
-            UDP_frame_data = UDPFrame(raw_frame=IP_frame_data.payload)
-            UDP_frame_data.decode_udp_frame()
-            print('Source PORT : ', UDP_frame_data.udp_source_port)
-            print('Dest PORT   : ', UDP_frame_data.udp_dest_port)
-            if UDP_frame_data.udp_dest_port == 4791:
-                print('RoCE packet recieved!')
-                RoCE_frame_data = RoCEFrame(raw_ip_frame=IP_frame_data.raw_frame, raw_frame=UDP_frame_data.payload)
-                RoCE_frame_data.decode_BTH()
-                RoCE_frame_data.decode_icrc()
-                if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                    Exp_psn = RoCE_frame_data.roce_bth_psn
-                else:
-                    Exp_psn = Exp_psn + 1
-                if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                    RoCE_frame_data.decode_RETH()
-                    Sim_data_legth = RoCE_frame_data.roce_reth_dma_length
-                if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY:
-                    Measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4
-                elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                    Measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4 - 4
-                elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_MIDDLE or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST:
-                    Measured_data_legth = Measured_data_legth + RoCE_frame_data.frame_length - 12 - 4
-                elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD:
-                    Measured_data_legth = Measured_data_legth + RoCE_frame_data.frame_length - 12 - 4 - 4
-                print('OP CODE = ', RoCE_frame_data.OP_codes[RoCE_frame_data.roce_bth_opcode])
-                print('QUEUE PAIR NUMBER = ', RoCE_frame_data.roce_bth_dest_qp)
-                print('Recieved PSN = ', RoCE_frame_data.roce_bth_psn)
-                print('Expected PSN = ', Exp_psn)
+        #print('------------------------END OF PACKET-----------------------')
+except KeyboardInterrupt:
+    print('Exiting!')
 
-                print('Remote key= ', hex(RoCE_frame_data.roce_reth_rkey))
-                print('SIM ICRC = ', hex(RoCE_frame_data.roce_icrc))
-                SW_icrc = RoCE_frame_data.compute_sw_icrc()
-                print('SW ICRC  = ', hex(SW_icrc))
-                if Exp_psn != RoCE_frame_data.roce_bth_psn:
-                    print('Wrong PSN!')
-                if SW_icrc != RoCE_frame_data.roce_icrc:
-                    print('Software ICRC does not match recieved one!')
-                else:
-                    print('Good ICRC!')
-                print('RETH DMA length= ', Sim_data_legth)
-                print('Measured length= ', Measured_data_legth)
-                if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or Eth_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                    if Sim_data_legth != Measured_data_legth:
-                        print('DMA Length does not match!')
-    print('------------------------END OF PACKET-----------------------')
-    
+RoCE_stream_recieved = RoCEStream(data_stream)
+icrc_errors, psn_errors, length_error = RoCE_stream_recieved.decode_Roce_stream(True)
+if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
+    print('No errors observed!')
+else:
+    print('Errors observed!')
+

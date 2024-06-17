@@ -287,7 +287,7 @@ module Roce_tx_header_producer #(
             roce_bth_dest_qp_next = qp_conn[47:24];
             roce_bth_ack_req_next = 1'b0;
             roce_reth_v_addr_next = qp_info[154:107];
-            roce_reth_r_key_next  = qp_info[106:52];
+            roce_reth_r_key_next  = qp_info[106:75];
             roce_reth_length_next = tx_metadata[31:0];
             roce_immdh_data_next  = 32'hDEADBEEF;
 
@@ -311,7 +311,7 @@ module Roce_tx_header_producer #(
             roce_bth_dest_qp_next = qp_conn[47:24];
             roce_bth_ack_req_next = 1'b0;
             roce_reth_v_addr_next = qp_info[154:107];
-            roce_reth_r_key_next  = qp_info[106:52];
+            roce_reth_r_key_next  = qp_info[106:75];
             roce_reth_length_next = tx_metadata[31:0];
             roce_immdh_data_next  = 32'hDEADBEEF;
 
@@ -631,7 +631,7 @@ module Roce_tx_header_producer #(
       //assign qp_info[26:3]    = 24'h000016;  //loc_qpn
       //assign qp_info[50:27]   = 24'h543210;  //rem_psn
       //assign qp_info[74:51]   = 24'h012345;  //loc_psn
-      //assign qp_info[106:52]  = 32'h11223344;  //r_key
+      //assign qp_info[106:75]  = 32'h11223344;  //r_key
       //assign qp_info[170:107] = 64'h000000000000;  //vaddr
 
       qp_conn = {ROCE_UDP_PORT, s_rem_ip_addr, s_rem_qpn, 24'h000017};
