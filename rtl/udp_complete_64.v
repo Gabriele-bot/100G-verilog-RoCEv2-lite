@@ -198,6 +198,11 @@ module udp_complete_64 #(
     input wire        clear_arp_cache
 );
 
+  wire eth_tx_from_ip_hdr_valid;
+  wire eth_tx_from_ip_hdr_ready;
+  wire [47:0] eth_tx_from_ip_dest_mac;
+  wire [47:0] eth_tx_from_ip_src_mac;
+  wire [15:0] eth_tx_from_ip_type;
   wire ip_is_roce_packet;
   wire [63:0] eth_tx_from_ip_payload_axis_tdata;
   wire [7:0] eth_tx_from_ip_payload_axis_tkeep;
@@ -205,27 +210,43 @@ module udp_complete_64 #(
   wire eth_tx_from_ip_payload_axis_tlast;
   wire eth_tx_from_ip_payload_axis_tuser;
   wire eth_tx_from_ip_payload_axis_tready;
-
+  
+  
+  wire        eth_tx_to_icrc_module_hdr_valid;
+  wire        eth_tx_to_icrc_module_hdr_ready;
+  wire [47:0] eth_tx_to_icrc_module_dest_mac;
+  wire [47:0] eth_tx_to_icrc_module_src_mac;
+  wire [15:0] eth_tx_to_icrc_module_type;
   wire [63:0] eth_tx_to_icrc_module_payload_axis_tdata;
-  wire [7:0]  eth_tx_to_icrc_module_payload_axis_tkeep;
-  wire        eth_tx_to_icrc_module_payload_axis_tvalid;
-  wire        eth_tx_to_icrc_module_payload_axis_tlast;
-  wire        eth_tx_to_icrc_module_payload_axis_tuser;
-  wire        eth_tx_to_icrc_module_payload_axis_tready;
+  wire [7:0] eth_tx_to_icrc_module_payload_axis_tkeep;
+  wire eth_tx_to_icrc_module_payload_axis_tvalid;
+  wire eth_tx_to_icrc_module_payload_axis_tlast;
+  wire eth_tx_to_icrc_module_payload_axis_tuser;
+  wire eth_tx_to_icrc_module_payload_axis_tready;
 
+  wire        eth_tx_with_roce_icrc_hdr_valid;
+  wire        eth_tx_with_roce_icrc_hdr_ready;
+  wire [47:0] eth_tx_with_roce_icrc_dest_mac;
+  wire [47:0] eth_tx_with_roce_icrc_src_mac;
+  wire [15:0] eth_tx_with_roce_icrc_type;
   wire [63:0] eth_tx_with_roce_icrc_payload_axis_tdata;
-  wire [7:0]  eth_tx_with_roce_icrc_payload_axis_tkeep;
-  wire        eth_tx_with_roce_icrc_payload_axis_tvalid;
-  wire        eth_tx_with_roce_icrc_payload_axis_tlast;
-  wire        eth_tx_with_roce_icrc_payload_axis_tuser;
-  wire        eth_tx_with_roce_icrc_payload_axis_tready;
-
+  wire [7:0] eth_tx_with_roce_icrc_payload_axis_tkeep;
+  wire eth_tx_with_roce_icrc_payload_axis_tvalid;
+  wire eth_tx_with_roce_icrc_payload_axis_tlast;
+  wire eth_tx_with_roce_icrc_payload_axis_tuser;
+  wire eth_tx_with_roce_icrc_payload_axis_tready;
+  
+  wire        eth_tx_icrc_bypass_hdr_valid;
+  wire        eth_tx_icrc_bypass_hdr_ready;
+  wire [47:0] eth_tx_icrc_bypass_dest_mac;
+  wire [47:0] eth_tx_icrc_bypass_src_mac;
+  wire [15:0] eth_tx_icrc_bypass_type;
   wire [63:0] eth_tx_icrc_bypass_payload_axis_tdata_int;
-  wire [7:0]  eth_tx_icrc_bypass_payload_axis_tkeep_int;
-  wire        eth_tx_icrc_bypass_payload_axis_tvalid_int;
-  wire        eth_tx_icrc_bypass_payload_axis_tready_int;
-  wire        eth_tx_icrc_bypass_payload_axis_tlast_int;
-  wire        eth_tx_icrc_bypass_payload_axis_tuser_int;
+  wire [7:0] eth_tx_icrc_bypass_payload_axis_tkeep_int;
+  wire eth_tx_icrc_bypass_payload_axis_tvalid_int;
+  wire eth_tx_icrc_bypass_payload_axis_tready_int;
+  wire eth_tx_icrc_bypass_payload_axis_tlast_int;
+  wire eth_tx_icrc_bypass_payload_axis_tuser_int;
 
   wire [63:0] eth_tx_from_fifo_payload_axis_tdata_int;
   wire [7:0] eth_tx_from_fifo_payload_axis_tkeep_int;
@@ -403,81 +424,110 @@ module udp_complete_64 #(
   /*
    * ICRC insertion, only if is RoCE packet
    */
-   // AXIS demux
-  axis_demux #(
+  // Ethernet demux
+  eth_demux #(
       .M_COUNT(2),
       .DATA_WIDTH(64)
-  ) axis_demux_ICRC (
+  ) eth_demux_ICRC (
       .clk(clk),
       .rst(rst),
       // AXIS input
-      .s_axis_tdata(eth_tx_from_ip_payload_axis_tdata),
-      .s_axis_tkeep(eth_tx_from_ip_payload_axis_tkeep),
-      .s_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
-      .s_axis_tready(eth_tx_from_ip_payload_axis_tready),
-      .s_axis_tlast(eth_tx_from_ip_payload_axis_tlast),
-      .s_axis_tuser(eth_tx_from_ip_payload_axis_tuser),
+      .s_eth_hdr_valid(eth_tx_from_ip_hdr_valid), 
+      .s_eth_hdr_ready(eth_tx_from_ip_hdr_ready), 
+      .s_eth_dest_mac (eth_tx_from_ip_dest_mac ),  
+      .s_eth_src_mac  (eth_tx_from_ip_src_mac),   
+      .s_eth_type     (eth_tx_from_ip_type),      
+      .s_eth_payload_axis_tdata(eth_tx_from_ip_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep(eth_tx_from_ip_payload_axis_tkeep),
+      .s_eth_payload_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
+      .s_eth_payload_axis_tready(eth_tx_from_ip_payload_axis_tready),
+      .s_eth_payload_axis_tlast(eth_tx_from_ip_payload_axis_tlast),
+      .s_eth_payload_axis_tuser(eth_tx_from_ip_payload_axis_tuser),
       // AXIS outputs
-      .m_axis_tdata ({eth_tx_icrc_bypass_payload_axis_tdata_int,  eth_tx_to_icrc_module_payload_axis_tdata}),
-      .m_axis_tkeep ({eth_tx_icrc_bypass_payload_axis_tkeep_int,  eth_tx_to_icrc_module_payload_axis_tkeep}),
-      .m_axis_tvalid({eth_tx_icrc_bypass_payload_axis_tvalid_int, eth_tx_to_icrc_module_payload_axis_tvalid}),
-      .m_axis_tready({eth_tx_icrc_bypass_payload_axis_tready_int, eth_tx_to_icrc_module_payload_axis_tready}),
-      .m_axis_tlast ({eth_tx_icrc_bypass_payload_axis_tlast_int,  eth_tx_to_icrc_module_payload_axis_tlast}),
-      .m_axis_tuser ({eth_tx_icrc_bypass_payload_axis_tuser_int,  eth_tx_to_icrc_module_payload_axis_tuser}),
+      .m_eth_hdr_valid({eth_tx_icrc_bypass_hdr_valid, eth_tx_to_icrc_module_hdr_valid}), 
+      .m_eth_hdr_ready({eth_tx_icrc_bypass_hdr_ready, eth_tx_to_icrc_module_hdr_ready}), 
+      .m_eth_dest_mac ({eth_tx_icrc_bypass_dest_mac, eth_tx_to_icrc_module_dest_mac}), 
+      .m_eth_src_mac  ({eth_tx_icrc_bypass_src_mac, eth_tx_to_icrc_module_src_mac}), 
+      .m_eth_type     ({eth_tx_icrc_bypass_type, eth_tx_to_icrc_module_type}), 
+      .m_eth_payload_axis_tdata({eth_tx_icrc_bypass_payload_axis_tdata_int, eth_tx_to_icrc_module_payload_axis_tdata}),
+      .m_eth_payload_axis_tkeep({eth_tx_icrc_bypass_payload_axis_tkeep_int, eth_tx_to_icrc_module_payload_axis_tkeep}),
+      .m_eth_payload_axis_tvalid({eth_tx_icrc_bypass_payload_axis_tvalid_int, eth_tx_to_icrc_module_payload_axis_tvalid}),
+      .m_eth_payload_axis_tready({eth_tx_icrc_bypass_payload_axis_tready_int, eth_tx_to_icrc_module_payload_axis_tready}),
+      .m_eth_payload_axis_tlast({eth_tx_icrc_bypass_payload_axis_tlast_int, eth_tx_to_icrc_module_payload_axis_tlast}),
+      .m_eth_payload_axis_tuser({eth_tx_icrc_bypass_payload_axis_tuser_int, eth_tx_to_icrc_module_payload_axis_tuser}),
       // Control
       .enable(1'b1),
       .drop(rst),
       .select(~ip_is_roce_packet)
   );
-  
+
   // Insert ICRC
-   axis_RoCE_icrc_insert_64 #(
+  axis_RoCE_icrc_insert_64 #(
       .ENABLE_PADDING  (0),
       .MIN_FRAME_LENGTH(64)
   ) axis_RoCE_icrc_insert_64_instance (
       .clk(clk),
       .rst(rst),
-      .s_axis_tdata ( eth_tx_to_icrc_module_payload_axis_tdata),
-      .s_axis_tkeep ( eth_tx_to_icrc_module_payload_axis_tkeep),
-      .s_axis_tvalid( eth_tx_to_icrc_module_payload_axis_tvalid),
-      .s_axis_tready( eth_tx_to_icrc_module_payload_axis_tready),
-      .s_axis_tlast ( eth_tx_to_icrc_module_payload_axis_tlast),
-      .s_axis_tuser ( eth_tx_to_icrc_module_payload_axis_tuser),
-      .m_axis_tdata (eth_tx_with_roce_icrc_payload_axis_tdata),  
-      .m_axis_tkeep (eth_tx_with_roce_icrc_payload_axis_tkeep),  
-      .m_axis_tvalid(eth_tx_with_roce_icrc_payload_axis_tvalid), 
-      .m_axis_tready(eth_tx_with_roce_icrc_payload_axis_tready),  
-      .m_axis_tlast (eth_tx_with_roce_icrc_payload_axis_tlast),  
-      .m_axis_tuser (eth_tx_with_roce_icrc_payload_axis_tuser), 
+      .s_eth_hdr_valid(eth_tx_to_icrc_module_hdr_valid), 
+      .s_eth_hdr_ready(eth_tx_to_icrc_module_hdr_ready), 
+      .s_eth_dest_mac (eth_tx_to_icrc_module_dest_mac ),  
+      .s_eth_src_mac  (eth_tx_to_icrc_module_src_mac),   
+      .s_eth_type     (eth_tx_to_icrc_module_type),
+      .s_eth_payload_axis_tdata(eth_tx_to_icrc_module_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep(eth_tx_to_icrc_module_payload_axis_tkeep),
+      .s_eth_payload_axis_tvalid(eth_tx_to_icrc_module_payload_axis_tvalid),
+      .s_eth_payload_axis_tready(eth_tx_to_icrc_module_payload_axis_tready),
+      .s_eth_payload_axis_tlast(eth_tx_to_icrc_module_payload_axis_tlast),
+      .s_eth_payload_axis_tuser(eth_tx_to_icrc_module_payload_axis_tuser),
+      .m_eth_hdr_valid(eth_tx_with_roce_icrc_hdr_valid), 
+      .m_eth_hdr_ready(eth_tx_with_roce_icrc_hdr_ready), 
+      .m_eth_dest_mac (eth_tx_with_roce_icrc_dest_mac), 
+      .m_eth_src_mac  (eth_tx_with_roce_icrc_src_mac ), 
+      .m_eth_type     (eth_tx_with_roce_icrc_type),
+      .m_eth_payload_axis_tdata(eth_tx_with_roce_icrc_payload_axis_tdata),
+      .m_eth_payload_axis_tkeep(eth_tx_with_roce_icrc_payload_axis_tkeep),
+      .m_eth_payload_axis_tvalid(eth_tx_with_roce_icrc_payload_axis_tvalid),
+      .m_eth_payload_axis_tready(eth_tx_with_roce_icrc_payload_axis_tready),
+      .m_eth_payload_axis_tlast(eth_tx_with_roce_icrc_payload_axis_tlast),
+      .m_eth_payload_axis_tuser(eth_tx_with_roce_icrc_payload_axis_tuser),
       .busy()
   );
-  
-  
+
+
   // Merge the two axi stream, stream with ICRC insertion has highest priority
-  axis_arb_mux #(
-    .S_COUNT(2),
-    .DATA_WIDTH(64),
-    .ARB_TYPE_ROUND_ROBIN(0),
-    .ARB_LSB_HIGH_PRIORITY(1)
-)
-axis_mux_ICRC (
-    .clk(clk),
-    .rst(rst),
-    // AXI inputs
-    .s_axis_tdata ({eth_tx_icrc_bypass_payload_axis_tdata_int,  eth_tx_with_roce_icrc_payload_axis_tdata}), 
-    .s_axis_tkeep ({eth_tx_icrc_bypass_payload_axis_tkeep_int,  eth_tx_with_roce_icrc_payload_axis_tkeep}), 
-    .s_axis_tvalid({eth_tx_icrc_bypass_payload_axis_tvalid_int, eth_tx_with_roce_icrc_payload_axis_tvalid}),
-    .s_axis_tready({eth_tx_icrc_bypass_payload_axis_tready_int, eth_tx_with_roce_icrc_payload_axis_tready}),
-    .s_axis_tlast ({eth_tx_icrc_bypass_payload_axis_tlast_int,  eth_tx_with_roce_icrc_payload_axis_tlast}), 
-    .s_axis_tuser ({eth_tx_icrc_bypass_payload_axis_tuser_int,  eth_tx_with_roce_icrc_payload_axis_tuser}), 
-    // AXI output
-    .m_axis_tdata (m_eth_payload_axis_tdata),      
-    .m_axis_tkeep (m_eth_payload_axis_tkeep),      
-    .m_axis_tvalid(m_eth_payload_axis_tvalid),     
-    .m_axis_tready(m_eth_payload_axis_tready),     
-    .m_axis_tlast (m_eth_payload_axis_tlast),      
-    .m_axis_tuser (m_eth_payload_axis_tuser)     
-);
+  eth_arb_mux #(
+      .S_COUNT(2),
+      .DATA_WIDTH(64),
+      .ARB_TYPE_ROUND_ROBIN(0),
+      .ARB_LSB_HIGH_PRIORITY(1)
+  ) axis_mux_ICRC (
+      .clk(clk),
+      .rst(rst),
+      // AXI inputs
+      .s_eth_hdr_valid({eth_tx_icrc_bypass_hdr_valid, eth_tx_with_roce_icrc_hdr_valid}), 
+      .s_eth_hdr_ready({eth_tx_icrc_bypass_hdr_ready, eth_tx_with_roce_icrc_hdr_ready}), 
+      .s_eth_dest_mac ({eth_tx_icrc_bypass_dest_mac, eth_tx_with_roce_icrc_dest_mac}), 
+      .s_eth_src_mac  ({eth_tx_icrc_bypass_src_mac, eth_tx_with_roce_icrc_src_mac}), 
+      .s_eth_type     ({eth_tx_icrc_bypass_type, eth_tx_with_roce_icrc_type}), 
+      .s_eth_payload_axis_tdata({eth_tx_icrc_bypass_payload_axis_tdata_int, eth_tx_with_roce_icrc_payload_axis_tdata}),
+      .s_eth_payload_axis_tkeep({eth_tx_icrc_bypass_payload_axis_tkeep_int, eth_tx_with_roce_icrc_payload_axis_tkeep}),
+      .s_eth_payload_axis_tvalid({eth_tx_icrc_bypass_payload_axis_tvalid_int, eth_tx_with_roce_icrc_payload_axis_tvalid}),
+      .s_eth_payload_axis_tready({eth_tx_icrc_bypass_payload_axis_tready_int, eth_tx_with_roce_icrc_payload_axis_tready}),
+      .s_eth_payload_axis_tlast({eth_tx_icrc_bypass_payload_axis_tlast_int, eth_tx_with_roce_icrc_payload_axis_tlast}),
+      .s_eth_payload_axis_tuser({eth_tx_icrc_bypass_payload_axis_tuser_int, eth_tx_with_roce_icrc_payload_axis_tuser}),
+      // AXI output
+      .m_eth_hdr_valid(m_eth_hdr_valid), 
+      .m_eth_hdr_ready(m_eth_hdr_ready), 
+      .m_eth_dest_mac (m_eth_dest_mac), 
+      .m_eth_src_mac  (m_eth_src_mac ), 
+      .m_eth_type     (m_eth_type),
+      .m_eth_payload_axis_tdata(m_eth_payload_axis_tdata),
+      .m_eth_payload_axis_tkeep(m_eth_payload_axis_tkeep),
+      .m_eth_payload_axis_tvalid(m_eth_payload_axis_tvalid),
+      .m_eth_payload_axis_tready(m_eth_payload_axis_tready),
+      .m_eth_payload_axis_tlast(m_eth_payload_axis_tlast),
+      .m_eth_payload_axis_tuser(m_eth_payload_axis_tuser)
+  );
 
 
 
@@ -579,18 +629,18 @@ axis_mux_ICRC (
       .s_eth_payload_axis_tlast(s_eth_payload_axis_tlast),
       .s_eth_payload_axis_tuser(s_eth_payload_axis_tuser),
       // Ethernet frame output
-      .m_eth_hdr_valid(m_eth_hdr_valid),
-      .m_eth_hdr_ready(m_eth_hdr_ready),
-      .m_eth_dest_mac(m_eth_dest_mac),
-      .m_eth_src_mac(m_eth_src_mac),
-      .m_eth_type(m_eth_type),
+      .m_eth_hdr_valid(eth_tx_from_ip_hdr_valid),
+      .m_eth_hdr_ready(eth_tx_from_ip_hdr_ready),
+      .m_eth_dest_mac (eth_tx_from_ip_dest_mac),
+      .m_eth_src_mac  (eth_tx_from_ip_src_mac),
+      .m_eth_type     (eth_tx_from_ip_type),
       .m_is_roce_packet(ip_is_roce_packet),
-      .m_eth_payload_axis_tdata (eth_tx_from_ip_payload_axis_tdata),
-      .m_eth_payload_axis_tkeep (eth_tx_from_ip_payload_axis_tkeep),
+      .m_eth_payload_axis_tdata(eth_tx_from_ip_payload_axis_tdata),
+      .m_eth_payload_axis_tkeep(eth_tx_from_ip_payload_axis_tkeep),
       .m_eth_payload_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
       .m_eth_payload_axis_tready(eth_tx_from_ip_payload_axis_tready),
-      .m_eth_payload_axis_tlast (eth_tx_from_ip_payload_axis_tlast),
-      .m_eth_payload_axis_tuser (eth_tx_from_ip_payload_axis_tuser),
+      .m_eth_payload_axis_tlast(eth_tx_from_ip_payload_axis_tlast),
+      .m_eth_payload_axis_tuser(eth_tx_from_ip_payload_axis_tuser),
       // IP frame input
       .s_ip_hdr_valid(ip_tx_ip_hdr_valid),
       .s_ip_hdr_ready(ip_tx_ip_hdr_ready),
