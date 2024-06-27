@@ -368,6 +368,8 @@ module Roce_tx_header_producer #(
     packet_inst_length_next       = packet_inst_length_reg;
     total_packet_inst_length_next = total_packet_inst_length_reg;
 
+    psn_next                      = psn_reg;
+
     eth_dest_mac_next             = eth_dest_mac_reg;
     eth_src_mac_next              = eth_src_mac_reg;
     eth_type_next                 = eth_type_reg;
@@ -774,6 +776,8 @@ module Roce_tx_header_producer #(
       remaining_length_reg         <= {32{1'b1}};
       packet_inst_length_reg       <= 14'd0;
       total_packet_inst_length_reg <= 32'd0;
+
+      psn_reg                      <= 24'd0;
 
       eth_dest_mac_reg             <= 48'h0;
       eth_src_mac_reg              <= 48'h0;

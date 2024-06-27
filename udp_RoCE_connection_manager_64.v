@@ -138,6 +138,8 @@ module udp_RoCE_connection_manager_64 #(
 
     metadata_valid_next            = metadata_valid_reg;
 
+    udp_port_next                  = udp_port_reg;
+
     qp_info_valid_next             = qp_info_valid_reg;
     qp_info_rem_qpn_next           = qp_info_rem_qpn_reg;
     qp_info_loc_qpn_next           = qp_info_loc_qpn_reg;

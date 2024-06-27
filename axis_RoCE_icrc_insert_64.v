@@ -420,6 +420,8 @@ module axis_RoCE_icrc_insert_64 #(
 
   always @* begin
     state_next              = STATE_IDLE;
+    
+    s_eth_hdr_ready_next = 1'b0;
 
     reset_crc               = 1'b0;
     update_crc              = 1'b0;
