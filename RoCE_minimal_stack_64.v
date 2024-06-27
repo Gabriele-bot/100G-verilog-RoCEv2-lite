@@ -69,6 +69,13 @@ module RoCE_minimal_stack_64 #(
   wire        s_payload_axis_tlast;
   wire        s_payload_axis_tuser;
   wire        s_payload_axis_tready;
+  
+  wire [63:0] s_payload_fifo_axis_tdata;
+  wire [ 7:0] s_payload_fifo_axis_tkeep;
+  wire        s_payload_fifo_axis_tvalid;
+  wire        s_payload_fifo_axis_tlast;
+  wire        s_payload_fifo_axis_tuser;
+  wire        s_payload_fifo_axis_tready;
 
   wire [63:0] m_udp_payload_axis_not_masked_tdata;
   wire [ 7:0] m_udp_payload_axis_not_masked_tkeep;
@@ -147,7 +154,7 @@ module RoCE_minimal_stack_64 #(
   wire [15:0] udp_length;
   wire [15:0] udp_checksum;
 
-  reg  [63:0] word_counter = {64{1'b1}} - 8;
+  reg  [31:0] word_counter = {32{1'b1}} - 8;
 
   function [3:0] keep2count;
     input [7:0] k;
@@ -187,7 +194,7 @@ module RoCE_minimal_stack_64 #(
 
   always @(posedge clk) begin
     if (rst) begin
-      word_counter   <= {64{1'b1}} - 8;
+      word_counter   <= {32{1'b1}} - 8;
       dma_length_reg <= 32'd0;
     end else begin
       start_1 <= start_transfer;
@@ -198,7 +205,7 @@ module RoCE_minimal_stack_64 #(
         end
       end else if (~start_1 && start_transfer) begin
         dma_length_reg <= dma_transfer_length;
-        word_counter   <= {64{1'b1}} - 8;
+        word_counter   <= {32{1'b1}} - 8;
       end else if (~start_2 && start_1) begin
         word_counter <= 0;
       end
@@ -215,6 +222,47 @@ module RoCE_minimal_stack_64 #(
   assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
   assign s_payload_axis_tlast = (word_counter + 8 >= dma_length_reg) ? 1'b1 : 1'b0;
   assign s_payload_axis_tuser = 1'b0;
+  
+  axis_fifo #(
+      .DEPTH(256),
+      .DATA_WIDTH(64),
+      .KEEP_ENABLE(1),
+      .KEEP_WIDTH(8),
+      .ID_ENABLE(0),
+      .DEST_ENABLE(0),
+      .USER_ENABLE(1),
+      .USER_WIDTH(1),
+      .FRAME_FIFO(0)
+  ) input_axis_fifo (
+      .clk(clk),
+      .rst(rst),
+
+      // AXI input
+      .s_axis_tdata(s_payload_axis_tdata),
+      .s_axis_tkeep(s_payload_axis_tkeep),
+      .s_axis_tvalid(s_payload_axis_tvalid),
+      .s_axis_tready(s_payload_axis_tready),
+      .s_axis_tlast(s_payload_axis_tlast),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
+      .s_axis_tuser(s_payload_axis_tuser),
+
+      // AXI output
+      .m_axis_tdata( s_payload_fifo_axis_tdata ),
+      .m_axis_tkeep( s_payload_fifo_axis_tkeep ),
+      .m_axis_tvalid(s_payload_fifo_axis_tvalid),
+      .m_axis_tready(s_payload_fifo_axis_tready),
+      .m_axis_tlast( s_payload_fifo_axis_tlast ),
+      .m_axis_tid(),
+      .m_axis_tdest(),
+      .m_axis_tuser(s_payload_fifo_axis_tuser),
+
+      // Status
+      .status_overflow  (),
+      .status_bad_frame (),
+      .status_good_frame()
+  );
+  
 
   Roce_tx_header_producer #(
       .DATA_WIDTH(DATA_WIDTH)
@@ -227,12 +275,12 @@ module RoCE_minimal_stack_64 #(
       .s_r_key                   (r_key),
       .s_rem_ip_addr             (rem_ip_addr),
       .s_rem_addr                (rem_addr),
-      .s_axis_tdata              (s_payload_axis_tdata),
-      .s_axis_tkeep              (s_payload_axis_tkeep),
-      .s_axis_tvalid             (s_payload_axis_tvalid),
-      .s_axis_tready             (s_payload_axis_tready),
-      .s_axis_tlast              (s_payload_axis_tlast),
-      .s_axis_tuser              (s_payload_axis_tuser),
+      .s_axis_tdata              (s_payload_fifo_axis_tdata ),
+      .s_axis_tkeep              (s_payload_fifo_axis_tkeep ),
+      .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
+      .s_axis_tready             (s_payload_fifo_axis_tready),
+      .s_axis_tlast              (s_payload_fifo_axis_tlast ),
+      .s_axis_tuser              (s_payload_fifo_axis_tuser ),
       .m_roce_bth_valid          (roce_bth_valid),
       .m_roce_bth_ready          (roce_bth_ready),
       .m_roce_bth_op_code        (roce_bth_op_code),
