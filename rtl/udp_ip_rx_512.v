@@ -388,22 +388,22 @@ separate AXI stream.
   endfunction
 
   always @* begin
-    shift_ip_payload_axis_tdata[351:0] = save_ip_payload_axis_tdata_reg[511:160];
-    shift_ip_payload_axis_tkeep[43:0]  = save_ip_payload_axis_tkeep_reg[63:20];
+    shift_ip_payload_axis_tdata[447:0] = save_ip_payload_axis_tdata_reg[511:64];
+    shift_ip_payload_axis_tkeep[55:0]  = save_ip_payload_axis_tkeep_reg[63:8];
 
     if (shift_ip_payload_extra_cycle_reg) begin
-      shift_ip_payload_axis_tdata[511:352] = 160'd0;
-      shift_ip_payload_axis_tkeep[63:44] = 20'd0;
+      shift_ip_payload_axis_tdata[511:448] = 64'd0;
+      shift_ip_payload_axis_tkeep[63:56] = 8'd0;
       shift_ip_payload_axis_tvalid = 1'b1;
       shift_ip_payload_axis_tlast = save_ip_payload_axis_tlast_reg;
       shift_ip_payload_axis_tuser = save_ip_payload_axis_tuser_reg;
       shift_ip_payload_s_tready = flush_save;
     end else begin
-      shift_ip_payload_axis_tdata[511:352] = s_ip_payload_axis_tdata[159:0];
-      shift_ip_payload_axis_tkeep[63:44] = s_ip_payload_axis_tkeep[19:0];
+      shift_ip_payload_axis_tdata[511:448] = s_ip_payload_axis_tdata[63:0];
+      shift_ip_payload_axis_tkeep[63:56] = s_ip_payload_axis_tkeep[7:0];
       shift_ip_payload_axis_tvalid = s_ip_payload_axis_tvalid;
-      shift_ip_payload_axis_tlast = (s_ip_payload_axis_tlast && (s_ip_payload_axis_tkeep[63:20] == 0));
-      shift_ip_payload_axis_tuser = (s_ip_payload_axis_tuser && (s_ip_payload_axis_tkeep[63:20] == 0));
+      shift_ip_payload_axis_tlast = (s_ip_payload_axis_tlast && (s_ip_payload_axis_tkeep[63:8] == 0));
+      shift_ip_payload_axis_tuser = (s_ip_payload_axis_tuser && (s_ip_payload_axis_tkeep[63:8] == 0));
       shift_ip_payload_s_tready = !(s_ip_payload_axis_tlast && s_ip_payload_axis_tvalid && transfer_in_save);
     end
   end
@@ -455,7 +455,7 @@ separate AXI stream.
       STATE_READ_HEADER: begin
         // read header
         s_ip_payload_axis_tready_next = shift_ip_payload_s_tready;
-        word_count_next = m_udp_length_reg - 5 * 4;
+        word_count_next = m_ip_length_reg - 16'd8 - 16'd20;
 
         if (s_ip_payload_axis_tvalid) begin
           // word transfer in - store it
@@ -463,13 +463,14 @@ separate AXI stream.
           state_next = STATE_READ_HEADER;
 
           store_hdr_word = 1'b1;
+          m_udp_hdr_valid_next = 1'b1;
 
 
 
           s_ip_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_ip_payload_s_tready;
           state_next = STATE_READ_PAYLOAD;
 
-          if (shift_ip_payload_axis_tlast) begin
+          if (shift_ip_payload_axis_tlast && (s_ip_length - 20 >= 16'd64)) begin
             error_header_early_termination_next = 1'b1;
             error_invalid_header_next = 1'b0;
             error_invalid_checksum_next = 1'b0;
@@ -496,7 +497,7 @@ separate AXI stream.
 
         if (m_udp_payload_axis_tready_int_reg && shift_ip_payload_axis_tvalid) begin
           // word transfer through
-          word_count_next = word_count_reg - 16'd64;
+          word_count_next = word_count_reg - keep2count(shift_ip_payload_axis_tkeep);
           transfer_in_save = 1'b1;
           m_udp_payload_axis_tvalid_int = 1'b1;
           if (word_count_reg <= 64) begin

@@ -392,8 +392,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
   endfunction
 
   always @* begin
-    shift_udp_payload_axis_tdata[63:0] = save_udp_payload_axis_tdata_reg[511:64];
-    shift_udp_payload_axis_tkeep[7:0]  = save_udp_payload_axis_tkeep_reg[63:8];
+    shift_udp_payload_axis_tdata[63:0] = save_udp_payload_axis_tdata_reg[511:448];
+    shift_udp_payload_axis_tkeep[7:0]  = save_udp_payload_axis_tkeep_reg[63:56];
 
     if (shift_udp_payload_extra_cycle_reg) begin
       shift_udp_payload_axis_tdata[511:64] = 448'd0;
@@ -404,11 +404,11 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
       shift_udp_payload_s_tready = flush_save;
     end else begin
       shift_udp_payload_axis_tdata[511:64] = s_udp_payload_axis_tdata[447:0];
-      shift_udp_payload_axis_tkeep[63:8] = s_udp_payload_axis_tkeep[51:0];
+      shift_udp_payload_axis_tkeep[63:8] = s_udp_payload_axis_tkeep[55:0];
       shift_udp_payload_axis_tvalid = s_udp_payload_axis_tvalid;
-      shift_udp_payload_axis_tlast = (s_udp_payload_axis_tlast && (s_udp_payload_axis_tkeep[63:8] == 0));
-      shift_udp_payload_axis_tuser = (s_udp_payload_axis_tuser && (s_udp_payload_axis_tkeep[63:8] == 0));
-      shift_udp_payload_s_tready = !(s_udp_payload_axis_tlast && s_udp_payload_axis_tvalid && transfer_in_save);
+      shift_udp_payload_axis_tlast = (s_udp_payload_axis_tlast && (s_udp_payload_axis_tkeep[63:56] == 0));
+      shift_udp_payload_axis_tuser = (s_udp_payload_axis_tuser && (s_udp_payload_axis_tkeep[63:56] == 0));
+      shift_udp_payload_s_tready = !(s_udp_payload_axis_tlast && s_udp_payload_axis_tvalid && transfer_in_save) & !save_udp_payload_axis_tlast_reg;
     end
   end
 
@@ -450,7 +450,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
 
           s_udp_hdr_ready_next = 1'b0;
           m_ip_hdr_valid_next = 1'b1;
-          s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early;
+          //s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early;
+          /*
           if (m_ip_payload_axis_tready_int_reg && shift_udp_payload_axis_tvalid) begin
             transfer_in_save = 1'b1;
             m_ip_payload_axis_tvalid_int = 1'b1;
@@ -469,35 +470,41 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
             m_ip_payload_axis_tdata_int[63:56] = s_udp_checksum[7:0];
             m_ip_payload_axis_tdata_int[511:64] = shift_udp_payload_axis_tdata[511:64];
             m_ip_payload_axis_tkeep_int = {shift_udp_payload_axis_tkeep[63:8], 8'hFF};
-            s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early;
+            //s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early;
 
             word_count_next = s_udp_length - keep2count(m_ip_payload_axis_tkeep_int);
-          end
-          state_next = STATE_WRITE_HEADER;
-          if (s_udp_length - keep2count(m_ip_payload_axis_tkeep_int) == 16'd0) begin
-            // have entire payload 
-            if (shift_udp_payload_axis_tlast) begin
-              m_ip_payload_axis_tlast_int = 1'b1;
-              s_udp_hdr_ready_next = !m_ip_hdr_valid_next;
-              s_udp_payload_axis_tready_next = 1'b0;
-              state_next = STATE_IDLE;
+
+            s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early && shift_udp_payload_s_tready;
+            if (s_udp_length - keep2count(m_ip_payload_axis_tkeep_int) == 16'd0) begin
+              // have entire payload 
+              if (shift_udp_payload_axis_tlast) begin
+                m_ip_payload_axis_tlast_int = 1'b1;
+                s_udp_hdr_ready_next = !m_ip_hdr_valid_next;
+                s_udp_payload_axis_tready_next = 1'b0;
+                state_next = STATE_IDLE;
+              end else begin
+                store_last_word = 1'b1;
+                s_udp_payload_axis_tready_next = shift_udp_payload_s_tready;
+                m_ip_payload_axis_tvalid_int = 1'b0;
+                state_next = STATE_WRITE_PAYLOAD_LAST;
+              end
             end else begin
-              store_last_word = 1'b1;
-              s_udp_payload_axis_tready_next = shift_udp_payload_s_tready;
-              m_ip_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              if (shift_udp_payload_axis_tlast) begin
+                // end of frame, but length does not match
+                error_payload_early_termination_next = 1'b1;
+                s_udp_payload_axis_tready_next = shift_udp_payload_s_tready;
+                m_ip_payload_axis_tuser_int = 1'b1;
+                state_next = STATE_WAIT_LAST;
+              end else begin
+                //s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early && shift_udp_payload_s_tready;
+                state_next = STATE_WRITE_PAYLOAD;
+              end
             end
           end else begin
-            if (shift_udp_payload_axis_tlast) begin
-              // end of frame, but length does not match
-              error_payload_early_termination_next = 1'b1;
-              s_udp_payload_axis_tready_next = shift_udp_payload_s_tready;
-              m_ip_payload_axis_tuser_int = 1'b1;
-              state_next = STATE_WAIT_LAST;
-            end else begin
-              state_next = STATE_WRITE_PAYLOAD;
-            end
-          end
+            state_next = STATE_WRITE_HEADER;
+        end
+        */
+          state_next = STATE_WRITE_HEADER;
         end else begin
           state_next = STATE_IDLE;
         end
@@ -507,7 +514,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
         s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early && shift_udp_payload_s_tready;
 
         if (s_udp_payload_axis_tready && s_udp_payload_axis_tvalid) begin
-          m_ip_payload_axis_tvalid_int = 1'b1;
+          transfer_in_save = 1'b1;
+
           m_ip_payload_axis_tvalid_int = 1'b1;
           m_ip_payload_axis_tdata_int[7:0] = udp_source_port_reg[15:8];
           m_ip_payload_axis_tdata_int[15:8] = udp_source_port_reg[7:0];
@@ -570,14 +578,15 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
 
         if (m_ip_payload_axis_tready_int_reg && shift_udp_payload_axis_tvalid) begin
           // word transfer through
-          word_count_next = word_count_reg - 16'd8;
+          word_count_next = word_count_reg - 16'd64;
           transfer_in_save = 1'b1;
           m_ip_payload_axis_tvalid_int = 1'b1;
-          if (word_count_reg <= 8) begin
+          //if (word_count_reg <= 64) begin
+          if (word_count_reg - keep2count(m_ip_payload_axis_tkeep_int) == 16'd0) begin
             // have entire payload
             m_ip_payload_axis_tkeep_int = count2keep(word_count_reg);
             if (shift_udp_payload_axis_tlast) begin
-              if (keep2count(shift_udp_payload_axis_tkeep) < word_count_reg[4:0]) begin
+              if (keep2count(shift_udp_payload_axis_tkeep) < word_count_reg[6:0]) begin
                 // end of frame, but length does not match
                 error_payload_early_termination_next = 1'b1;
                 m_ip_payload_axis_tuser_int = 1'b1;
@@ -611,6 +620,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
         // read and discard until end of frame
         s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early && shift_udp_payload_s_tready;
 
+        //m_ip_payload_axis_tdata_int = shift_udp_payload_axis_tdata;
+        //m_ip_payload_axis_tkeep_int = shift_udp_payload_axis_tkeep;
         m_ip_payload_axis_tdata_int = last_word_data_reg;
         m_ip_payload_axis_tkeep_int = last_word_keep_reg;
         m_ip_payload_axis_tlast_int = shift_udp_payload_axis_tlast;
@@ -677,7 +688,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
         shift_udp_payload_extra_cycle_reg <= 1'b0;
       end else if (transfer_in_save) begin
         save_udp_payload_axis_tlast_reg <= s_udp_payload_axis_tlast;
-        shift_udp_payload_extra_cycle_reg <= s_udp_payload_axis_tlast && (s_udp_payload_axis_tkeep[7:4] != 0);
+        shift_udp_payload_extra_cycle_reg <= s_udp_payload_axis_tlast && (s_udp_payload_axis_tkeep[63:56] != 0);
       end
     end
 

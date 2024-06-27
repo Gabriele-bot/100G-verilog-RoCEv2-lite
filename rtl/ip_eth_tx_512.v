@@ -434,6 +434,7 @@ interface.
           hdr_sum_temp = hdr_sum_temp[15:0] + hdr_sum_temp[16];
           s_ip_hdr_ready_next = 1'b0;
           m_eth_hdr_valid_next = 1'b1;
+          /*
           s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early;
           if (m_eth_payload_axis_tready_int_reg && shift_ip_payload_axis_tvalid) begin
             transfer_in_save = 1'b1;
@@ -468,7 +469,8 @@ interface.
             s_ip_payload_axis_tready_next         = m_eth_payload_axis_tready_int_early;
 
             word_count_next = s_ip_length - keep2count(m_eth_payload_axis_tkeep_int);
-          end
+        end
+        
           state_next = STATE_WRITE_HEADER;
           if (s_ip_length - keep2count(m_eth_payload_axis_tkeep_int) == 16'd0) begin
             // have entire payload 
@@ -493,7 +495,9 @@ interface.
             end else begin
               state_next = STATE_WRITE_PAYLOAD;
             end
-          end
+        end
+        */
+          state_next = STATE_WRITE_HEADER;
         end else begin
           state_next = STATE_IDLE;
         end
@@ -503,6 +507,8 @@ interface.
         s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early && shift_ip_payload_s_tready;
 
         if (s_ip_payload_axis_tready && s_ip_payload_axis_tvalid) begin
+          transfer_in_save = 1'b1;
+
           m_eth_payload_axis_tvalid_int = 1'b1;
           hdr_sum_temp = hdr_sum_reg[15:0] + hdr_sum_reg[19:16];
           hdr_sum_temp = hdr_sum_temp[15:0] + hdr_sum_temp[16];
@@ -537,7 +543,7 @@ interface.
 
           s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early;
 
-          word_count_next = s_ip_length - keep2count(m_eth_payload_axis_tkeep_int); 
+          word_count_next = s_ip_length - keep2count(m_eth_payload_axis_tkeep_int);
 
           if (s_ip_length - keep2count(m_eth_payload_axis_tkeep_int) == 16'd0) begin
             // have entire payload
@@ -580,14 +586,14 @@ interface.
 
         if (m_eth_payload_axis_tready_int_reg && shift_ip_payload_axis_tvalid) begin
           // word transfer through
-          word_count_next = word_count_reg - 16'd8;
+          word_count_next = word_count_reg - 16'd64;
           transfer_in_save = 1'b1;
           m_eth_payload_axis_tvalid_int = 1'b1;
-          if (word_count_reg <= 8) begin
+          if (word_count_reg - keep2count(m_eth_payload_axis_tkeep_int) == 16'd0) begin
             // have entire payload
             m_eth_payload_axis_tkeep_int = count2keep(word_count_reg);
             if (shift_ip_payload_axis_tlast) begin
-              if (keep2count(shift_ip_payload_axis_tkeep) < word_count_reg[4:0]) begin
+              if (keep2count(shift_ip_payload_axis_tkeep) < word_count_reg[6:0]) begin
                 // end of frame, but length does not match
                 error_payload_early_termination_next = 1'b1;
                 m_eth_payload_axis_tuser_int = 1'b1;
@@ -730,8 +736,8 @@ interface.
   reg [511:0] m_eth_payload_axis_tdata_reg = 512'd0;
   reg [ 63:0] m_eth_payload_axis_tkeep_reg = 64'd0;
   reg m_eth_payload_axis_tvalid_reg = 1'b0, m_eth_payload_axis_tvalid_next;
-  reg        m_eth_payload_axis_tlast_reg = 1'b0;
-  reg        m_eth_payload_axis_tuser_reg = 1'b0;
+  reg         m_eth_payload_axis_tlast_reg = 1'b0;
+  reg         m_eth_payload_axis_tuser_reg = 1'b0;
 
   reg [511:0] temp_m_eth_payload_axis_tdata_reg = 512'd0;
   reg [ 63:0] temp_m_eth_payload_axis_tkeep_reg = 64'd0;
