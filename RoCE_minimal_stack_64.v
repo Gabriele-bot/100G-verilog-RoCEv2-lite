@@ -15,7 +15,7 @@ module RoCE_minimal_stack_64 #(
     input wire [23:0] rem_qpn,
     input wire [23:0] rem_psn,
     input wire [31:0] r_key,
-    input wire [47:0] rem_addr,
+    input wire [63:0] rem_addr,
     input wire [31:0] rem_ip_addr,
 
     input wire start_transfer,

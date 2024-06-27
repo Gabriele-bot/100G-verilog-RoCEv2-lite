@@ -29,7 +29,7 @@ THE SOFTWARE.
 /*
  * FPGA core logic
  */
-module fpga_core_10g_sim_with_roce (
+module fpga_core_10g_512_sim_with_roce (
     /*
      * Clock: 390.625 MHz
      * Synchronous reset
@@ -76,14 +76,35 @@ module fpga_core_10g_sim_with_roce (
   wire tx_axis_tlast;
   wire tx_axis_tuser;
 
+  wire [511:0] rx_512_axis_tdata;
+  wire [63:0] rx_512_axis_tkeep;
+  wire rx_512_axis_tvalid;
+  wire rx_512_axis_tready;
+  wire rx_512_axis_tlast;
+  wire rx_512_axis_tuser;
+
+  wire [511:0] tx_512_axis_tdata;
+  wire [63:0] tx_512_axis_tkeep;
+  wire tx_512_axis_tvalid;
+  wire tx_512_axis_tready;
+  wire tx_512_axis_tlast;
+  wire tx_512_axis_tuser;
+
+  wire [511:0] tx_512_fifo_axis_tdata;
+  wire [63:0] tx_512_fifo_axis_tkeep;
+  wire tx_512_fifo_axis_tvalid;
+  wire tx_512_fifo_axis_tready;
+  wire tx_512_fifo_axis_tlast;
+  wire tx_512_fifo_axis_tuser;
+
   // Ethernet frame between Ethernet modules and UDP stack
   wire rx_eth_hdr_ready;
   wire rx_eth_hdr_valid;
   wire [47:0] rx_eth_dest_mac;
   wire [47:0] rx_eth_src_mac;
   wire [15:0] rx_eth_type;
-  wire [63:0] rx_eth_payload_axis_tdata;
-  wire [7:0] rx_eth_payload_axis_tkeep;
+  wire [511:0] rx_eth_payload_axis_tdata;
+  wire [63:0] rx_eth_payload_axis_tkeep;
   wire rx_eth_payload_axis_tvalid;
   wire rx_eth_payload_axis_tready;
   wire rx_eth_payload_axis_tlast;
@@ -94,8 +115,8 @@ module fpga_core_10g_sim_with_roce (
   wire [47:0] tx_eth_dest_mac;
   wire [47:0] tx_eth_src_mac;
   wire [15:0] tx_eth_type;
-  wire [63:0] tx_eth_payload_axis_tdata;
-  wire [7:0] tx_eth_payload_axis_tkeep;
+  wire [511:0] tx_eth_payload_axis_tdata;
+  wire [63:0] tx_eth_payload_axis_tkeep;
   wire tx_eth_payload_axis_tvalid;
   wire tx_eth_payload_axis_tready;
   wire tx_eth_payload_axis_tlast;
@@ -120,8 +141,8 @@ module fpga_core_10g_sim_with_roce (
   wire [15:0] rx_ip_header_checksum;
   wire [31:0] rx_ip_source_ip;
   wire [31:0] rx_ip_dest_ip;
-  wire [63:0] rx_ip_payload_axis_tdata;
-  wire [7:0] rx_ip_payload_axis_tkeep;
+  wire [511:0] rx_ip_payload_axis_tdata;
+  wire [63:0] rx_ip_payload_axis_tkeep;
   wire rx_ip_payload_axis_tvalid;
   wire rx_ip_payload_axis_tready;
   wire rx_ip_payload_axis_tlast;
@@ -136,8 +157,8 @@ module fpga_core_10g_sim_with_roce (
   wire [7:0] tx_ip_protocol;
   wire [31:0] tx_ip_source_ip;
   wire [31:0] tx_ip_dest_ip;
-  wire [63:0] tx_ip_payload_axis_tdata;
-  wire [7:0] tx_ip_payload_axis_tkeep;
+  wire [511:0] tx_ip_payload_axis_tdata;
+  wire [63:0] tx_ip_payload_axis_tkeep;
   wire tx_ip_payload_axis_tvalid;
   wire tx_ip_payload_axis_tready;
   wire tx_ip_payload_axis_tlast;
@@ -166,8 +187,8 @@ module fpga_core_10g_sim_with_roce (
   wire [15:0] rx_udp_dest_port;
   wire [15:0] rx_udp_length;
   wire [15:0] rx_udp_checksum;
-  wire [63:0] rx_udp_payload_axis_tdata;
-  wire [7:0] rx_udp_payload_axis_tkeep;
+  wire [511:0] rx_udp_payload_axis_tdata;
+  wire [63:0] rx_udp_payload_axis_tkeep;
   wire rx_udp_payload_axis_tvalid;
   wire rx_udp_payload_axis_tready;
   wire rx_udp_payload_axis_tlast;
@@ -184,22 +205,22 @@ module fpga_core_10g_sim_with_roce (
   wire [15:0] tx_udp_dest_port;
   wire [15:0] tx_udp_length;
   wire [15:0] tx_udp_checksum;
-  wire [63:0] tx_udp_payload_axis_tdata;
-  wire [7:0] tx_udp_payload_axis_tkeep;
+  wire [511:0] tx_udp_payload_axis_tdata;
+  wire [63:0] tx_udp_payload_axis_tkeep;
   wire tx_udp_payload_axis_tvalid;
   wire tx_udp_payload_axis_tready;
   wire tx_udp_payload_axis_tlast;
   wire tx_udp_payload_axis_tuser;
 
-  wire [63:0] rx_fifo_udp_payload_axis_tdata;
-  wire [7:0] rx_fifo_udp_payload_axis_tkeep;
+  wire [511:0] rx_fifo_udp_payload_axis_tdata;
+  wire [63:0] rx_fifo_udp_payload_axis_tkeep;
   wire rx_fifo_udp_payload_axis_tvalid;
   wire rx_fifo_udp_payload_axis_tready;
   wire rx_fifo_udp_payload_axis_tlast;
   wire rx_fifo_udp_payload_axis_tuser;
 
-  wire [63:0] tx_fifo_udp_payload_axis_tdata;
-  wire [7:0] tx_fifo_udp_payload_axis_tkeep;
+  wire [511:0] tx_fifo_udp_payload_axis_tdata;
+  wire [63:0] tx_fifo_udp_payload_axis_tkeep;
   wire tx_fifo_udp_payload_axis_tvalid;
   wire tx_fifo_udp_payload_axis_tready;
   wire tx_fifo_udp_payload_axis_tlast;
@@ -300,7 +321,7 @@ module fpga_core_10g_sim_with_roce (
 
   //assign led = sw;
   assign led = led_reg;
-  assign phy_reset_n = !rst;
+  //assign phy_reset_n = !rst;
 
   eth_mac_10g_fifo #(
       .ENABLE_PADDING(1),
@@ -390,10 +411,14 @@ module fpga_core_10g_sim_with_roce (
     end
   end
 
-
-  eth_axis_rx #(
-      .DATA_WIDTH(64)
-  ) eth_axis_rx_inst (
+  axis_adapter #(
+      .S_DATA_WIDTH(64),
+      .M_DATA_WIDTH(512),
+      .ID_ENABLE(0),
+      .DEST_ENABLE(0),
+      .USER_ENABLE(1),
+      .USER_WIDTH(1)
+  ) rx_axis_64_to_512_adapter_inst (
       .clk(clk),
       .rst(rst),
       // AXI input
@@ -403,6 +428,54 @@ module fpga_core_10g_sim_with_roce (
       .s_axis_tready(rx_axis_tready),
       .s_axis_tlast(rx_axis_tlast),
       .s_axis_tuser(rx_axis_tuser),
+      // AXI output
+      .m_axis_tdata(rx_512_axis_tdata),
+      .m_axis_tkeep(rx_512_axis_tkeep),
+      .m_axis_tvalid(rx_512_axis_tvalid),
+      .m_axis_tready(rx_512_axis_tready),
+      .m_axis_tlast(rx_512_axis_tlast),
+      .m_axis_tuser(rx_512_axis_tuser)
+  );
+
+  axis_adapter #(
+      .S_DATA_WIDTH(512),
+      .M_DATA_WIDTH(64),
+      .ID_ENABLE(0),
+      .DEST_ENABLE(0),
+      .USER_ENABLE(1),
+      .USER_WIDTH(1)
+  ) tx_axis_512_to_64_adapter_inst (
+      .clk(clk),
+      .rst(rst),
+      // AXI input
+      .s_axis_tdata(tx_512_axis_tdata),
+      .s_axis_tkeep(tx_512_axis_tkeep),
+      .s_axis_tvalid(tx_512_axis_tvalid),
+      .s_axis_tready(tx_512_axis_tready),
+      .s_axis_tlast(tx_512_axis_tlast),
+      .s_axis_tuser(tx_512_axis_tuser),
+      // AXI output
+      .m_axis_tdata(tx_axis_tdata),
+      .m_axis_tkeep(tx_axis_tkeep),
+      .m_axis_tvalid(tx_axis_tvalid),
+      .m_axis_tready(tx_axis_tready),
+      .m_axis_tlast(tx_axis_tlast),
+      .m_axis_tuser(tx_axis_tuser)
+  );
+
+
+  eth_axis_rx #(
+      .DATA_WIDTH(512)
+  ) eth_axis_rx_inst (
+      .clk(clk),
+      .rst(rst),
+      // AXI input
+      .s_axis_tdata(rx_512_axis_tdata),
+      .s_axis_tkeep(rx_512_axis_tkeep),
+      .s_axis_tvalid(rx_512_axis_tvalid),
+      .s_axis_tready(rx_512_axis_tready),
+      .s_axis_tlast(rx_512_axis_tlast),
+      .s_axis_tuser(rx_512_axis_tuser),
       // Ethernet frame output
       .m_eth_hdr_valid(rx_eth_hdr_valid),
       .m_eth_hdr_ready(rx_eth_hdr_ready),
@@ -421,34 +494,74 @@ module fpga_core_10g_sim_with_roce (
   );
 
   eth_axis_tx #(
-      .DATA_WIDTH(64)
+      .DATA_WIDTH(512)
   ) eth_axis_tx_inst (
-      .clk(clk),
-      .rst(rst),
+      .clk                      (clk),
+      .rst                      (rst),
       // Ethernet frame input
-      .s_eth_hdr_valid(tx_eth_hdr_valid),
-      .s_eth_hdr_ready(tx_eth_hdr_ready),
-      .s_eth_dest_mac(tx_eth_dest_mac),
-      .s_eth_src_mac(tx_eth_src_mac),
-      .s_eth_type(tx_eth_type),
-      .s_eth_payload_axis_tdata(tx_eth_payload_axis_tdata),
-      .s_eth_payload_axis_tkeep(tx_eth_payload_axis_tkeep),
+      .s_eth_hdr_valid          (tx_eth_hdr_valid),
+      .s_eth_hdr_ready          (tx_eth_hdr_ready),
+      .s_eth_dest_mac           (tx_eth_dest_mac),
+      .s_eth_src_mac            (tx_eth_src_mac),
+      .s_eth_type               (tx_eth_type),
+      .s_eth_payload_axis_tdata (tx_eth_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep (tx_eth_payload_axis_tkeep),
       .s_eth_payload_axis_tvalid(tx_eth_payload_axis_tvalid),
       .s_eth_payload_axis_tready(tx_eth_payload_axis_tready),
-      .s_eth_payload_axis_tlast(tx_eth_payload_axis_tlast),
-      .s_eth_payload_axis_tuser(tx_eth_payload_axis_tuser),
+      .s_eth_payload_axis_tlast (tx_eth_payload_axis_tlast),
+      .s_eth_payload_axis_tuser (tx_eth_payload_axis_tuser),
       // AXI output
-      .m_axis_tdata(tx_axis_tdata),
-      .m_axis_tkeep(tx_axis_tkeep),
-      .m_axis_tvalid(tx_axis_tvalid),
-      .m_axis_tready(tx_axis_tready),
-      .m_axis_tlast(tx_axis_tlast),
-      .m_axis_tuser(tx_axis_tuser),
+      .m_axis_tdata             (tx_512_fifo_axis_tdata),
+      .m_axis_tkeep             (tx_512_fifo_axis_tkeep),
+      .m_axis_tvalid            (tx_512_fifo_axis_tvalid),
+      .m_axis_tready            (tx_512_fifo_axis_tready),
+      .m_axis_tlast             (tx_512_fifo_axis_tlast),
+      .m_axis_tuser             (tx_512_fifo_axis_tuser),
       // Status signals
-      .busy()
+      .busy                     ()
   );
 
-  udp_complete_64 #(
+  axis_fifo #(
+      .DEPTH(2048),
+      .DATA_WIDTH(512),
+      .KEEP_ENABLE(1),
+      .KEEP_WIDTH(64),
+      .ID_ENABLE(0),
+      .DEST_ENABLE(0),
+      .USER_ENABLE(1),
+      .USER_WIDTH(1),
+      .FRAME_FIFO(0)
+  ) eth_tx_axis_fifo (
+      .clk(clk),
+      .rst(rst),
+
+      // AXI input
+      .s_axis_tdata(tx_512_fifo_axis_tdata),
+      .s_axis_tkeep(tx_512_fifo_axis_tkeep),
+      .s_axis_tvalid(tx_512_fifo_axis_tvalid),
+      .s_axis_tready(tx_512_fifo_axis_tready),
+      .s_axis_tlast(tx_512_fifo_axis_tlast),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
+      .s_axis_tuser(tx_512_fifo_axis_tuser),
+
+      // AXI output
+      .m_axis_tdata(tx_512_axis_tdata),
+      .m_axis_tkeep(tx_512_axis_tkeep),
+      .m_axis_tvalid(tx_512_axis_tvalid),
+      .m_axis_tready(tx_512_axis_tready),
+      .m_axis_tlast(tx_512_axis_tlast),
+      .m_axis_tid(),
+      .m_axis_tdest(),
+      .m_axis_tuser(tx_512_axis_tuser),
+
+      // Status
+      .status_overflow  (),
+      .status_bad_frame (),
+      .status_good_frame()
+  );
+
+  udp_complete_512 #(
       .UDP_CHECKSUM_GEN_ENABLE(0)
   ) udp_complete_inst (
       .clk(clk),
@@ -595,15 +708,13 @@ module fpga_core_10g_sim_with_roce (
   wire [23:0] rem_psn;
   wire [31:0] r_key;
   wire [47:0] rem_addr;
-  wire [31:0] rem_ip_addr = {8'd11, 8'd1, 8'd212, 8'd11};
+  wire [31:0] rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
   wire start_transfer;
 
   wire metadata_valid;
 
   // ROCE TX inst
-  RoCE_minimal_stack_64 #(
-      .DATA_WIDTH(64)
-  ) RoCE_minimal_stack_64_instance (
+  RoCE_minimal_stack_512 RoCE_minimal_stack_512_instance (
       .clk(clk),
       .rst(rst),
       .dma_transfer_length(dma_transfer_length),

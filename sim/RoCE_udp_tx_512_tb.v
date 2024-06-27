@@ -25,7 +25,7 @@ module RoCE_udp_tx_512_tb();
     wire m_udp_payload_axis_tvalid;
     wire m_udp_payload_axis_tlast;
     wire m_udp_payload_axis_tuser;
-    wire m_udp_payload_axis_tready;
+    wire m_udp_payload_axis_tready = 1'b1;
     
     wire [511:0] m_udp_payload_axis_masked_tdata;
     wire [63:0] m_udp_payload_axis_masked_tkeep;
@@ -76,6 +76,8 @@ module RoCE_udp_tx_512_tb();
     reg [63:0] s_roce_reth_v_addr = 64'd12435;
     reg [31:0] s_roce_reth_r_key = 32'd233;
     reg [31:0] s_roce_reth_length = 32'd444;
+    
+    wire [31:0] s_roce_immdh_ready;
 
     reg [47:0] s_eth_dest_mac = 48'd124521111;
     reg [47:0] s_eth_src_mac = 48'd2318743;
@@ -94,7 +96,7 @@ module RoCE_udp_tx_512_tb();
     reg [31:0] s_ip_dest_ip = 32'd3214;
     reg [15:0] s_udp_source_port = 16'd2321;
     reg [15:0] s_udp_dest_port = 16'd123;
-    reg [15:0] s_udp_length = 16'd1400;
+    reg [15:0] s_udp_length = 16'd128;
     reg [15:0] s_udp_checksum = 16'd0;
 
     reg[63:0] word_counter = 64'd0;
@@ -273,6 +275,9 @@ module RoCE_udp_tx_512_tb();
         .s_roce_reth_v_addr(s_roce_reth_v_addr),
         .s_roce_reth_r_key(s_roce_reth_r_key),
         .s_roce_reth_length(s_roce_reth_length),
+        .s_roce_immdh_valid(1'b0),
+        .s_roce_immdh_ready(s_roce_immdh_ready),
+        .s_roce_immdh_data(32'hDEADBEEF),
         .s_eth_dest_mac(s_eth_dest_mac),
         .s_eth_src_mac(s_eth_src_mac),
         .s_eth_type(s_eth_type),
@@ -330,6 +335,7 @@ module RoCE_udp_tx_512_tb();
         .error_payload_early_termination(error_payload_early_termination)
     );
     
+    /*
     axis_mask_fields_icrc #(
         .DATA_WIDTH(512)
     ) axis_mask_fields_icrc_instance(
@@ -370,7 +376,7 @@ module RoCE_udp_tx_512_tb();
         .busy(busy)
     );
     
-
+ */
 
     //assign s_roce_payload_axis_tdata = s_axis_tdata;
     assign s_roce_payload_axis_tkeep = s_roce_payload_axis_tlast ? count2keep(s_udp_length-word_counter-28-8) : {64{1'b1}};
