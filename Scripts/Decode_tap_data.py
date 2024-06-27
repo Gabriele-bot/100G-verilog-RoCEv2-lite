@@ -3,6 +3,8 @@ import numpy as np
 import sys
 import socket
 
+from send_connection_info import send_txmeta, send_qp_info
+
 
 from ipaddress import ip_address, IPv4Address
 
@@ -24,8 +26,8 @@ def compute_crc(data, poly, crc_init):
     for i in range(4):
         crc ^= data >> (8 * i) & 0xFF
         for j in range(8):
-            mask = -(crc & 1);
-            crc = (crc >> 1) ^ (poly_reversed & mask);
+            mask = -(crc & 1)
+            crc = (crc >> 1) ^ (poly_reversed & mask)
     return crc
 
 
@@ -75,6 +77,26 @@ class EthFrame(object):
         self.payload = self.raw_frame[-(len(self.raw_frame) - 14):]
         #if self.eth_type == 0x0800:
         #    self.ip_raw_frame = self._payload
+
+    def build_eth_frame(self):
+        data = b''
+        data += struct.pack('>Q', self.eth_dest_mac)[2:]
+        data += struct.pack('>Q', self.eth_src_mac)[2:]
+        data += struct.pack('>H', self.eth_type)
+
+        for i in range(int(len(self.payload)/4)):
+            data += struct.pack('>Q', self.payload[i*4:(i+1)*4])
+
+        fcs_value = self.compute_fcs(data)
+        data += struct.pack('>Q', fcs_value)
+
+    def compute_fcs(self, data_stream):
+        steps_32 = int(len(data_stream) / 4)
+
+        crc_temp = 0xFFFFFFFF
+        for i in range(steps_32):
+            value = struct.unpack('>L', data_stream[(i * 4):(i * 4 + 4)])[0]
+            crc_temp = compute_crc(value, 0x04c11db7, crc_temp)
 
 
 class IPFrame(object):
@@ -136,6 +158,9 @@ class IPFrame(object):
         self.ip_dest_ip = struct.unpack('>L', ip_header[16:20])[0]
 
         self.payload = self.raw_frame[-(len(self.raw_frame) - 20):]
+
+
+
 
 
 class UDPFrame(object):
@@ -288,6 +313,9 @@ class RoCEFrame(object):
         for i in range(steps_32):
             value = struct.unpack('<L', roce_frame_temp[(i * 4):(i * 4 + 4)])[0]
             crc_temp = compute_crc(value, 0x04c11db7, crc_temp)
+            #print("Hex data value ", hex(value))
+            #if i % 16 == 15:
+                #print(i, hex(crc_temp))
 
         crc_temp = ~np.uint32(crc_temp)
 
@@ -307,7 +335,7 @@ class RoCEStream(object):
         self.sim_data_legth = 0
         self.received_r_key = 0
 
-    def decode_Roce_stream(self, DEBUG_OUT = False):
+    def decode_Roce_stream(self, DEBUG_OUT = False, set_dma_length=0x0, set_r_key=0x0, starting_psn=0x0, set_qpn=0x0):
         icrc_errors  = 0
         psn_errors   = 0
         length_error = False
@@ -335,7 +363,8 @@ class RoCEStream(object):
                         RoCE_frame_data.decode_BTH()
                         RoCE_frame_data.decode_icrc()
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                            self.exp_psn = RoCE_frame_data.roce_bth_psn
+                            #self.exp_psn = RoCE_frame_data.roce_bth_psn
+                            self.exp_psn = starting_psn
                         else:
                             self.exp_psn = self.exp_psn + 1
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
@@ -343,13 +372,14 @@ class RoCEStream(object):
                             self.sim_data_legth = RoCE_frame_data.roce_reth_dma_length
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY:
                             self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4
+                            self.received_r_key = RoCE_frame_data.roce_reth_rkey
                         elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
                             self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4 - 4
+                            self.received_r_key = RoCE_frame_data.roce_reth_rkey
                         elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_MIDDLE or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST:
                             self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4
                         elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD:
                             self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4 - 4
-                        self.received_r_key = RoCE_frame_data.roce_reth_rkey
                         SW_icrc = RoCE_frame_data.compute_sw_icrc()
                         if DEBUG_OUT:
                             print('RoCE packet recieved!')
@@ -357,18 +387,27 @@ class RoCEStream(object):
                             print('QUEUE PAIR NUMBER = ', RoCE_frame_data.roce_bth_dest_qp)
                             print('Recieved PSN = ', RoCE_frame_data.roce_bth_psn)
                             print('Expected PSN = ', self.exp_psn)
+                            if set_qpn != RoCE_frame_data.roce_bth_dest_qp:
+                                print('Wrong QPN!')
                             if self.exp_psn != RoCE_frame_data.roce_bth_psn:
                                 print('Wrong PSN!')
                             print('SIM ICRC = ', hex(RoCE_frame_data.roce_icrc))
                             print('SW ICRC  = ', hex(SW_icrc))
+                            print('SW ICRC_reversed  = ', hex(~np.uint32(SW_icrc)))
                             if SW_icrc != RoCE_frame_data.roce_icrc:
                                 print('Software ICRC does not match recieved one!')
                             else:
                                 print('Good ICRC!')
                             print('Measured length= ', self.measured_data_legth)
                             if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or Eth_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                                if set_dma_length != self.sim_data_legth:
+                                    print('RETH DMA Length does not match with sent one!')
+                                if set_dma_length != self.measured_data_legth:
+                                    print('DMA Length measured does not match with sent one!')
                                 if self.sim_data_legth != self.measured_data_legth:
                                     print('DMA Length does not match!')
+                                if set_r_key != self.received_r_key:
+                                    print('R_KEY does not match with sent one!')
                                 print('RETH DMA length= ', self.sim_data_legth)
                                 print('Measured length= ', self.measured_data_legth)
                                 print('Remote key= ', hex(self.received_r_key))
@@ -390,6 +429,16 @@ Received_r_key = 0
 
 data_stream = []
 
+dma_length_set  = 8224
+r_key_set        = 0x1234
+starting_psn_set = 10
+rem_qpn_set = 0x11
+
+#send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
+#send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
+
+send_txmeta(rem_ip_addr="22.1.212.10", rem_addr=0x1234567, rdma_length=dma_length_set, start_flag=0x1)
+
 
 ETH_P_ALL = 3  # not defined in socket module, sadly...
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
@@ -404,10 +453,45 @@ try:
 except KeyboardInterrupt:
     print('Exiting!')
 
+#print(data_stream)
+
 RoCE_stream_recieved = RoCEStream(data_stream)
-icrc_errors, psn_errors, length_error = RoCE_stream_recieved.decode_Roce_stream(True)
+icrc_errors, psn_errors, length_error = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
 if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
     print('No errors observed!')
 else:
     print('Errors observed!')
+
+
+#data = 0xFEEDBEEFDEADBEEF
+#crc_value = compute_crc(data,0x04c11db7, 0xFFFFFFFF)
+#data_struct = struct.pack('>Q', data)
+#print(data_struct)
+#data = struct.unpack('>Q', data_struct[0:8])[0]
+#crc_temp = 0xFFFFFFFF
+#crc_temp_2 = 0xFFFFFFFF
+#for i in range(2):
+#    data_value = data >> i*32 & 0xFFFFFFFF
+#    crc_temp = compute_crc(data_value, 0x04c11db7, crc_temp)
+#    crc_temp_2 = compute_crc(data_value, 0xEDB88320, crc_temp_2)
+#print(hex(data))
+#print(hex(crc_temp))
+#print(hex(crc_temp_2))
+#data = struct.unpack('<Q', data_struct[0:8])[0]
+#crc_temp = 0xFFFFFFFF
+#crc_temp_2 = 0xFFFFFFFF
+#for i in range(2):
+#    data_value = data >> i*32 & 0xFFFFFFFF
+#    crc_temp = compute_crc(data_value, 0x04c11db7, crc_temp)
+#    crc_temp_2 = compute_crc(data_value, 0xEDB88320, crc_temp_2)
+#print(hex(data))
+#print(hex(crc_temp))
+#print(hex(crc_temp_2))
+#
+#test = 0xDEADBEEF
+#test_struct = struct.pack('>L', test)
+#test = struct.unpack('<L', test_struct[0:4])[0]
+#print(hex(test))
+
+
 
