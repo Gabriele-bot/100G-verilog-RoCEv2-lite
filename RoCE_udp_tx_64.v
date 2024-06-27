@@ -121,32 +121,62 @@ module RoCE_udp_tx_64 (
 
   /*
 
-IP Frame
+RoCE RDMA WRITE Frame.
 
+RDMA WRITE FIRST or RMDA WRITE ONLY
+IP_HDR + UDP_HDR + BTH + RETH + PAYLOAD + ICRC
+RMDA WRITE ONLY with IMMD + PAYLOAD + ICRC
+IP_HDR + UDP_HDR +BTH + RETH + IMMD + PAYLOAD + ICRC
+RDMA WRITE MIDDLE or RMDA WRITE LAST
+IP_HDR + UDP_HDR +BTH + PAYLOAD + ICRC
+RMDA WRITE LAST with IMMD + PAYLOAD + ICRC
+IP_HDR + UDP_HDR +BTH + IMMD + PAYLOAD + ICRC
+
+
++--------------------------------------+
+|                BTH                   |
++--------------------------------------+
  Field                       Length
- Destination MAC address     6 octets
- Source MAC address          6 octets
- Ethertype (0x0800)          2 octets
- Version (4)                 4 bits
- IHL (5-15)                  4 bits
- DSCP (0)                    6 bits
- ECN (0)                     2 bits
- length                      2 octets
- identification (0?)         2 octets
- flags (010)                 3 bits
- fragment offset (0)         13 bits
- time to live (64?)          1 octet
- protocol                    1 octet
- header checksum             2 octets
- source IP                   4 octets
- destination IP              4 octets
- options                     (IHL-5)*4 octets
+ OP code                     1 octet
+ Solicited Event             1 bit
+ Mig request                 1 bit
+ Pad count                   2 bits
+ Header version              4 bits
+ Partition key               2 octets
+ Reserved                    1 octet
+ Queue Pair Number           3 octets
+ Ack request                 1 bit
+ Reserved                    7 bits
+ Packet Sequence Number      3 octets
++--------------------------------------+
+|               RETH                   |
++--------------------------------------+
+ Field                       Length
+ Remote Address              8 octets
+ R key                       4 octets
+ DMA length                  4 octets
++--------------------------------------+
+|               IMMD                   |
++--------------------------------------+
+ Field                       Length
+ Immediate data              4 octets
++--------------------------------------+
+|               AETH                   |
++--------------------------------------+
+ Field                       Length
+ Syndrome                    1 octet
+ Message Sequence Number     3 octets
+ 
  payload                     length octets
++--------------------------------------+
+|               ICRC                   |
++--------------------------------------+
+ Field                       Length
+ ICRC field                  4 octets
 
-This module receives an IP frame with header fields in parallel along with the
-payload in an AXI stream, combines the header with the payload, passes through
-the Ethernet headers, and transmits the complete Ethernet payload on an AXI
-interface.
+This module receives a RoCEv2 frame with headers fields in parallel along with the
+payload in an AXI stream, combines the headers with the payload, passes through
+the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
 */
 
@@ -504,8 +534,8 @@ interface.
               end
             end
             6'h08: begin
-              m_udp_payload_axis_tdata_int[0]     = roce_bth_ack_req_reg;
-              m_udp_payload_axis_tdata_int[7:1]   = 7'b0;  // Reserved
+              m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
+              m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
               m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
               m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
               m_udp_payload_axis_tdata_int[31:24] = roce_bth_psn_reg[7:0];
@@ -566,8 +596,8 @@ interface.
           m_udp_payload_axis_tvalid_int = 1'b1;
           transfer_in_save = 1'b1;
           if (header_type == HEADER_BTH) begin
-            m_udp_payload_axis_tdata_int[0]     = roce_bth_ack_req_reg;
-            m_udp_payload_axis_tdata_int[7:1]   = 7'b0;  // Reserved
+            m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
+            m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
             m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
             m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
             m_udp_payload_axis_tdata_int[31:24] = roce_bth_psn_reg[7:0];
