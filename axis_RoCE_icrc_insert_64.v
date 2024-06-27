@@ -37,24 +37,34 @@ module axis_RoCE_icrc_insert_64 #(
     input wire rst,
 
     /*
-     * AXI input
+     * ETHERNET frame input
      */
-    input  wire [63:0] s_axis_tdata,
-    input  wire [ 7:0] s_axis_tkeep,
-    input  wire        s_axis_tvalid,
-    output wire        s_axis_tready,
-    input  wire        s_axis_tlast,
-    input  wire        s_axis_tuser,
+    input  wire        s_eth_hdr_valid,
+    output wire        s_eth_hdr_ready,
+    input  wire [47:0] s_eth_dest_mac,
+    input  wire [47:0] s_eth_src_mac,
+    input  wire [15:0] s_eth_type,
+    input  wire [63:0] s_eth_payload_axis_tdata,
+    input  wire [ 7:0] s_eth_payload_axis_tkeep,
+    input  wire        s_eth_payload_axis_tvalid,
+    output wire        s_eth_payload_axis_tready,
+    input  wire        s_eth_payload_axis_tlast,
+    input  wire        s_eth_payload_axis_tuser,
 
     /*
-     * AXI output
+     * ETHERNET frame output with ICRC at the end
      */
-    output wire [63:0] m_axis_tdata,
-    output wire [ 7:0] m_axis_tkeep,
-    output wire        m_axis_tvalid,
-    input  wire        m_axis_tready,
-    output wire        m_axis_tlast,
-    output wire        m_axis_tuser,
+    output wire        m_eth_hdr_valid,
+    input  wire        m_eth_hdr_ready,
+    output wire [47:0] m_eth_dest_mac,
+    output wire [47:0] m_eth_src_mac,
+    output wire [15:0] m_eth_type,
+    output wire [63:0] m_eth_payload_axis_tdata,
+    output wire [ 7:0] m_eth_payload_axis_tkeep,
+    output wire        m_eth_payload_axis_tvalid,
+    input  wire        m_eth_payload_axis_tready,
+    output wire        m_eth_payload_axis_tlast,
+    output wire        m_eth_payload_axis_tuser,
 
     /*
      * Status
@@ -65,6 +75,11 @@ module axis_RoCE_icrc_insert_64 #(
   localparam [1:0] STATE_IDLE = 2'd0, STATE_PAYLOAD = 2'd1, STATE_PAD = 2'd2, STATE_ICRC = 2'd3;
 
   reg [1:0] state_reg = STATE_IDLE, state_next;
+
+  reg m_eth_hdr_valid_reg = 1'b0, m_eth_hdr_valid_next;
+  reg  [47:0] m_eth_dest_mac_reg = 48'd0;
+  reg  [47:0] m_eth_src_mac_reg = 48'd0;
+  reg  [15:0] m_eth_type_reg = 16'd0;
 
   wire [63:0] axis_to_mask_tdata;
   wire [ 7:0] axis_to_mask_tkeep;
@@ -106,7 +121,10 @@ module axis_RoCE_icrc_insert_64 #(
 
   reg busy_reg = 1'b0;
 
+  reg s_eth_hdr_ready_reg = 1'b0, s_eth_hdr_ready_next;
   reg s_axis_tready_reg = 1'b0, s_axis_tready_next;
+
+  reg         store_eth_hdr;
 
   reg  [31:0] crc_state = 32'hDEBB20E3;
 
@@ -128,17 +146,26 @@ module axis_RoCE_icrc_insert_64 #(
   reg         m_axis_tuser_int;
   wire        m_axis_tready_int_early;
 
-  assign axis_masked_tready = s_axis_tready_reg;
+  assign s_eth_hdr_ready     = s_eth_hdr_ready_reg;
 
-  assign busy = busy_reg;
+  assign axis_masked_tready  = s_axis_tready_reg;
 
 
-  assign axis_to_mask_tdata = s_axis_tdata;
-  assign axis_to_mask_tkeep = s_axis_tkeep;
-  assign axis_to_mask_tvalid = s_axis_tvalid;
-  assign axis_to_mask_tlast = s_axis_tlast;
-  assign axis_to_mask_tuser = s_axis_tuser;
-  assign s_axis_tready = axis_to_mask_tready;
+  assign m_eth_hdr_valid     = m_eth_hdr_valid_reg;
+  assign m_eth_dest_mac      = m_eth_dest_mac_reg;
+  assign m_eth_src_mac       = m_eth_src_mac_reg;
+  assign m_eth_type          = m_eth_type_reg;
+
+
+  assign busy                = busy_reg;
+
+
+  assign axis_to_mask_tdata  = s_eth_payload_axis_tdata;
+  assign axis_to_mask_tkeep  = s_eth_payload_axis_tkeep;
+  assign axis_to_mask_tvalid = s_eth_payload_axis_tvalid;
+  assign axis_to_mask_tlast  = s_eth_payload_axis_tlast;
+  assign axis_to_mask_tuser  = s_eth_payload_axis_tuser;
+  assign s_eth_payload_axis_tready       = axis_to_mask_tready;
 
 
   axis_mask_fields_icrc #(
@@ -325,24 +352,28 @@ module axis_RoCE_icrc_insert_64 #(
     casez (icrc_s_tkeep)
       8'bzzzzzz01: begin
         icrc_m_tdata_0 = {24'd0, ~crc_next0[31:0], icrc_s_tdata_not_masked[7:0]};
+        //icrc_m_tdata_0 = {24'd0, ~crc_next0[7:0], ~crc_next0[15:8], ~crc_next0[23:16], ~crc_next0[31:24], icrc_s_tdata_not_masked[7:0]};
         icrc_m_tdata_1 = 64'd0;
         icrc_m_tkeep_0 = 8'b00011111;
         icrc_m_tkeep_1 = 8'b00000000;
       end
       8'bzzzzz011: begin
         icrc_m_tdata_0 = {16'd0, ~crc_next1[31:0], icrc_s_tdata_not_masked[15:0]};
+        //icrc_m_tdata_0 = {16'd0, ~crc_next1[7:0], ~crc_next1[15:8], ~crc_next1[23:16], ~crc_next1[31:24],  icrc_s_tdata_not_masked[15:0]};
         icrc_m_tdata_1 = 64'd0;
         icrc_m_tkeep_0 = 8'b00111111;
         icrc_m_tkeep_1 = 8'b00000000;
       end
       8'bzzzz0111: begin
         icrc_m_tdata_0 = {8'd0, ~crc_next2[31:0], icrc_s_tdata_not_masked[23:0]};
+        //icrc_m_tdata_0 = {8'd0, ~crc_next2[7:0], ~crc_next2[15:8], ~crc_next2[23:16], ~crc_next2[31:24],  icrc_s_tdata_not_masked[23:0]};
         icrc_m_tdata_1 = 64'd0;
         icrc_m_tkeep_0 = 8'b01111111;
         icrc_m_tkeep_1 = 8'b00000000;
       end
       8'bzzz01111: begin
         icrc_m_tdata_0 = {~crc_next3[31:0], icrc_s_tdata_not_masked[31:0]};
+        //icrc_m_tdata_0 = {~crc_next3[7:0], ~crc_next3[15:8], ~crc_next3[23:16], ~crc_next3[31:24],  icrc_s_tdata_not_masked[31:0]};
         icrc_m_tdata_1 = 64'd0;
         icrc_m_tkeep_0 = 8'b11111111;
         icrc_m_tkeep_1 = 8'b00000000;
@@ -350,24 +381,31 @@ module axis_RoCE_icrc_insert_64 #(
       8'bzz011111: begin
         icrc_m_tdata_0 = {~crc_next4[23:0], icrc_s_tdata_not_masked[39:0]};
         icrc_m_tdata_1 = {56'd0, ~crc_next4[31:24]};
+        //icrc_m_tdata_0 = {~crc_next4[15:8], ~crc_next4[23:16], ~crc_next4[31:24], icrc_s_tdata_not_masked[39:0]};
+        //icrc_m_tdata_1 = {56'd0, ~crc_next4[7:0]};
         icrc_m_tkeep_0 = 8'b11111111;
         icrc_m_tkeep_1 = 8'b00000001;
       end
       8'bz0111111: begin
         icrc_m_tdata_0 = {~crc_next5[15:0], icrc_s_tdata_not_masked[47:0]};
         icrc_m_tdata_1 = {48'd0, ~crc_next5[31:16]};
+        //icrc_m_tdata_0 = {~crc_next5[23:16], ~crc_next5[31:24], icrc_s_tdata_not_masked[47:0]};
+        //icrc_m_tdata_1 = {48'd0, ~crc_next5[7:0], ~crc_next5[15:8]};
         icrc_m_tkeep_0 = 8'b11111111;
         icrc_m_tkeep_1 = 8'b00000011;
       end
       8'b01111111: begin
         icrc_m_tdata_0 = {~crc_next6[7:0], icrc_s_tdata_not_masked[55:0]};
         icrc_m_tdata_1 = {40'd0, ~crc_next6[31:8]};
+        //icrc_m_tdata_0 = {~crc_next6[31:24], icrc_s_tdata_not_masked[55:0]};
+        //icrc_m_tdata_1 = {40'd0, ~crc_next6[7:0], ~crc_next6[15:8], ~crc_next6[23:16]};
         icrc_m_tkeep_0 = 8'b11111111;
         icrc_m_tkeep_1 = 8'b00000111;
       end
       8'b11111111: begin
         icrc_m_tdata_0 = icrc_s_tdata_not_masked;
         icrc_m_tdata_1 = {32'd0, ~crc_next7[31:0]};
+        //icrc_m_tdata_1 = {32'd0, ~crc_next7[7:0], ~crc_next7[15:8], ~crc_next7[23:16], ~crc_next7[31:24]};
         icrc_m_tkeep_0 = 8'b11111111;
         icrc_m_tkeep_1 = 8'b00001111;
       end
@@ -381,29 +419,34 @@ module axis_RoCE_icrc_insert_64 #(
   end
 
   always @* begin
-    state_next = STATE_IDLE;
+    state_next              = STATE_IDLE;
 
-    reset_crc = 1'b0;
-    update_crc = 1'b0;
+    reset_crc               = 1'b0;
+    update_crc              = 1'b0;
 
-    frame_ptr_next = frame_ptr_reg;
+    store_eth_hdr           = 1'b0;
 
-    last_cycle_tdata_next = last_cycle_tdata_reg;
-    last_cycle_tkeep_next = last_cycle_tkeep_reg;
+    frame_ptr_next          = frame_ptr_reg;
 
-    s_axis_tready_next = 1'b0;
+    last_cycle_tdata_next   = last_cycle_tdata_reg;
+    last_cycle_tkeep_next   = last_cycle_tkeep_reg;
 
-    icrc_s_tdata = 64'd0;
-    icrc_s_tkeep = 8'd0;
+    s_axis_tready_next      = 1'b0;
+
+    icrc_s_tdata            = 64'd0;
+    icrc_s_tkeep            = 8'd0;
 
     icrc_s_tdata_not_masked = 64'd0;
     icrc_s_tkeep_not_masked = 8'd0;
 
-    m_axis_tdata_int = 64'd0;
-    m_axis_tkeep_int = 8'd0;
-    m_axis_tvalid_int = 1'b0;
-    m_axis_tlast_int = 1'b0;
-    m_axis_tuser_int = 1'b0;
+    m_eth_hdr_valid_next    = m_eth_hdr_valid_reg && !m_eth_hdr_ready;
+
+
+    m_axis_tdata_int        = 64'd0;
+    m_axis_tkeep_int        = 8'd0;
+    m_axis_tvalid_int       = 1'b0;
+    m_axis_tlast_int        = 1'b0;
+    m_axis_tuser_int        = 1'b0;
 
     case (state_reg)
       STATE_IDLE: begin
@@ -411,6 +454,8 @@ module axis_RoCE_icrc_insert_64 #(
         s_axis_tready_next = m_axis_tready_int_early;
         frame_ptr_next = 16'd0;
         reset_crc = 1'b1;
+
+        s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
 
         m_axis_tdata_int = axis_not_masked_tdata;
         m_axis_tkeep_int = axis_masked_tkeep;
@@ -425,11 +470,15 @@ module axis_RoCE_icrc_insert_64 #(
         icrc_s_tkeep_not_masked = axis_masked_tkeep;
 
         if (axis_masked_tready && axis_masked_tvalid) begin
+          s_eth_hdr_ready_next = 1'b0;
+          m_eth_hdr_valid_next = 1'b1;
+          store_eth_hdr = 1'b1;
           reset_crc = 1'b0;
           update_crc = 1'b1;
           frame_ptr_next = keep2count(axis_masked_tkeep);
           if (axis_masked_tlast) begin
             if (axis_masked_tuser) begin
+              s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
               m_axis_tlast_int = 1'b1;
               m_axis_tuser_int = 1'b1;
               reset_crc = 1'b1;
@@ -458,6 +507,7 @@ module axis_RoCE_icrc_insert_64 #(
                   reset_crc = 1'b1;
 
                   if (icrc_m_tkeep_1 == 8'd0) begin
+                    s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
                     m_axis_tlast_int = 1'b1;
                     s_axis_tready_next = m_axis_tready_int_early;
                     frame_ptr_next = 1'b0;
@@ -476,6 +526,7 @@ module axis_RoCE_icrc_insert_64 #(
                 reset_crc = 1'b1;
 
                 if (icrc_m_tkeep_1 == 8'd0) begin
+                  s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
                   m_axis_tlast_int = 1'b1;
                   s_axis_tready_next = m_axis_tready_int_early;
                   frame_ptr_next = 16'd0;
@@ -490,6 +541,7 @@ module axis_RoCE_icrc_insert_64 #(
             state_next = STATE_PAYLOAD;
           end
         end else begin
+          s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
           state_next = STATE_IDLE;
         end
       end
@@ -515,6 +567,7 @@ module axis_RoCE_icrc_insert_64 #(
           frame_ptr_next = frame_ptr_reg + keep2count(axis_masked_tkeep);
           if (axis_masked_tlast) begin
             if (axis_masked_tuser) begin
+              s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
               m_axis_tlast_int = 1'b1;
               m_axis_tuser_int = 1'b1;
               reset_crc = 1'b1;
@@ -543,6 +596,7 @@ module axis_RoCE_icrc_insert_64 #(
                   reset_crc = 1'b1;
 
                   if (icrc_m_tkeep_1 == 8'd0) begin
+                    s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
                     m_axis_tlast_int = 1'b1;
                     s_axis_tready_next = m_axis_tready_int_early;
                     frame_ptr_next = 16'd0;
@@ -561,6 +615,7 @@ module axis_RoCE_icrc_insert_64 #(
                 reset_crc = 1'b1;
 
                 if (icrc_m_tkeep_1 == 8'd0) begin
+                  s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
                   m_axis_tlast_int = 1'b1;
                   s_axis_tready_next = m_axis_tready_int_early;
                   frame_ptr_next = 16'd0;
@@ -612,6 +667,7 @@ module axis_RoCE_icrc_insert_64 #(
             reset_crc = 1'b1;
 
             if (icrc_m_tkeep_1 == 8'd0) begin
+              s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
               m_axis_tlast_int = 1'b1;
               s_axis_tready_next = m_axis_tready_int_early;
               frame_ptr_next = 16'd0;
@@ -636,6 +692,7 @@ module axis_RoCE_icrc_insert_64 #(
         m_axis_tuser_int   = 1'b0;
 
         if (m_axis_tready_int_reg) begin
+          s_eth_hdr_ready_next = !m_eth_hdr_valid_next;
           reset_crc = 1'b1;
           s_axis_tready_next = m_axis_tready_int_early;
           frame_ptr_next = 1'b0;
@@ -653,7 +710,11 @@ module axis_RoCE_icrc_insert_64 #(
 
       frame_ptr_reg <= 1'b0;
 
+      s_eth_hdr_ready_reg <= 1'b0;
+
       s_axis_tready_reg <= 1'b0;
+
+      m_eth_hdr_valid_reg <= 1'b0;
 
       busy_reg <= 1'b0;
 
@@ -663,7 +724,11 @@ module axis_RoCE_icrc_insert_64 #(
 
       frame_ptr_reg <= frame_ptr_next;
 
+      s_eth_hdr_ready_reg <= s_eth_hdr_ready_next;
+
       s_axis_tready_reg <= s_axis_tready_next;
+
+      m_eth_hdr_valid_reg <= m_eth_hdr_valid_next;
 
       busy_reg <= state_next != STATE_IDLE;
 
@@ -673,6 +738,12 @@ module axis_RoCE_icrc_insert_64 #(
       end else if (update_crc) begin
         crc_state <= crc_next7;
       end
+    end
+
+    if (store_eth_hdr) begin
+      m_eth_dest_mac_reg <= s_eth_dest_mac;
+      m_eth_src_mac_reg <= s_eth_src_mac;
+      m_eth_type_reg <= s_eth_type;
     end
 
     last_cycle_tdata_reg <= last_cycle_tdata_next;
@@ -697,14 +768,14 @@ module axis_RoCE_icrc_insert_64 #(
   reg store_axis_int_to_temp;
   reg store_axis_temp_to_output;
 
-  assign m_axis_tdata = m_axis_tdata_reg;
-  assign m_axis_tkeep = m_axis_tkeep_reg;
-  assign m_axis_tvalid = m_axis_tvalid_reg;
-  assign m_axis_tlast = m_axis_tlast_reg;
-  assign m_axis_tuser = m_axis_tuser_reg;
+  assign m_eth_payload_axis_tdata = m_axis_tdata_reg;
+  assign m_eth_payload_axis_tkeep = m_axis_tkeep_reg;
+  assign m_eth_payload_axis_tvalid = m_axis_tvalid_reg;
+  assign m_eth_payload_axis_tlast = m_axis_tlast_reg;
+  assign m_eth_payload_axis_tuser = m_axis_tuser_reg;
 
   // enable ready input next cycle if output is ready or if both output registers are empty
-  assign m_axis_tready_int_early = m_axis_tready || (!temp_m_axis_tvalid_reg && !m_axis_tvalid_reg);
+  assign m_axis_tready_int_early = m_eth_payload_axis_tready || (!temp_m_axis_tvalid_reg && !m_axis_tvalid_reg);
 
   always @* begin
     // transfer sink ready state to source
@@ -717,7 +788,7 @@ module axis_RoCE_icrc_insert_64 #(
 
     if (m_axis_tready_int_reg) begin
       // input is ready
-      if (m_axis_tready || !m_axis_tvalid_reg) begin
+      if (m_eth_payload_axis_tready || !m_axis_tvalid_reg) begin
         // output is ready or currently not valid, transfer data to output
         m_axis_tvalid_next = m_axis_tvalid_int;
         store_axis_int_to_output = 1'b1;
@@ -726,7 +797,7 @@ module axis_RoCE_icrc_insert_64 #(
         temp_m_axis_tvalid_next = m_axis_tvalid_int;
         store_axis_int_to_temp  = 1'b1;
       end
-    end else if (m_axis_tready) begin
+    end else if (m_eth_payload_axis_tready) begin
       // input is not ready, but output is ready
       m_axis_tvalid_next = temp_m_axis_tvalid_reg;
       temp_m_axis_tvalid_next = 1'b0;
