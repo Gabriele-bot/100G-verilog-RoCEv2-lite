@@ -429,13 +429,13 @@ Received_r_key = 0
 
 data_stream = []
 
-dma_length_set  = 8224
+dma_length_set  = 20000
 r_key_set        = 0x1234
 starting_psn_set = 10
 rem_qpn_set = 0x11
 
-#send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
-#send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
+send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
+send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
 
 send_txmeta(rem_ip_addr="22.1.212.10", rem_addr=0x1234567, rdma_length=dma_length_set, start_flag=0x1)
 

@@ -81,6 +81,151 @@ module Roce_tx_header_producer #(
     input  wire [              12:0] pmtu
 
 );
+
+  function [15:0] keep2count;
+    input [63:0] k;
+    casez (k)
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0: keep2count = 16'd0;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01: keep2count = 16'd1;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011: keep2count = 16'd2;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111: keep2count = 16'd3;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111: keep2count = 16'd4;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111: keep2count = 16'd5;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111: keep2count = 16'd6;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111: keep2count = 16'd7;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111: keep2count = 16'd8;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111: keep2count = 16'd9;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111: keep2count = 16'd10;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111: keep2count = 16'd11;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111: keep2count = 16'd12;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111: keep2count = 16'd13;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111: keep2count = 16'd14;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111: keep2count = 16'd15;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111: keep2count = 16'd16;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111: keep2count = 16'd17;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111: keep2count = 16'd18;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111: keep2count = 16'd19;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111: keep2count = 16'd20;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111: keep2count = 16'd21;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111: keep2count = 16'd22;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111: keep2count = 16'd23;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111: keep2count = 16'd24;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111: keep2count = 16'd25;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111: keep2count = 16'd26;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111: keep2count = 16'd27;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111: keep2count = 16'd28;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111: keep2count = 16'd29;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111: keep2count = 16'd30;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111: keep2count = 16'd31;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111: keep2count = 16'd32;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111: keep2count = 16'd33;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111: keep2count = 16'd34;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111: keep2count = 16'd35;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111: keep2count = 16'd36;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111: keep2count = 16'd37;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111: keep2count = 16'd38;
+      64'bzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111: keep2count = 16'd39;
+      64'bzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111: keep2count = 16'd40;
+      64'bzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111: keep2count = 16'd41;
+      64'bzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111: keep2count = 16'd42;
+      64'bzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111111: keep2count = 16'd43;
+      64'bzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111111: keep2count = 16'd44;
+      64'bzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111111: keep2count = 16'd45;
+      64'bzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111111111: keep2count = 16'd46;
+      64'bzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111111111: keep2count = 16'd47;
+      64'bzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111111111: keep2count = 16'd48;
+      64'bzzzzzzzzzzzzzz01111111111111111111111111111111111111111111111111: keep2count = 16'd49;
+      64'bzzzzzzzzzzzzz011111111111111111111111111111111111111111111111111: keep2count = 16'd50;
+      64'bzzzzzzzzzzzz0111111111111111111111111111111111111111111111111111: keep2count = 16'd51;
+      64'bzzzzzzzzzzz01111111111111111111111111111111111111111111111111111: keep2count = 16'd52;
+      64'bzzzzzzzzzz011111111111111111111111111111111111111111111111111111: keep2count = 16'd53;
+      64'bzzzzzzzzz0111111111111111111111111111111111111111111111111111111: keep2count = 16'd54;
+      64'bzzzzzzzz01111111111111111111111111111111111111111111111111111111: keep2count = 16'd55;
+      64'bzzzzzzz011111111111111111111111111111111111111111111111111111111: keep2count = 16'd56;
+      64'bzzzzzz0111111111111111111111111111111111111111111111111111111111: keep2count = 16'd57;
+      64'bzzzzz01111111111111111111111111111111111111111111111111111111111: keep2count = 16'd58;
+      64'bzzzz011111111111111111111111111111111111111111111111111111111111: keep2count = 16'd59;
+      64'bzzz0111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd60;
+      64'bzz01111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd61;
+      64'bz011111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd62;
+      64'b0111111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd63;
+      64'b1111111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd64;
+    endcase
+  endfunction
+
+  function [63:0] count2keep;
+    input [6:0] k;
+    case (k)
+      7'd0:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000000;
+      7'd1:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000001;
+      7'd2:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000011;
+      7'd3:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000111;
+      7'd4:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000001111;
+      7'd5:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000011111;
+      7'd6:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000111111;
+      7'd7:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000001111111;
+      7'd8:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000011111111;
+      7'd9:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000111111111;
+      7'd10:   count2keep = 64'b0000000000000000000000000000000000000000000000000000001111111111;
+      7'd11:   count2keep = 64'b0000000000000000000000000000000000000000000000000000011111111111;
+      7'd12:   count2keep = 64'b0000000000000000000000000000000000000000000000000000111111111111;
+      7'd13:   count2keep = 64'b0000000000000000000000000000000000000000000000000001111111111111;
+      7'd14:   count2keep = 64'b0000000000000000000000000000000000000000000000000011111111111111;
+      7'd15:   count2keep = 64'b0000000000000000000000000000000000000000000000000111111111111111;
+      7'd16:   count2keep = 64'b0000000000000000000000000000000000000000000000001111111111111111;
+      7'd17:   count2keep = 64'b0000000000000000000000000000000000000000000000011111111111111111;
+      7'd18:   count2keep = 64'b0000000000000000000000000000000000000000000000111111111111111111;
+      7'd19:   count2keep = 64'b0000000000000000000000000000000000000000000001111111111111111111;
+      7'd20:   count2keep = 64'b0000000000000000000000000000000000000000000011111111111111111111;
+      7'd21:   count2keep = 64'b0000000000000000000000000000000000000000000111111111111111111111;
+      7'd22:   count2keep = 64'b0000000000000000000000000000000000000000001111111111111111111111;
+      7'd23:   count2keep = 64'b0000000000000000000000000000000000000000011111111111111111111111;
+      7'd24:   count2keep = 64'b0000000000000000000000000000000000000000111111111111111111111111;
+      7'd25:   count2keep = 64'b0000000000000000000000000000000000000001111111111111111111111111;
+      7'd26:   count2keep = 64'b0000000000000000000000000000000000000011111111111111111111111111;
+      7'd27:   count2keep = 64'b0000000000000000000000000000000000000111111111111111111111111111;
+      7'd28:   count2keep = 64'b0000000000000000000000000000000000001111111111111111111111111111;
+      7'd29:   count2keep = 64'b0000000000000000000000000000000000011111111111111111111111111111;
+      7'd30:   count2keep = 64'b0000000000000000000000000000000000111111111111111111111111111111;
+      7'd31:   count2keep = 64'b0000000000000000000000000000000001111111111111111111111111111111;
+      7'd32:   count2keep = 64'b0000000000000000000000000000000011111111111111111111111111111111;
+      7'd33:   count2keep = 64'b0000000000000000000000000000000111111111111111111111111111111111;
+      7'd34:   count2keep = 64'b0000000000000000000000000000001111111111111111111111111111111111;
+      7'd35:   count2keep = 64'b0000000000000000000000000000011111111111111111111111111111111111;
+      7'd36:   count2keep = 64'b0000000000000000000000000000111111111111111111111111111111111111;
+      7'd37:   count2keep = 64'b0000000000000000000000000001111111111111111111111111111111111111;
+      7'd38:   count2keep = 64'b0000000000000000000000000011111111111111111111111111111111111111;
+      7'd39:   count2keep = 64'b0000000000000000000000000111111111111111111111111111111111111111;
+      7'd40:   count2keep = 64'b0000000000000000000000001111111111111111111111111111111111111111;
+      7'd41:   count2keep = 64'b0000000000000000000000011111111111111111111111111111111111111111;
+      7'd42:   count2keep = 64'b0000000000000000000000111111111111111111111111111111111111111111;
+      7'd43:   count2keep = 64'b0000000000000000000001111111111111111111111111111111111111111111;
+      7'd44:   count2keep = 64'b0000000000000000000011111111111111111111111111111111111111111111;
+      7'd45:   count2keep = 64'b0000000000000000000111111111111111111111111111111111111111111111;
+      7'd46:   count2keep = 64'b0000000000000000001111111111111111111111111111111111111111111111;
+      7'd47:   count2keep = 64'b0000000000000000011111111111111111111111111111111111111111111111;
+      7'd48:   count2keep = 64'b0000000000000000111111111111111111111111111111111111111111111111;
+      7'd49:   count2keep = 64'b0000000000000001111111111111111111111111111111111111111111111111;
+      7'd50:   count2keep = 64'b0000000000000011111111111111111111111111111111111111111111111111;
+      7'd51:   count2keep = 64'b0000000000000111111111111111111111111111111111111111111111111111;
+      7'd52:   count2keep = 64'b0000000000001111111111111111111111111111111111111111111111111111;
+      7'd53:   count2keep = 64'b0000000000011111111111111111111111111111111111111111111111111111;
+      7'd54:   count2keep = 64'b0000000000111111111111111111111111111111111111111111111111111111;
+      7'd55:   count2keep = 64'b0000000001111111111111111111111111111111111111111111111111111111;
+      7'd56:   count2keep = 64'b0000000011111111111111111111111111111111111111111111111111111111;
+      7'd57:   count2keep = 64'b0000000111111111111111111111111111111111111111111111111111111111;
+      7'd58:   count2keep = 64'b0000001111111111111111111111111111111111111111111111111111111111;
+      7'd59:   count2keep = 64'b0000011111111111111111111111111111111111111111111111111111111111;
+      7'd60:   count2keep = 64'b0000111111111111111111111111111111111111111111111111111111111111;
+      7'd61:   count2keep = 64'b0001111111111111111111111111111111111111111111111111111111111111;
+      7'd62:   count2keep = 64'b0011111111111111111111111111111111111111111111111111111111111111;
+      7'd63:   count2keep = 64'b0111111111111111111111111111111111111111111111111111111111111111;
+      7'd64:   count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
+      default: count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
+    endcase
+  endfunction
+
+
   localparam [7:0]
     RC_RDMA_WRITE_FIRST   = 8'h06,
     RC_RDMA_WRITE_MIDDLE  = 8'h07,
@@ -213,6 +358,8 @@ module Roce_tx_header_producer #(
 
     s_axis_tready_next            = 1'b0;
 
+    store_last_word               = 1'b0;
+
     roce_bth_valid_next           = roce_bth_valid_reg && !m_roce_bth_ready;
     roce_reth_valid_next          = roce_reth_valid_reg && !m_roce_reth_ready;
     roce_immdh_valid_next         = roce_immdh_valid_reg && !m_roce_immdh_ready;
@@ -221,56 +368,65 @@ module Roce_tx_header_producer #(
     packet_inst_length_next       = packet_inst_length_reg;
     total_packet_inst_length_next = total_packet_inst_length_reg;
 
+    eth_dest_mac_next             = eth_dest_mac_reg;
+    eth_src_mac_next              = eth_src_mac_reg;
+    eth_type_next                 = eth_type_reg;
+
+    ip_version_next               = ip_version_reg;
+    ip_ihl_next                   = ip_ihl_reg;
+    ip_dscp_next                  = ip_dscp_reg;
+    ip_ecn_next                   = ip_ecn_reg;
+    ip_identification_next        = ip_identification_reg;
+    ip_flags_next                 = ip_flags_reg;
+    ip_fragment_offset_next       = ip_fragment_offset_reg;
+    ip_ttl_next                   = ip_ttl_reg;
+    ip_protocol_next              = ip_protocol_reg;
+    ip_header_checksum_next       = ip_header_checksum_reg;
+    ip_source_ip_next             = ip_source_ip_reg;
+    ip_dest_ip_next               = ip_dest_ip_reg;
+
+    udp_source_port_next          = udp_source_port_reg;
+    udp_dest_port_next            = udp_dest_port_reg;
+    udp_length_next               = udp_length_reg;
+    udp_checksum_next             = udp_checksum_reg;
+
+    roce_bth_op_code_next         = roce_bth_op_code_reg;
+    roce_bth_p_key_next           = roce_bth_p_key_reg;
+    roce_bth_psn_next             = roce_bth_psn_reg;
+    roce_bth_dest_qp_next         = roce_bth_dest_qp_reg;
+    roce_bth_ack_req_next         = roce_bth_ack_req_reg;
+    roce_reth_v_addr_next         = roce_reth_v_addr_reg;
+    roce_reth_r_key_next          = roce_reth_r_key_reg;
+    roce_reth_length_next         = roce_reth_length_reg;
+    roce_immdh_data_next          = roce_immdh_data_reg;
+
+    m_axis_tdata_int              = {DATA_WIDTH{1'b0}};
+    m_axis_tkeep_int              = {DATA_WIDTH / 8{1'b0}};
+    m_axis_tvalid_int             = 1'b0;
+    m_axis_tlast_int              = 1'b0;
+    m_axis_tuser_int              = 1'b0;
+
 
     case (state_reg)
       STATE_IDLE: begin
 
-        /*
-        eth_dest_mac_next       = 48'h0;
-        eth_src_mac_next        = 48'h0;
-        eth_type_next           = 16'h0;
-        ip_version_next         = 4'd4;
-        ip_ihl_next             = 4'd0;
-        ip_dscp_next            = 6'h0;
-        ip_ecn_next             = 2'h0;
-        ip_identification_next  = 16'h0;
-        ip_flags_next           = 3'b001;
-        ip_fragment_offset_next = 13'h0;
-        ip_ttl_next             = 8'h40;
-        ip_protocol_next        = 8'd11;
-        ip_header_checksum_next = 16'd0;
-        ip_source_ip_next       = 32'h0;
-        ip_dest_ip_next         = 32'h0;
-        udp_source_port_next    = 16'd0;
-        udp_dest_port_next      = ROCE_UDP_PORT;
-        udp_length_next         = 16'h0;
-        udp_checksum_next       = 16'h0;
-        roce_bth_op_code_next   = RC_RDMA_WRITE_ONLY;
-        roce_bth_p_key_next     = 16'd0;
-        roce_bth_psn_next       = 24'd0;
-        roce_bth_dest_qp_next   = 24'd0;
-        roce_bth_ack_req_next   = 1'b0;
-        roce_reth_v_addr_next   = 48'd0;
-        roce_reth_r_key_next    = 32'd0;
-        roce_reth_length_next   = 16'h0;
-        roce_immdh_data_next    = 32'h0;
-        */
-
-        m_axis_tdata_int  <= s_axis_tdata;
-        m_axis_tkeep_int  <= s_axis_tkeep;
-        m_axis_tvalid_int <= s_axis_tvalid;
-        m_axis_tlast_int  <= s_axis_tlast;
-        m_axis_tuser_int  <= s_axis_tuser;
-        //m_axis_tlast_int  <= s_axis_tlast;
+        udp_dest_port_next = udp_dest_port_reg;
 
         s_axis_tready_next = 1'b1;
+
+        m_axis_tdata_int   = s_axis_tdata;
+        m_axis_tkeep_int   = s_axis_tkeep;
+        m_axis_tvalid_int  = s_axis_tvalid;
+        m_axis_tlast_int   = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+        m_axis_tuser_int   = s_axis_tuser;
+        //m_axis_tlast_int  = s_axis_tlast;
 
         if (s_axis_tready && s_axis_tvalid) begin
           remaining_length_next = s_dma_length - DATA_WIDTH / 8;
           packet_inst_length_next = DATA_WIDTH / 8;
           total_packet_inst_length_next = DATA_WIDTH / 8;
           if (s_dma_length <= pmtu) begin
-            state_next <= STATE_ONLY;
+            state_next            = STATE_ONLY;
             roce_bth_valid_next   = 1'b1;
             roce_reth_valid_next  = 1'b1;
             roce_immdh_valid_next = 1'b0;
@@ -280,6 +436,7 @@ module Roce_tx_header_producer #(
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
+            udp_dest_port_next    = ROCE_UDP_PORT;
             udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8;
             // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
 
@@ -295,7 +452,7 @@ module Roce_tx_header_producer #(
 
             psn_next              = qp_info[74:51];
           end else begin
-            state_next <= STATE_FIRST;
+            state_next            = STATE_FIRST;
             roce_bth_valid_next   = 1'b1;
             roce_reth_valid_next  = 1'b1;
             roce_immdh_valid_next = 1'b0;
@@ -304,6 +461,7 @@ module Roce_tx_header_producer #(
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
+            udp_dest_port_next    = ROCE_UDP_PORT;
             udp_length_next       = pmtu + 12 + 16 + 8;
             // PMTU + BTH + RETH + UDP HEADER
 
@@ -327,12 +485,12 @@ module Roce_tx_header_producer #(
         state_next = state_reg;
 
 
-        m_axis_tdata_int  <= s_axis_tdata;
-        m_axis_tkeep_int  <= s_axis_tkeep;
-        m_axis_tvalid_int <= s_axis_tvalid;
-        m_axis_tlast_int  <= packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
-        m_axis_tuser_int  <= s_axis_tuser;
-        //m_axis_tlast_int  <= s_axis_tlast;
+        m_axis_tdata_int = s_axis_tdata;
+        m_axis_tkeep_int = s_axis_tkeep;
+        m_axis_tvalid_int = s_axis_tvalid;
+        m_axis_tlast_int = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+        m_axis_tuser_int = s_axis_tuser;
+        //m_axis_tlast_int  = s_axis_tlast;
 
         s_axis_tready_next = m_axis_tready_int_early;
 
@@ -343,9 +501,9 @@ module Roce_tx_header_producer #(
           //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
           if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 <= pmtu) begin
             packet_inst_length_next = 14'd0;
-            state_next <= STATE_LAST;
-            roce_bth_valid_next   = 1'b1;
-            roce_reth_valid_next  = 1'b0;
+            state_next = STATE_LAST;
+            roce_bth_valid_next = 1'b1;
+            roce_reth_valid_next = 1'b0;
             roce_immdh_valid_next = 1'b0;
 
             if (roce_bth_valid_next) begin
@@ -361,19 +519,19 @@ module Roce_tx_header_producer #(
             //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
           end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
             packet_inst_length_next = 14'd0;
-            state_next <= STATE_MIDDLE;
-            roce_bth_valid_next   = 1'b1;
-            roce_reth_valid_next  = 1'b0;
-            roce_immdh_valid_next = 1'b0;
+            state_next              = STATE_MIDDLE;
+            roce_bth_valid_next     = 1'b1;
+            roce_reth_valid_next    = 1'b0;
+            roce_immdh_valid_next   = 1'b0;
 
-            udp_length_next       = pmtu + 12 + 8;  //no RETH
+            udp_length_next         = pmtu + 12 + 8;  //no RETH
             // PMTU + BTH + UDP HEADER
 
-            roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
-            roce_bth_psn_next     = psn_reg + 1;
-            roce_bth_ack_req_next = 1'b1;
+            roce_bth_op_code_next   = RC_RDMA_WRITE_MIDDLE;
+            roce_bth_psn_next       = psn_reg + 1;
+            roce_bth_ack_req_next   = 1'b1;
 
-            psn_next              = psn_reg + 1;
+            psn_next                = psn_reg + 1;
           end
         end
       end
@@ -381,11 +539,11 @@ module Roce_tx_header_producer #(
 
         state_next = state_reg;
 
-        m_axis_tdata_int  <= s_axis_tdata;
-        m_axis_tkeep_int  <= s_axis_tkeep;
-        m_axis_tvalid_int <= s_axis_tvalid;
-        m_axis_tlast_int  <= packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
-        m_axis_tuser_int  <= s_axis_tuser;
+        m_axis_tdata_int = s_axis_tdata;
+        m_axis_tkeep_int = s_axis_tkeep;
+        m_axis_tvalid_int = s_axis_tvalid;
+        m_axis_tlast_int = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+        m_axis_tuser_int = s_axis_tuser;
 
         s_axis_tready_next = m_axis_tready_int_early;
 
@@ -397,9 +555,9 @@ module Roce_tx_header_producer #(
           //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
           if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 <= pmtu) begin
             packet_inst_length_next = 14'd0;
-            state_next <= STATE_LAST;
-            roce_bth_valid_next   = 1'b1;
-            roce_reth_valid_next  = 1'b0;
+            state_next = STATE_LAST;
+            roce_bth_valid_next = 1'b1;
+            roce_reth_valid_next = 1'b0;
             roce_immdh_valid_next = 1'b0;
 
             if (roce_bth_valid_next) begin
@@ -415,19 +573,19 @@ module Roce_tx_header_producer #(
             //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
           end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
             packet_inst_length_next = 14'd0;
-            state_next <= STATE_MIDDLE;
-            roce_bth_valid_next   = 1'b1;
-            roce_reth_valid_next  = 1'b0;
-            roce_immdh_valid_next = 1'b0;
+            state_next              = STATE_MIDDLE;
+            roce_bth_valid_next     = 1'b1;
+            roce_reth_valid_next    = 1'b0;
+            roce_immdh_valid_next   = 1'b0;
 
-            udp_length_next       = pmtu + 12 + 8;  //no RETH
+            udp_length_next         = pmtu + 12 + 8;  //no RETH
             // PMTU + BTH + UDP HEADER
 
-            roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
-            roce_bth_psn_next     = psn_reg + 1;
-            roce_bth_ack_req_next = 1'b1;
+            roce_bth_op_code_next   = RC_RDMA_WRITE_MIDDLE;
+            roce_bth_psn_next       = psn_reg + 1;
+            roce_bth_ack_req_next   = 1'b1;
 
-            psn_next              = psn_reg + 1;
+            psn_next                = psn_reg + 1;
           end
         end
       end
@@ -435,11 +593,11 @@ module Roce_tx_header_producer #(
 
         state_next = state_reg;
 
-        m_axis_tdata_int  <= s_axis_tdata;
-        m_axis_tkeep_int  <= s_axis_tkeep;
-        m_axis_tvalid_int <= s_axis_tvalid;
-        m_axis_tlast_int  <= s_axis_tlast;
-        m_axis_tuser_int  <= s_axis_tuser;
+        m_axis_tdata_int = s_axis_tdata;
+        m_axis_tkeep_int = s_axis_tkeep;
+        m_axis_tvalid_int = s_axis_tvalid;
+        m_axis_tlast_int = s_axis_tlast;
+        m_axis_tuser_int = s_axis_tuser;
 
         s_axis_tready_next = m_axis_tready_int_early;
 
@@ -463,7 +621,7 @@ module Roce_tx_header_producer #(
           end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8> pmtu) begin
             packet_inst_length_next = 14'd0;
             total_packet_inst_length_next = 32'd0;
-            state_next <= STATE_ERROR;
+            state_next = STATE_ERROR;
           end else begin
             if (s_axis_tlast) begin
               // end of frame, but length does not match
@@ -473,9 +631,9 @@ module Roce_tx_header_producer #(
             end
           end
 
-          remaining_length_next <= remaining_length_reg - DATA_WIDTH / 8;
-          packet_inst_length_next <= packet_inst_length_reg + DATA_WIDTH / 8;
-          total_packet_inst_length_next <= total_packet_inst_length_reg + DATA_WIDTH / 8;
+          remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
           //if (remaining_length - DATA_WIDTH / 8 == 0) begin
 
         end
@@ -484,11 +642,11 @@ module Roce_tx_header_producer #(
 
         state_next = state_reg;
 
-        m_axis_tdata_int  <= s_axis_tdata;
-        m_axis_tkeep_int  <= s_axis_tkeep;
-        m_axis_tvalid_int <= s_axis_tvalid;
-        m_axis_tlast_int  <= s_axis_tlast;
-        m_axis_tuser_int  <= s_axis_tuser;
+        m_axis_tdata_int = s_axis_tdata;
+        m_axis_tkeep_int = s_axis_tkeep;
+        m_axis_tvalid_int = s_axis_tvalid;
+        m_axis_tlast_int = s_axis_tlast;
+        m_axis_tuser_int = s_axis_tuser;
 
         s_axis_tready_next = m_axis_tready_int_early;
 
@@ -512,7 +670,7 @@ module Roce_tx_header_producer #(
           end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
             packet_inst_length_next = 14'd0;
             total_packet_inst_length_next = 32'd0;
-            state_next <= STATE_ERROR;
+            state_next = STATE_ERROR;
           end else begin
             if (s_axis_tlast) begin
               // end of frame, but length does not match
@@ -522,9 +680,9 @@ module Roce_tx_header_producer #(
             end
           end
 
-          remaining_length_next <= remaining_length_reg - DATA_WIDTH / 8;
-          packet_inst_length_next <= packet_inst_length_reg + DATA_WIDTH / 8;
-          total_packet_inst_length_next <= total_packet_inst_length_reg + DATA_WIDTH / 8;
+          remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
+          packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
+          total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
           //if (remaining_length - DATA_WIDTH / 8 == 0) begin
 
         end
@@ -533,10 +691,10 @@ module Roce_tx_header_producer #(
       STATE_WRITE_PAYLOAD_LAST: begin
         state_next = state_reg;
 
-        m_axis_tdata_int <= last_word_data_reg;
-        m_axis_tkeep_int <= last_word_keep_reg;
-        m_axis_tlast_int <= s_axis_tlast;
-        m_axis_tuser_int <= s_axis_tuser;
+        m_axis_tdata_int = last_word_data_reg;
+        m_axis_tkeep_int = last_word_keep_reg;
+        m_axis_tlast_int = s_axis_tlast;
+        m_axis_tuser_int = s_axis_tuser;
 
         s_axis_tready_next = m_axis_tready_int_early;
 
@@ -546,26 +704,26 @@ module Roce_tx_header_producer #(
             m_axis_tvalid_int = 1'b1;
             packet_inst_length_next = 14'd0;
             total_packet_inst_length_next = 32'd0;
-            state_next <= STATE_IDLE;
+            state_next = STATE_IDLE;
           end else begin
             remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
             packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
             total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
-            state_next <= STATE_WRITE_PAYLOAD_LAST;
+            state_next = STATE_WRITE_PAYLOAD_LAST;
           end
         end else begin
           remaining_length_next = remaining_length_reg;
           packet_inst_length_next = packet_inst_length_reg;
           total_packet_inst_length_next = total_packet_inst_length_reg;
-          state_next <= STATE_WRITE_PAYLOAD_LAST;
+          state_next = STATE_WRITE_PAYLOAD_LAST;
         end
       end
       STATE_ERROR: begin
         state_next = state_reg;
-        m_axis_tdata_int  <= {DATA_WIDTH{1'b0}};
-        m_axis_tkeep_int  <= {DATA_WIDTH / 8{1'b0}};
-        m_axis_tvalid_int <= 1'b0;
-        m_axis_tlast_int  <= 1'b0;
+        m_axis_tdata_int = {DATA_WIDTH{1'b0}};
+        m_axis_tkeep_int = {DATA_WIDTH / 8{1'b0}};
+        m_axis_tvalid_int = 1'b0;
+        m_axis_tlast_int = 1'b0;
         s_axis_tready_next = 1'b0;
         if (rst) begin
           state_next = STATE_IDLE;
@@ -681,27 +839,27 @@ module Roce_tx_header_producer #(
       //assign tx_metadata[79:32] = 64'h001122334455;  //rem_addr
 
 
-      roce_bth_valid_reg     <= roce_bth_valid_next;
-      roce_reth_valid_reg    <= roce_reth_valid_next;
-      roce_immdh_valid_reg   <= roce_immdh_valid_next;
+      roce_bth_valid_reg   <= roce_bth_valid_next;
+      roce_reth_valid_reg  <= roce_reth_valid_next;
+      roce_immdh_valid_reg <= roce_immdh_valid_next;
 
-      roce_bth_op_code_reg   <= roce_bth_op_code_next;
-      roce_bth_p_key_reg     <= roce_bth_p_key_next;
-      roce_bth_psn_reg       <= roce_bth_psn_next;
-      roce_bth_dest_qp_reg   <= roce_bth_dest_qp_next;
-      roce_bth_ack_req_reg   <= roce_bth_ack_req_next;
+      roce_bth_op_code_reg <= roce_bth_op_code_next;
+      roce_bth_p_key_reg   <= roce_bth_p_key_next;
+      roce_bth_psn_reg     <= roce_bth_psn_next;
+      roce_bth_dest_qp_reg <= roce_bth_dest_qp_next;
+      roce_bth_ack_req_reg <= roce_bth_ack_req_next;
 
-      roce_reth_v_addr_reg   <= roce_reth_v_addr_next;
-      roce_reth_r_key_reg    <= roce_reth_r_key_next;
-      roce_reth_length_reg   <= roce_reth_length_next;
+      roce_reth_v_addr_reg <= roce_reth_v_addr_next;
+      roce_reth_r_key_reg  <= roce_reth_r_key_next;
+      roce_reth_length_reg <= roce_reth_length_next;
 
-      roce_immdh_data_reg    <= roce_immdh_data_next;
+      roce_immdh_data_reg  <= roce_immdh_data_next;
 
-      ip_source_ip_reg       <= ip_source_ip_next;
-      ip_dest_ip_reg         <= ip_dest_ip_next;
-      udp_source_port_reg    <= udp_source_port_next;
-      udp_dest_port_reg      <= udp_dest_port_next;
-      udp_length_reg         <= udp_length_next;
+      ip_source_ip_reg     <= ip_source_ip_next;
+      ip_dest_ip_reg       <= ip_dest_ip_next;
+      udp_source_port_reg  <= udp_source_port_next;
+      udp_dest_port_reg    <= udp_dest_port_next;
+      udp_length_reg       <= udp_length_next;
 
 
     end

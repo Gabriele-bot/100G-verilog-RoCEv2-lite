@@ -56,10 +56,10 @@ module udp_RoCE_connection_manager_64 #(
     input  wire [15:0] s_ip_header_checksum,
     input  wire [31:0] s_ip_source_ip,
     input  wire [31:0] s_ip_dest_ip,
-    output wire [15:0] s_udp_source_port,
-    output wire [15:0] s_udp_dest_port,
-    output wire [15:0] s_udp_length,
-    output wire [15:0] s_udp_checksum,
+    input  wire [15:0] s_udp_source_port,
+    input  wire [15:0] s_udp_dest_port,
+    input  wire [15:0] s_udp_length,
+    input  wire [15:0] s_udp_checksum,
     input  wire [63:0] s_udp_payload_axis_tdata,
     input  wire [ 7:0] s_udp_payload_axis_tkeep,
     input  wire        s_udp_payload_axis_tvalid,
@@ -129,14 +129,32 @@ module udp_RoCE_connection_manager_64 #(
 
   always @* begin
 
-    state_next = STATE_IDLE;
+    state_next                     = STATE_IDLE;
 
-    s_udp_hdr_ready_next = 1'b0;
+    s_udp_hdr_ready_next           = 1'b0;
     s_udp_payload_axis_tready_next = 1'b0;
 
-    m_udp_hdr_valid_next = m_udp_hdr_valid_reg;
+    m_udp_hdr_valid_next           = m_udp_hdr_valid_reg;
 
-    metadata_valid_next = 1'b0;
+    metadata_valid_next            = metadata_valid_reg;
+
+    qp_info_valid_next             = qp_info_valid_reg;
+    qp_info_rem_qpn_next           = qp_info_rem_qpn_reg;
+    qp_info_loc_qpn_next           = qp_info_loc_qpn_reg;
+    qp_info_rem_psn_next           = qp_info_rem_psn_reg;
+    qp_info_loc_psn_next           = qp_info_loc_psn_reg;
+    qp_info_r_key_next             = qp_info_r_key_reg;
+
+    txmeta_valid_next              = txmeta_valid_reg;
+    txmeta_start_next              = txmeta_start_reg;
+    txmeta_write_type_next         = txmeta_write_type_reg;
+    txmeta_rem_ip_addr_next        = txmeta_rem_ip_addr_reg;
+    txmeta_rem_addr_next           = txmeta_rem_addr_reg;
+    txmeta_dma_lentgh_next         = txmeta_dma_lentgh_reg;
+    txmeta_rem_udp_port_next       = txmeta_rem_udp_port_reg;
+
+    roce_metadata_ptr_next         = roce_metadata_ptr_reg;
+
 
     case (state_reg)
       STATE_IDLE: begin
@@ -146,6 +164,10 @@ module udp_RoCE_connection_manager_64 #(
         s_udp_hdr_ready_next = !m_udp_hdr_valid_next;
 
         udp_port_next = 16'd0;
+
+        qp_info_valid_next = 1'b0;
+        txmeta_valid_next = 1'b0;
+        txmeta_start_next = 1'b0;
 
         if (s_udp_hdr_ready && s_udp_hdr_valid) begin
           if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == 16'd44) begin
@@ -169,77 +191,92 @@ module udp_RoCE_connection_manager_64 #(
           case (roce_metadata_ptr_reg)
             4'd0: begin
               qp_info_valid_next = s_udp_payload_axis_tdata[0];
-              qp_info_rem_qpn_next = {
-                s_udp_payload_axis_tdata[15:8],
-                s_udp_payload_axis_tdata[23:16],
-                s_udp_payload_axis_tdata[31:24]
+              if (qp_info_valid_next) begin
+                qp_info_rem_qpn_next = {
+                  s_udp_payload_axis_tdata[15:8],
+                  s_udp_payload_axis_tdata[23:16],
+                  s_udp_payload_axis_tdata[31:24]
 
-              };
-              qp_info_loc_qpn_next = {
-                s_udp_payload_axis_tdata[39:32],
-                s_udp_payload_axis_tdata[47:40],
-                s_udp_payload_axis_tdata[55:48]
-              };
-              qp_info_rem_psn_next[7:0] = s_udp_payload_axis_tdata[63:56];
+                };
+                qp_info_loc_qpn_next = {
+                  s_udp_payload_axis_tdata[39:32],
+                  s_udp_payload_axis_tdata[47:40],
+                  s_udp_payload_axis_tdata[55:48]
+                };
+                qp_info_rem_psn_next[23:16] = s_udp_payload_axis_tdata[63:56];
+              end
 
               roce_metadata_ptr_next = 4'd1;
             end
             4'd1: begin
-              qp_info_rem_psn_next[23:8] = {
-                s_udp_payload_axis_tdata[15:8], s_udp_payload_axis_tdata[7:0]
-              };
-              qp_info_loc_psn_next = {
-                s_udp_payload_axis_tdata[23:16],
-                s_udp_payload_axis_tdata[31:24],
-                s_udp_payload_axis_tdata[39:32]
-              };
-              qp_info_r_key_next[23:0] = {
-                s_udp_payload_axis_tdata[47:40],
-                s_udp_payload_axis_tdata[55:48],
-                s_udp_payload_axis_tdata[63:56]
-              };
+              if (qp_info_valid_reg) begin
+                qp_info_rem_psn_next[15:0] = {
+                  s_udp_payload_axis_tdata[7:0], s_udp_payload_axis_tdata[15:8]
+                };
+                qp_info_loc_psn_next = {
+                  s_udp_payload_axis_tdata[23:16],
+                  s_udp_payload_axis_tdata[31:24],
+                  s_udp_payload_axis_tdata[39:32]
+                };
+                qp_info_r_key_next[31:8] = {
+                  s_udp_payload_axis_tdata[47:40],
+                  s_udp_payload_axis_tdata[55:48],
+                  s_udp_payload_axis_tdata[63:56]
+                };
+              end
+
               roce_metadata_ptr_next = 4'd2;
             end
             4'd2: begin
-              qp_info_r_key_next[31:24] = s_udp_payload_axis_tdata[7:0];
+              if (qp_info_valid_reg) begin
+                qp_info_r_key_next[7:0] = s_udp_payload_axis_tdata[7:0];
+              end
 
               txmeta_valid_next = s_udp_payload_axis_tdata[8];
-              txmeta_write_type_next = s_udp_payload_axis_tdata[9];
-              txmeta_rem_ip_addr_next = {
-                s_udp_payload_axis_tdata[23:16],
-                s_udp_payload_axis_tdata[31:24],
-                s_udp_payload_axis_tdata[39:32],
-                s_udp_payload_axis_tdata[47:40]
-              };
-              txmeta_rem_addr_next[63:48] = {
-                s_udp_payload_axis_tdata[55:48], s_udp_payload_axis_tdata[63:56]
-              };
+              txmeta_start_next = s_udp_payload_axis_tdata[9];
+              txmeta_write_type_next = s_udp_payload_axis_tdata[10];
+              if (txmeta_valid_next) begin
+                txmeta_rem_ip_addr_next = {
+                  s_udp_payload_axis_tdata[23:16],
+                  s_udp_payload_axis_tdata[31:24],
+                  s_udp_payload_axis_tdata[39:32],
+                  s_udp_payload_axis_tdata[47:40]
+                };
+                txmeta_rem_addr_next[63:48] = {
+                  s_udp_payload_axis_tdata[55:48], s_udp_payload_axis_tdata[63:56]
+                };
+              end
 
               roce_metadata_ptr_next = 4'd3;
             end
             4'd3: begin
-              txmeta_rem_addr_next[48:0] = {
-                s_udp_payload_axis_tdata[7:0],
-                s_udp_payload_axis_tdata[15:8],
-                s_udp_payload_axis_tdata[23:16],
-                s_udp_payload_axis_tdata[31:24],
-                s_udp_payload_axis_tdata[39:32],
-                s_udp_payload_axis_tdata[47:40]
-              };
-              txmeta_dma_lentgh_next[15:0] = {
-                s_udp_payload_axis_tdata[55:48], s_udp_payload_axis_tdata[63:56]
-              };
+              if (txmeta_valid_reg) begin
+                txmeta_rem_addr_next[48:0] = {
+                  s_udp_payload_axis_tdata[7:0],
+                  s_udp_payload_axis_tdata[15:8],
+                  s_udp_payload_axis_tdata[23:16],
+                  s_udp_payload_axis_tdata[31:24],
+                  s_udp_payload_axis_tdata[39:32],
+                  s_udp_payload_axis_tdata[47:40]
+                };
+                txmeta_dma_lentgh_next[31:16] = {
+                  s_udp_payload_axis_tdata[55:48], s_udp_payload_axis_tdata[63:56]
+                };
+              end
 
               roce_metadata_ptr_next = 4'd4;
             end
             4'd4: begin
-              txmeta_dma_lentgh_next[31:16] = {
-                s_udp_payload_axis_tdata[0:7], s_udp_payload_axis_tdata[15:8]
-              };
-              txmeta_rem_udp_port_next = {
-                s_udp_payload_axis_tdata[23:16], s_udp_payload_axis_tdata[31:24]
-              };
-              metadata_valid_next = 1'b1;
+              if (txmeta_valid_reg) begin
+                txmeta_dma_lentgh_next[15:0] = {
+                  s_udp_payload_axis_tdata[7:0], s_udp_payload_axis_tdata[15:8]
+                };
+                txmeta_rem_udp_port_next = {
+                  s_udp_payload_axis_tdata[23:16], s_udp_payload_axis_tdata[31:24]
+                };
+                metadata_valid_next = 1'b1;
+              end
+
               roce_metadata_ptr_next = 4'd5;
             end
             4'd5: begin
@@ -287,23 +324,20 @@ module udp_RoCE_connection_manager_64 #(
       udp_port_reg                  <= udp_port_next;
 
       qp_info_valid_reg             <= qp_info_valid_next;
-      if (qp_info_valid_next) begin
-        qp_info_rem_qpn_reg <= qp_info_rem_qpn_next;
-        qp_info_loc_qpn_reg <= qp_info_loc_qpn_next;
-        qp_info_rem_psn_reg <= qp_info_rem_psn_next;
-        qp_info_loc_psn_reg <= qp_info_loc_psn_next;
-        qp_info_r_key_reg   <= qp_info_r_key_next;
-      end
+      qp_info_rem_qpn_reg           <= qp_info_rem_qpn_next;
+      qp_info_loc_qpn_reg           <= qp_info_loc_qpn_next;
+      qp_info_rem_psn_reg           <= qp_info_rem_psn_next;
+      qp_info_loc_psn_reg           <= qp_info_loc_psn_next;
+      qp_info_r_key_reg             <= qp_info_r_key_next;
 
-      txmeta_valid_reg <= txmeta_valid_next;
-      txmeta_start_reg        <= txmeta_start_next;
-      if (txmeta_valid_next) begin
-        txmeta_write_type_reg   <= txmeta_write_type_next;
-        txmeta_rem_ip_addr_reg  <= txmeta_rem_ip_addr_next;
-        txmeta_rem_addr_reg     <= txmeta_rem_addr_next;
-        txmeta_dma_lentgh_reg   <= txmeta_dma_lentgh_next;
-        txmeta_rem_udp_port_reg <= txmeta_rem_udp_port_next;
-      end
+      txmeta_valid_reg              <= txmeta_valid_next;
+      txmeta_start_reg              <= txmeta_start_next;
+      txmeta_write_type_reg         <= txmeta_write_type_next;
+      txmeta_rem_ip_addr_reg        <= txmeta_rem_ip_addr_next;
+      txmeta_rem_addr_reg           <= txmeta_rem_addr_next;
+      txmeta_dma_lentgh_reg         <= txmeta_dma_lentgh_next;
+      txmeta_rem_udp_port_reg       <= txmeta_rem_udp_port_next;
+
 
 
       busy_reg                      <= state_next != STATE_IDLE;

@@ -193,7 +193,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
   localparam [1:0] HEADER_BTH = 2'd0, HEADER_BTH_RETH = 2'd1, HEADER_BTH_RETH_IMMDH = 2'd2;
 
-  reg [1:0] header_type = HEADER_BTH;
+  reg [1:0] header_type_reg = HEADER_BTH, header_type_next;
 
   // datapath control signals
   reg store_roce_bth;
@@ -394,6 +394,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
     m_udp_hdr_valid_next                 = m_udp_hdr_valid_reg && !m_udp_hdr_ready;
 
+    header_type_next                     = header_type_reg;
+
     error_payload_early_termination_next = 1'b0;
 
     m_udp_payload_axis_tdata_int         = 1'b0;
@@ -411,20 +413,20 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         s_roce_reth_ready_next = !m_udp_hdr_valid_next;
         s_roce_immdh_ready_next = !m_udp_hdr_valid_next;
         if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid) begin
-          header_type = HEADER_BTH;
-          store_roce_bth = 1'b1;
+          header_type_next = HEADER_BTH;
+          store_roce_bth   = 1'b1;
         end else if ( s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid && ~s_roce_immdh_valid) begin
-          header_type = HEADER_BTH_RETH;
-          store_roce_bth = 1'b1;
-          store_roce_reth = 1'b1;
+          header_type_next = HEADER_BTH_RETH;
+          store_roce_bth   = 1'b1;
+          store_roce_reth  = 1'b1;
         end else if ( s_roce_bth_ready && s_roce_bth_valid && s_roce_reth_ready && s_roce_reth_valid && s_roce_immdh_ready && s_roce_immdh_valid) begin
-          header_type = HEADER_BTH_RETH_IMMDH;
-          store_roce_bth = 1'b1;
-          store_roce_reth = 1'b1;
+          header_type_next = HEADER_BTH_RETH_IMMDH;
+          store_roce_bth   = 1'b1;
+          store_roce_reth  = 1'b1;
           store_roce_immdh = 1'b1;
         end else begin
-          header_type = HEADER_BTH;
-          store_roce_bth = 1'b1;
+          header_type_next = HEADER_BTH;
+          store_roce_bth   = 1'b1;
         end
 
         if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid) begin
@@ -451,7 +453,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
             m_udp_payload_axis_tkeep_int        = 8'hff;
             hdr_ptr_next                        = 6'd8;
-            if (header_type == HEADER_BTH) begin
+            if (header_type_next == HEADER_BTH) begin
               state_next = STATE_WRITE_HEADER_LAST;
             end else begin
               state_next = STATE_WRITE_HEADER;
@@ -466,12 +468,6 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           s_roce_reth_ready_next = 1'b0;
           s_roce_immdh_ready_next = 1'b0;
           m_udp_hdr_valid_next = 1'b1;
-
-
-          m_udp_payload_axis_tdata_int[71:65] = 7'b0;  // Reserved
-          m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-          m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-          m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
 
           if (m_udp_payload_axis_tready_int_reg) begin
             m_udp_payload_axis_tvalid_int       = 1'b1;
@@ -497,13 +493,13 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       end
       STATE_WRITE_HEADER: begin
         // write header
-        if (header_type == HEADER_BTH) begin
+        if (header_type_reg == HEADER_BTH) begin
           // UDP length - UDP header - BTH  - half frame
           word_count_next = m_udp_length_reg - 8 - 12 - 4;
-        end else if (header_type == HEADER_BTH_RETH) begin
+        end else if (header_type_reg == HEADER_BTH_RETH) begin
           // UDP length - UDP header - BTH - RETH + half frame
           word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
-        end else if (header_type == HEADER_BTH_RETH_IMMDH) begin
+        end else if (header_type_reg == HEADER_BTH_RETH_IMMDH) begin
           // UDP length - UDP header - BTH - RETH - IMMDH
           word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
         end else begin
@@ -528,7 +524,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
               m_udp_payload_axis_tdata_int[55:48] = roce_bth_dest_qp_reg[15:8];
               m_udp_payload_axis_tdata_int[63:56] = roce_bth_dest_qp_reg[7:0];
               m_udp_payload_axis_tkeep_int        = 8'hff;
-              if (header_type == HEADER_BTH) begin
+              if (header_type_reg == HEADER_BTH) begin
                 state_next = STATE_WRITE_HEADER_LAST;
                 s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
               end
@@ -556,7 +552,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
               m_udp_payload_axis_tdata_int[55:48] = roce_reth_r_key_reg[15:8];
               m_udp_payload_axis_tdata_int[63:56] = roce_reth_r_key_reg[7:0];
               m_udp_payload_axis_tkeep_int = 8'hff;
-              if (header_type == HEADER_BTH_RETH) begin
+              if (header_type_reg == HEADER_BTH_RETH) begin
                 s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
                 state_next = STATE_WRITE_HEADER_LAST;
               end
@@ -595,13 +591,13 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         if (s_roce_payload_axis_tready && s_roce_payload_axis_tvalid) begin
           m_udp_payload_axis_tvalid_int = 1'b1;
           transfer_in_save = 1'b1;
-          if (header_type == HEADER_BTH) begin
+          if (header_type_reg == HEADER_BTH) begin
             m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
             m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
             m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
             m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
             m_udp_payload_axis_tdata_int[31:24] = roce_bth_psn_reg[7:0];
-          end else if (header_type == HEADER_BTH_RETH) begin
+          end else if (header_type_reg == HEADER_BTH_RETH) begin
             m_udp_payload_axis_tdata_int[7:0]   = roce_reth_length_reg[31:24];
             m_udp_payload_axis_tdata_int[15:8]  = roce_reth_length_reg[23:16];
             m_udp_payload_axis_tdata_int[23:16] = roce_reth_length_reg[15:8];
@@ -612,13 +608,13 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tlast_int = shift_roce_payload_axis_tlast;
           m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
           word_count_next = word_count_reg - 16'd8;
-          if (header_type == HEADER_BTH) begin
+          if (header_type_reg == HEADER_BTH) begin
             // UDP length - UDP header - BTH  - half frame
             word_count_next = m_udp_length_reg - 8 - 12 - 4;
-          end else if (header_type == HEADER_BTH_RETH) begin
+          end else if (header_type_reg == HEADER_BTH_RETH) begin
             // UDP length - UDP header - BTH - RETH + half frame
             word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
-          end else if (header_type == HEADER_BTH_RETH_IMMDH) begin
+          end else if (header_type_reg == HEADER_BTH_RETH_IMMDH) begin
             // UDP length - UDP header - BTH - RETH - IMMDH
             word_count_next = m_udp_length_reg - 8 - 12 - 16 - 4;
           end else begin
@@ -658,7 +654,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       end
       STATE_WRITE_PAYLOAD: begin
         // write payload
-        if (header_type == HEADER_BTH_RETH_IMMDH) begin
+        if (header_type_reg == HEADER_BTH_RETH_IMMDH) begin
           s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
           m_udp_payload_axis_tdata_int = s_roce_payload_axis_tdata;
@@ -775,6 +771,9 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       save_roce_payload_axis_tlast_reg <= 1'b0;
       shift_roce_payload_extra_cycle_reg <= 1'b0;
       busy_reg <= 1'b0;
+
+      header_type_reg <= 2'b00;
+
       error_payload_early_termination_reg <= 1'b0;
     end else begin
       state_reg <= state_next;
@@ -786,6 +785,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       s_roce_payload_axis_tready_reg <= s_roce_payload_axis_tready_next;
 
       m_udp_hdr_valid_reg <= m_udp_hdr_valid_next;
+
+      header_type_reg <= header_type_next;
 
       busy_reg <= (state_next != STATE_IDLE) ? 1'b1 : 1'b0;
 
