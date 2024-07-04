@@ -421,7 +421,9 @@ module udp_64 #(
       .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
       // Status signals
       .busy(tx_busy),
-      .error_payload_early_termination(tx_error_payload_early_termination)
+      .error_payload_early_termination(tx_error_payload_early_termination),
+      // Config
+      .RoCE_udp_port(RoCE_udp_port)
   );
 
 endmodule
