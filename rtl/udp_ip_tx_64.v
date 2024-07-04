@@ -104,7 +104,11 @@ module udp_ip_tx_64 (
      * Status signals
      */
     output wire busy,
-    output wire error_payload_early_termination
+    output wire error_payload_early_termination,
+    /*
+     * Config
+     */
+    input wire [15:0] RoCE_udp_port
 );
 
   /*
@@ -142,8 +146,6 @@ payload in an AXI stream, combines the header with the payload, passes through
 the IP headers, and transmits the complete IP payload on an AXI interface.
 
 */
-
-  localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
   localparam [2:0]
     STATE_IDLE = 3'd0,
@@ -301,7 +303,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
             m_ip_payload_axis_tdata_int[15:8] = s_udp_source_port[7:0];
             m_ip_payload_axis_tdata_int[23:16] = s_udp_dest_port[15:8];
             m_ip_payload_axis_tdata_int[31:24] = s_udp_dest_port[7:0];
-            if (s_udp_dest_port == ROCE_UDP_PORT) begin
+            if (s_udp_dest_port == RoCE_udp_port) begin
               m_ip_payload_axis_tdata_int[39:32] = udp_length_roce_int[15:8];
               m_ip_payload_axis_tdata_int[47:40] = udp_length_roce_int[7:0];
             end else begin
@@ -327,7 +329,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
           m_ip_payload_axis_tdata_int[15:8] = udp_source_port_reg[7:0];
           m_ip_payload_axis_tdata_int[23:16] = udp_dest_port_reg[15:8];
           m_ip_payload_axis_tdata_int[31:24] = udp_dest_port_reg[7:0];
-          if (udp_dest_port_reg == ROCE_UDP_PORT) begin
+          if (udp_dest_port_reg == RoCE_udp_port) begin
             m_ip_payload_axis_tdata_int[39:32] = udp_length_roce_reg[15:8];
             m_ip_payload_axis_tdata_int[47:40] = udp_length_roce_reg[7:0];
           end else begin
@@ -473,7 +475,7 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
       m_ip_header_checksum_reg <= s_ip_header_checksum;
       m_ip_source_ip_reg <= s_ip_source_ip;
       m_ip_dest_ip_reg <= s_ip_dest_ip;
-      m_is_roce_packet_reg <= s_udp_dest_port == ROCE_UDP_PORT;
+      m_is_roce_packet_reg <= s_udp_dest_port == RoCE_udp_port;
       udp_source_port_reg <= s_udp_source_port;
       udp_dest_port_reg <= s_udp_dest_port;
       udp_length_reg <= s_udp_length;
