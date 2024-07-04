@@ -49,7 +49,8 @@ module RoCE_throughput_eval (
     // Performance results
     output wire [63:0] tot_time_wo_ack_avg,
     output wire [63:0] tot_time_avg,
-    output wire [63:0] latency_tot
+    output wire [63:0] latency_tot,
+    output wire bad_frame
 
 );
 
@@ -604,6 +605,7 @@ module RoCE_throughput_eval (
   assign tot_time_wo_ack_avg = transfer_time_no_ack_reg;
   assign tot_time_avg = transfer_time_reg;
   assign latency_tot = latency_tot_reg;
+  assign bad_frame = bad_transfer;
 
 endmodule : RoCE_throughput_eval
 

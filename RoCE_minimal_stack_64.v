@@ -728,6 +728,7 @@ module RoCE_minimal_stack_64 #(
   wire [63:0] tot_time_wo_ack_avg;
   wire [63:0] tot_time_avg;
   wire [63:0] latency_tot;
+  wire bad_frame;
 
   RoCE_throughput_eval RoCE_throughput_eval_instance (
       .clk(clk),
@@ -755,7 +756,8 @@ module RoCE_minimal_stack_64 #(
       .s_roce_tx_reth_length(roce_reth_length),
       .tot_time_wo_ack_avg(tot_time_wo_ack_avg),
       .tot_time_avg(tot_time_avg),
-      .latency_tot(latency_tot)
+      .latency_tot(latency_tot),
+      .bad_frame(bad_frame)
   );
 
   /*

@@ -429,7 +429,8 @@ separate AXI stream.
 
       STATE_CHECK_ICRC: begin
 
-        s_udp_payload_axis_tready_next = 1'b1;
+        s_udp_payload_axis_tready_next = 1'b0;
+        s_udp_hdr_ready_next = !m_roce_bth_valid_next;
         state_next = STATE_IDLE;
         if (ENABLE_ICRC_CHECK) begin
           if (m_roce_computed_icrc_reg != m_roce_recieved_icrc_reg) begin
