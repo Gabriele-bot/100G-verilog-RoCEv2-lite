@@ -6,27 +6,28 @@
 
 /*
   * Structure
-  * +---------+-------------+---------------------+
-  * | OCTETS  |  BIT RANGE  |       Field         |
-  * +---------+-------------+---------------------+
-  * |   0     |  [0  :0  ]  |  QP_info_valid      |
-  * |   0     |  [7  :1  ]  |  QP_info_reserved   |
-  * | [3:1]   |  [31 :8  ]  |  QP_info_rem_qpn    |
-  * | [6:4]   |  [55 :32 ]  |  QP_info_loc_qpn    |
-  * | [9:7]   |  [79 :56 ]  |  QP_info_rem_psn    |
-  * | [12:10] |  [103:80 ]  |  QP_info_loc_psn    |
-  * | [16:13] |  [135:104]  |  QP_info_r_key      |
-  * +---------+-------------+---------------------+
-  * |   17    |  [136:136]  |  txmeta_valid       |
-  * |   17    |  [137:137]  |  txmeta_start       |
-  * |   17    |  [138:138]  |  txmeta_write_type  |
-  * |   17    |  [143:139]  |  txmeta_reserved    |
-  * | [21:18] |  [175:144]  |  txmeta_rem_ip_addr |
-  * | [29:22] |  [239:176]  |  txmeta_rem_addr    |
-  * | [33:30] |  [271:240]  |  txmeta_dma_length  |
-  * | [35:34] |  [287:272]  |  txmeta_rem_udp_port|
-  * +---------+-------------+---------------------+
-  * TOTAL length 288 bits, 36 bytes
+  * +---------+-------------+--------------------------+
+  * | OCTETS  |  BIT RANGE  |       Field              |
+  * +---------+-------------+--------------------------+
+  * |   0     |  [0  :0  ]  |  QP_info_valid           |
+  * |   0     |  [7  :1  ]  |  QP_info_reserved        |
+  * | [3:1]   |  [31 :8  ]  |  QP_info_rem_qpn         |
+  * | [6:4]   |  [55 :32 ]  |  QP_info_loc_qpn         |
+  * | [9:7]   |  [79 :56 ]  |  QP_info_rem_psn         |
+  * | [12:10] |  [103:80 ]  |  QP_info_loc_psn         |
+  * | [16:13] |  [135:104]  |  QP_info_r_key           |
+  * | [24:17] |  [199:136]  |  QP_info_rem_base_addr   |
+  * +---------+-------------+--------------------------+
+  * |   25    |  [200:200]  |  txmeta_valid            |
+  * |   25    |  [201:201]  |  txmeta_start            |
+  * |   25    |  [202:202]  |  txmeta_write_type       |
+  * |   25    |  [207:203]  |  txmeta_reserved         |
+  * | [29:26] |  [239:208]  |  txmeta_rem_ip_addr      |
+  * | [37:30] |  [303:240]  |  txmeta_rem_addr_offset  |
+  * | [41:38] |  [335:304]  |  txmeta_dma_length       |
+  * | [43:42] |  [351:336]  |  txmeta_rem_udp_port     |
+  * +---------+-------------+--------------------------+
+  * TOTAL length 352 bits, 44 bytes
   */
 
 module udp_RoCE_connection_manager_64 #(
@@ -109,12 +110,13 @@ module udp_RoCE_connection_manager_64 #(
   reg [23:0] qp_info_rem_psn_reg, qp_info_rem_psn_next;
   reg [23:0] qp_info_loc_psn_reg, qp_info_loc_psn_next;
   reg [31:0] qp_info_r_key_reg, qp_info_r_key_next;
+  reg [63:0] qp_info_rem_base_addr_reg, qp_info_rem_base_addr_next;
 
   reg txmeta_valid_reg, txmeta_valid_next;
   reg txmeta_start_reg, txmeta_start_next;
   reg txmeta_write_type_reg, txmeta_write_type_next;
   reg [31:0] txmeta_rem_ip_addr_reg, txmeta_rem_ip_addr_next;
-  reg [63:0] txmeta_rem_addr_reg, txmeta_rem_addr_next;
+  reg [63:0] txmeta_rem_addr_offset_reg, txmeta_rem_addr_offset_next;
   reg [31:0] txmeta_dma_lentgh_reg, txmeta_dma_lentgh_next;
   reg [15:0] txmeta_rem_udp_port_reg, txmeta_rem_udp_port_next;
 
@@ -146,12 +148,13 @@ module udp_RoCE_connection_manager_64 #(
     qp_info_rem_psn_next           = qp_info_rem_psn_reg;
     qp_info_loc_psn_next           = qp_info_loc_psn_reg;
     qp_info_r_key_next             = qp_info_r_key_reg;
+    qp_info_rem_base_addr_next     = qp_info_rem_base_addr_reg;
 
     txmeta_valid_next              = txmeta_valid_reg;
     txmeta_start_next              = txmeta_start_reg;
     txmeta_write_type_next         = txmeta_write_type_reg;
     txmeta_rem_ip_addr_next        = txmeta_rem_ip_addr_reg;
-    txmeta_rem_addr_next           = txmeta_rem_addr_reg;
+    txmeta_rem_addr_offset_next    = txmeta_rem_addr_offset_reg;
     txmeta_dma_lentgh_next         = txmeta_dma_lentgh_reg;
     txmeta_rem_udp_port_next       = txmeta_rem_udp_port_reg;
 
@@ -172,7 +175,7 @@ module udp_RoCE_connection_manager_64 #(
         txmeta_start_next = 1'b0;
 
         if (s_udp_hdr_ready && s_udp_hdr_valid) begin
-          if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == 16'd44) begin
+          if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == 16'd52) begin
             state_next = STATE_READ_METADATA;
             udp_port_next = s_udp_dest_port;
             s_udp_hdr_ready_next = 1'b0;
@@ -231,7 +234,24 @@ module udp_RoCE_connection_manager_64 #(
             end
             4'd2: begin
               if (qp_info_valid_reg) begin
-                qp_info_r_key_next[7:0] = s_udp_payload_axis_tdata[7:0];
+                qp_info_r_key_next[7:0]           = s_udp_payload_axis_tdata[7:0];
+                qp_info_rem_base_addr_next[63:56] = s_udp_payload_axis_tdata[15:8];
+                qp_info_rem_base_addr_next[55:48] = s_udp_payload_axis_tdata[23:16];
+                qp_info_rem_base_addr_next[47:40] = s_udp_payload_axis_tdata[31:24];
+                qp_info_rem_base_addr_next[39:32] = s_udp_payload_axis_tdata[39:32];
+                qp_info_rem_base_addr_next[31:24] = s_udp_payload_axis_tdata[47:40];
+                qp_info_rem_base_addr_next[23:16] = s_udp_payload_axis_tdata[55:48];
+                qp_info_rem_base_addr_next[15:8]  = s_udp_payload_axis_tdata[63:56];
+              end
+
+
+
+              roce_metadata_ptr_next = 4'd3;
+            end
+            4'd3: begin
+
+              if (qp_info_valid_reg) begin
+                qp_info_rem_base_addr_next[7:0] = s_udp_payload_axis_tdata[7:0];
               end
 
               txmeta_valid_next = s_udp_payload_axis_tdata[8];
@@ -244,16 +264,17 @@ module udp_RoCE_connection_manager_64 #(
                   s_udp_payload_axis_tdata[39:32],
                   s_udp_payload_axis_tdata[47:40]
                 };
-                txmeta_rem_addr_next[63:48] = {
+                txmeta_rem_addr_offset_next[63:48] = {
                   s_udp_payload_axis_tdata[55:48], s_udp_payload_axis_tdata[63:56]
                 };
               end
 
-              roce_metadata_ptr_next = 4'd3;
+              roce_metadata_ptr_next = 4'd4;
             end
-            4'd3: begin
+            4'd4: begin
+
               if (txmeta_valid_reg) begin
-                txmeta_rem_addr_next[48:0] = {
+                txmeta_rem_addr_offset_next[48:0] = {
                   s_udp_payload_axis_tdata[7:0],
                   s_udp_payload_axis_tdata[15:8],
                   s_udp_payload_axis_tdata[23:16],
@@ -266,9 +287,9 @@ module udp_RoCE_connection_manager_64 #(
                 };
               end
 
-              roce_metadata_ptr_next = 4'd4;
+              roce_metadata_ptr_next = 4'd5;
             end
-            4'd4: begin
+            4'd5: begin
               if (txmeta_valid_reg) begin
                 txmeta_dma_lentgh_next[15:0] = {
                   s_udp_payload_axis_tdata[7:0], s_udp_payload_axis_tdata[15:8]
@@ -279,10 +300,11 @@ module udp_RoCE_connection_manager_64 #(
                 metadata_valid_next = 1'b1;
               end
 
-              roce_metadata_ptr_next = 4'd5;
+              roce_metadata_ptr_next = 4'd6;
             end
-            4'd5: begin
-              roce_metadata_ptr_next = 4'd5;
+
+            4'd6: begin
+              roce_metadata_ptr_next = 4'd6;
             end
           endcase
 
@@ -326,23 +348,26 @@ module udp_RoCE_connection_manager_64 #(
       udp_port_reg                  <= udp_port_next;
 
       qp_info_valid_reg             <= qp_info_valid_next;
-      qp_info_rem_qpn_reg           <= qp_info_rem_qpn_next;
-      qp_info_loc_qpn_reg           <= qp_info_loc_qpn_next;
-      qp_info_rem_psn_reg           <= qp_info_rem_psn_next;
-      qp_info_loc_psn_reg           <= qp_info_loc_psn_next;
-      qp_info_r_key_reg             <= qp_info_r_key_next;
+      if (qp_info_valid_next) begin
+        qp_info_rem_qpn_reg       <= qp_info_rem_qpn_next;
+        qp_info_loc_qpn_reg       <= qp_info_loc_qpn_next;
+        qp_info_rem_psn_reg       <= qp_info_rem_psn_next;
+        qp_info_loc_psn_reg       <= qp_info_loc_psn_next;
+        qp_info_r_key_reg         <= qp_info_r_key_next;
+        qp_info_rem_base_addr_reg <= qp_info_rem_base_addr_next;
+      end
 
-      txmeta_valid_reg              <= txmeta_valid_next;
-      txmeta_start_reg              <= txmeta_start_next;
-      txmeta_write_type_reg         <= txmeta_write_type_next;
-      txmeta_rem_ip_addr_reg        <= txmeta_rem_ip_addr_next;
-      txmeta_rem_addr_reg           <= txmeta_rem_addr_next;
-      txmeta_dma_lentgh_reg         <= txmeta_dma_lentgh_next;
-      txmeta_rem_udp_port_reg       <= txmeta_rem_udp_port_next;
+      txmeta_valid_reg <= txmeta_valid_next;
+      if (txmeta_valid_next) begin
+        txmeta_start_reg           <= txmeta_start_next;
+        txmeta_write_type_reg      <= txmeta_write_type_next;
+        txmeta_rem_ip_addr_reg     <= txmeta_rem_ip_addr_next;
+        txmeta_rem_addr_offset_reg <= txmeta_rem_addr_offset_next;
+        txmeta_dma_lentgh_reg      <= txmeta_dma_lentgh_next;
+        txmeta_rem_udp_port_reg    <= txmeta_rem_udp_port_next;
+      end
 
-
-
-      busy_reg                      <= state_next != STATE_IDLE;
+      busy_reg <= state_next != STATE_IDLE;
     end
 
 
@@ -352,8 +377,8 @@ module udp_RoCE_connection_manager_64 #(
   assign r_key          = qp_info_r_key_reg;
   assign rem_qpn        = qp_info_rem_qpn_reg;
   assign rem_psn        = qp_info_rem_psn_reg;
-  assign rem_addr       = txmeta_rem_addr_reg;
-  assign start_transfer = txmeta_start_reg;
+  assign rem_addr       = qp_info_rem_base_addr_reg + txmeta_rem_addr_offset_reg;
+  assign start_transfer = txmeta_start_reg & metadata_valid_reg;
 
   assign metadata_valid = metadata_valid_reg;
 

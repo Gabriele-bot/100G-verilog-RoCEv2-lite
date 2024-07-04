@@ -78,7 +78,9 @@ module Roce_tx_header_producer #(
     output wire                      m_roce_payload_axis_tlast,
     output wire                      m_roce_payload_axis_tuser,
     // config
-    input  wire [              12:0] pmtu
+    input  wire [              12:0] pmtu,
+    input  wire [              15:0] RoCE_udp_port,
+    input  wire [              31:0] loc_ip_addr
 
 );
 
@@ -246,9 +248,9 @@ module Roce_tx_header_producer #(
 
   reg [2:0] state_reg, state_next;
 
-  localparam [31:0] LOC_IP_ADDR = {8'd22, 8'd1, 8'd212, 8'd10};
+  //localparam [31:0] LOC_IP_ADDR = {8'd22, 8'd1, 8'd212, 8'd10};
   localparam [15:0] LOC_UDP_PORT = 16'h2123;
-  localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
+  //localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
 
   reg roce_bth_valid_next, roce_bth_valid_reg;
@@ -434,11 +436,11 @@ module Roce_tx_header_producer #(
             roce_immdh_valid_next = 1'b0;
             // TODO add option for immediate 
 
-            ip_source_ip_next     = LOC_IP_ADDR;
+            ip_source_ip_next     = loc_ip_addr;
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
-            udp_dest_port_next    = ROCE_UDP_PORT;
+            udp_dest_port_next    = RoCE_udp_port;
             udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8;
             // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
 
@@ -459,11 +461,11 @@ module Roce_tx_header_producer #(
             roce_reth_valid_next  = 1'b1;
             roce_immdh_valid_next = 1'b0;
 
-            ip_source_ip_next     = LOC_IP_ADDR;
+            ip_source_ip_next     = loc_ip_addr;
             ip_dest_ip_next       = qp_conn[79:48];
 
             udp_source_port_next  = LOC_UDP_PORT;
-            udp_dest_port_next    = ROCE_UDP_PORT;
+            udp_dest_port_next    = RoCE_udp_port;
             udp_length_next       = pmtu + 12 + 16 + 8;
             // PMTU + BTH + RETH + UDP HEADER
 
@@ -795,7 +797,7 @@ module Roce_tx_header_producer #(
       ip_source_ip_reg             <= 32'h0;
       ip_dest_ip_reg               <= 32'h0;
       udp_source_port_reg          <= 16'd0;
-      udp_dest_port_reg            <= ROCE_UDP_PORT;
+      udp_dest_port_reg            <= RoCE_udp_port;
       udp_length_reg               <= 16'h0;
       udp_checksum_reg             <= 16'h0;
       roce_bth_op_code_reg         <= RC_RDMA_WRITE_ONLY;
@@ -831,7 +833,7 @@ module Roce_tx_header_producer #(
       //assign qp_info[106:75]  = 32'h11223344;  //r_key
       //assign qp_info[170:107] = 64'h000000000000;  //vaddr
 
-      qp_conn = {ROCE_UDP_PORT, s_rem_ip_addr, s_rem_qpn, 24'h000017};
+      qp_conn = {RoCE_udp_port, s_rem_ip_addr, s_rem_qpn, 24'h000017};
       //assign qp_conn[23:0]  = 24'h000017;  //loc_qpn
       //assign qp_conn[47:24] = 24'h000016;  //rem_qpn
       //assign qp_conn[79:48] = 32'h0BD40116;  //rem_ip_addr

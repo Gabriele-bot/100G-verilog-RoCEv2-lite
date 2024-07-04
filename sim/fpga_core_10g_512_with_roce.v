@@ -228,9 +228,10 @@ module fpga_core_10g_512_sim_with_roce (
 
   // Configuration
   wire [47:0] local_mac   = 48'h02_00_00_00_00_00;
-  wire [31:0] local_ip    = {8'd192, 8'd168, 8'd1,   8'd128};
-  wire [31:0] gateway_ip  = {8'd192, 8'd168, 8'd1,   8'd1};
-  wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0};
+  wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10};
+  wire [31:0] dest_ip     = {8'd22 , 8'd1  , 8'd212, 8'd11};
+  wire [31:0] gateway_ip  = {8'd22 , 8'd1  , 8'd212,  8'd1};
+  wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255,  8'd0};
 
   // IP ports not used
   assign rx_ip_hdr_ready = 1;
