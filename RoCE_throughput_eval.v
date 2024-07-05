@@ -49,8 +49,8 @@ module RoCE_throughput_eval (
     // Performance results
     output wire [63:0] tot_time_wo_ack_avg,
     output wire [63:0] tot_time_avg,
-    output wire [63:0] latency_tot,
-    output wire bad_frame
+    output wire [63:0] latency_first_packet,
+    output wire [63:0] latency_last_packet
 
 );
 
@@ -243,7 +243,7 @@ module RoCE_throughput_eval (
       .m_axis_tvalid(lpsn_fifo_valid),
       .m_axis_tready(fifo_re_last)
   );
-  */
+  
 
   wire [63:0] sent_message_stamp_fifo_out_data;
   wire        sent_message_stamp_fifo_out_valid;
@@ -279,7 +279,7 @@ module RoCE_throughput_eval (
       .m_axis_tready(sent_message_stamp_fifo_out_ready)
   );
 
-  /*
+  
   axis_fifo #(
       .DEPTH      (1024),
       .DATA_WIDTH (64),
@@ -308,7 +308,7 @@ module RoCE_throughput_eval (
       .m_axis_tvalid(),
       .m_axis_tready(1'b0)
   );
-  */
+  
 
   wire [23:0] sent_psn_fifo_out_data;
   wire sent_psn_fifo_out_valid;
@@ -343,7 +343,7 @@ module RoCE_throughput_eval (
       .m_axis_tvalid(sent_psn_fifo_out_valid),
       .m_axis_tready(sent_psn_fifo_out_ready)
   );
-  /*
+  
   axis_fifo #(
       .DEPTH      (1024),
       .DATA_WIDTH (24),
@@ -372,10 +372,10 @@ module RoCE_throughput_eval (
       .m_axis_tvalid(),
       .m_axis_tready(1'b0)
   );
-  */
+  
 
   assign fifo_rst = (start_i & ~start_d) ? 1'b1 : 1'b0;
-
+  */
   always @(posedge clk) begin
     start_d <= start_i;
   end
@@ -514,7 +514,9 @@ module RoCE_throughput_eval (
   reg [63:0] tot_time_wo_ack_avg_reg = 64'd0;
   reg [63:0] tot_time_avg_reg = 64'd0;
   reg [63:0] latency_tot_reg = 64'd0;
-
+  reg [63:0] latency_first_reg = 64'd0;
+  reg [63:0] latency_last_reg = 64'd0;
+  /*
   reg bad_transfer;
 
   always @(posedge clk) begin
@@ -540,72 +542,55 @@ module RoCE_throughput_eval (
 
   assign sent_message_stamp_fifo_out_ready = sent_message_stamp_fifo_out_ready_reg;
   assign sent_psn_fifo_out_ready = sent_psn_fifo_out_ready_reg;
+  */
 
   reg [23:0] start_psn;
   reg [23:0] finish_psn;
+  reg [63:0] start_time_stamp;
+  reg [63:0] end_time_stamp;
+  reg [63:0] end_time_stamp_acked;
+
 
   always @(posedge clk) begin
     if (start_i & ~start_d) begin
-      transfer_time_reg <= 64'd0;
+      transfer_time_reg        <= 64'd0;
       transfer_time_no_ack_reg <= 64'd0;
-      start_psn <= {24{1'b0}};
-      finish_psn <= {24{1'b0}};
+      latency_first_reg        <= 64'd0;
+      latency_last_reg         <= 64'd0;
+      start_psn                <= {24{1'b0}};
+      finish_psn               <= {24{1'b0}};
+      start_time_stamp         <= 64'd0;
+      end_time_stamp           <= 64'd0;
+      end_time_stamp_acked     <= 64'd0;
     end else begin
-      if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD) begin
-        start_psn <= s_roce_tx_bth_psn;
+      if (s_roce_tx_bth_valid) begin
+        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD) begin
+          start_psn        <= s_roce_tx_bth_psn;
+          start_time_stamp <= free_running_ctr;
+        end
+        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD) begin
+          finish_psn               <= s_roce_tx_bth_psn;
+          end_time_stamp           <= free_running_ctr;
+          transfer_time_no_ack_reg <= free_running_ctr - start_time_stamp;
+        end
       end
-      if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD) begin
-        finish_psn <= s_roce_tx_bth_psn;
-      end
-      if (sent_message_stamp_fifo_out_valid && s_roce_rx_bth_valid && ~bad_transfer) begin
-        if (sent_psn_fifo_out_valid && (sent_psn_fifo_out_data == start_psn)) begin
-          transfer_time_reg <= sent_message_stamp_fifo_out_data;
-        end else if (sent_psn_fifo_out_valid && (sent_psn_fifo_out_data == finish_psn)) begin
-          transfer_time_reg        <= free_running_ctr - transfer_time_reg;
-          transfer_time_no_ack_reg <= sent_message_stamp_fifo_out_data - transfer_time_reg;
+      if (s_roce_rx_bth_valid && s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin
+        if (s_roce_rx_bth_psn == start_psn) begin
+          latency_first_reg <= free_running_ctr - start_time_stamp;
+        end
+        if (s_roce_rx_bth_psn == finish_psn) begin
+          end_time_stamp_acked <= free_running_ctr;
+          latency_last_reg     <= free_running_ctr - end_time_stamp;
+          transfer_time_reg    <= free_running_ctr - start_time_stamp;
         end
       end
     end
   end
 
-  /*
-  always @(posedge clk) begin
-    if (start_i & ~start_d) begin
-      transfer_time_no_ack_reg <= 64'd0;
-      transfer_time_reg <= 64'd0;
-    end else if (lpsn_fifo_out == ack_psn_reg_del && ack_stamp_we_reg_del) begin
-      if (acked_messages_reg == n_transfers - 32'd1) begin
-        transfer_time_no_ack_reg <= finish_transfer_stamp_fifo_out_reg - begin_transfer_stamp_fifo_out_reg;
-        transfer_time_reg        <= ack_stamp_reg - begin_transfer_stamp_fifo_out_reg;
-      end
-    end
-  end
-
-  reg [63:0] latency_last_reg;
-
-  always @(posedge clk) begin
-    if (start_i & ~start_d) begin
-      latency_last_reg <= 64'd0;
-    end else if (lpsn_fifo_out == ack_psn_reg_del && ack_stamp_we_reg_del) begin
-      latency_last_reg <= latency_last_reg + (ack_stamp_reg - finish_transfer_stamp_fifo_out_reg);
-    end
-  end
-
-
-  
-
-  always @(posedge clk) begin
-    if (acked_messages_reg == n_transfers) begin
-      tot_time_wo_ack_avg_reg <= transfer_time_no_ack_reg;
-      tot_time_avg_reg        <= transfer_time_reg;
-      latency_tot_reg         <= latency_last_reg;
-    end
-  end
-  */
-  assign tot_time_wo_ack_avg = transfer_time_no_ack_reg;
-  assign tot_time_avg = transfer_time_reg;
-  assign latency_tot = latency_tot_reg;
-  assign bad_frame = bad_transfer;
+  assign tot_time_wo_ack_avg  = transfer_time_no_ack_reg;
+  assign tot_time_avg         = transfer_time_reg;
+  assign latency_first_packet = latency_first_reg;
+  assign latency_last_packet  = latency_last_reg;
 
 endmodule : RoCE_throughput_eval
 

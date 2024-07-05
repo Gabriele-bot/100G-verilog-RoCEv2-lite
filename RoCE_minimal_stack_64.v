@@ -85,8 +85,6 @@ module RoCE_minimal_stack_64 #(
     input  wire        m_udp_payload_axis_tready,
     output wire        m_udp_payload_axis_tlast,
     output wire        m_udp_payload_axis_tuser,
-
-
     /*
      * Status signals
      */
@@ -727,8 +725,8 @@ module RoCE_minimal_stack_64 #(
 
   wire [63:0] tot_time_wo_ack_avg;
   wire [63:0] tot_time_avg;
-  wire [63:0] latency_tot;
-  wire bad_frame;
+  wire [63:0] latency_first_packet;
+  wire [63:0] latency_last_packet;
 
   RoCE_throughput_eval RoCE_throughput_eval_instance (
       .clk(clk),
@@ -756,8 +754,8 @@ module RoCE_minimal_stack_64 #(
       .s_roce_tx_reth_length(roce_reth_length),
       .tot_time_wo_ack_avg(tot_time_wo_ack_avg),
       .tot_time_avg(tot_time_avg),
-      .latency_tot(latency_tot),
-      .bad_frame(bad_frame)
+      .latency_first_packet(latency_first_packet),
+      .latency_last_packet(latency_last_packet)
   );
 
   /*
