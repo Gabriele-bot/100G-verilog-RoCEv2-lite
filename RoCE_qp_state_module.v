@@ -47,16 +47,8 @@ module RoCE_qp_state_module #(
     input  wire [ 7:0] s_roce_rx_aeth_syndrome,
     input  wire [23:0] s_roce_rx_aeth_msn,
 
-    output wire [31:0] qp_dma_transfer,
-    output wire [31:0] qp_r_key,
-    output wire [23:0] qp_rem_qpn,
-    output wire [23:0] qp_loc_qpn,
-    output wire [23:0] qp_rem_psn,
-    output wire [23:0] qp_loc_psn,
-    output wire [31:0] qp_rem_ip_addr,
-    output wire [63:0] qp_rem_addr,
 
-    output wire udapte_qp_state,
+    output wire [23:0] last_acked_psn,
     output wire stop_transfer
 
 
@@ -89,7 +81,7 @@ module RoCE_qp_state_module #(
   reg [REM_ADDR_WIDTH-1:0] rem_addr_offset_reg;
 
   reg [23:0] last_psn;
-  reg [23:0] next_psn;
+  reg [23:0] last_acked_psn_reg;
 
   reg udapte_qp_state_reg;
   reg stop_transfer_reg;
@@ -107,17 +99,17 @@ module RoCE_qp_state_module #(
       last_psn            <= 24'd0;
     end else begin
 
+      /*
       if (s_roce_tx_reth_valid && s_roce_rx_bth_valid && s_roce_tx_bth_dest_qp == rem_qpn_reg) begin
         rem_addr_reg <= s_roce_tx_reth_v_addr;
         rem_addr_offset_reg <= s_roce_tx_reth_length;
       end
-
+      */
 
       if (s_roce_tx_bth_valid && s_roce_tx_bth_dest_qp == rem_qpn_reg) begin
         rem_psn_reg <= s_roce_tx_bth_psn;
         if (s_roce_tx_reth_valid) begin
           rem_addr_offset_reg <= dma_transfer_reg[REM_ADDR_WIDTH-1:0];
-          rem_addr_reg <= qp_init_dma_transfer + rem_addr_offset_reg;
         end
         if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || 
             s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD
@@ -137,21 +129,16 @@ module RoCE_qp_state_module #(
   // RX side 
   always @(posedge clk) begin
     if (rst_qp) begin
-      loc_qpn_reg <= qp_init_loc_qpn;
-      loc_psn_reg <= qp_init_loc_psn;
+      loc_qpn_reg        <= qp_init_loc_qpn;
+      loc_psn_reg        <= qp_init_loc_psn;
+      last_acked_psn_reg <= qp_init_rem_psn;
     end else begin
       if (s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == loc_qpn_reg) begin
         if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin
-          loc_psn_reg <= s_roce_rx_bth_psn;
-        end
-        if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
+          last_acked_psn_reg <= s_roce_rx_bth_psn;
+          stop_transfer_reg  <= 1'b0;
+        end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
           stop_transfer_reg <= 1'b1;
-          next_psn <= s_roce_rx_bth_psn;
-        end else if (s_roce_rx_bth_psn == last_psn) begin
-          next_psn <= s_roce_rx_bth_psn + 24'd1;
-          stop_transfer_reg <= 1'b0;
-        end else begin
-          stop_transfer_reg <= 1'b0;
         end
       end else begin
         stop_transfer_reg <= 1'b0;
@@ -160,17 +147,7 @@ module RoCE_qp_state_module #(
   end
 
 
-
-  assign qp_dma_transfer = dma_transfer_reg;
-  assign qp_r_key        = r_key_reg;
-  assign qp_rem_psn      = next_psn;
-  assign qp_loc_qpn      = loc_qpn_reg;
-  assign qp_rem_psn      = rem_qpn_reg;
-  assign qp_loc_psn      = loc_psn_reg;
-  assign qp_rem_ip_addr  = rem_ip_addr_reg;
-  assign qp_rem_addr     = rem_addr_reg;
-
-  assign udapte_qp_state = udapte_qp_state_reg;
+  assign last_acked_psn  = last_acked_psn_reg;
   assign stop_transfer   = stop_transfer_reg;
 
 endmodule

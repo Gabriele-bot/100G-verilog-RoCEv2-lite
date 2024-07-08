@@ -296,14 +296,22 @@ module RoCE_minimal_stack_64 #(
   wire start_transfer;
   wire update_qp_state;
 
+  wire stop_transfer;
+  wire last_acked_psn;
+
+  reg [31:0] n_transfers = 32'd6;
+  reg [31:0] sent_messages = 32'd0;
+
   reg [31:0] qp_update_dma_transfer_length_reg;
   reg [23:0] qp_update_rem_qpn_reg;
   reg [23:0] qp_update_loc_qpn_reg;
   reg [23:0] qp_update_rem_psn_reg;
   reg [31:0] qp_update_r_key_reg;
-  reg [63:0] qp_update_rem_addr_reg;
+  reg [63:0] qp_update_rem_addr_base_reg;
+  reg [31:0] qp_update_rem_addr_offset_reg;
   reg [31:0] qp_update_rem_ip_addr_reg;
   reg start_transfer_reg;
+  reg update_qp_state_reg;
 
   wire [31:0] qp_curr_dma_transfer_length;
   wire [23:0] qp_curr_rem_qpn;
@@ -358,13 +366,13 @@ module RoCE_minimal_stack_64 #(
       word_counter   <= {32{1'b1}} - 8;
       dma_length_reg <= 32'd0;
     end else begin
-      start_1 <= start_transfer;
+      start_1 <= start_transfer_wire;
       start_2 <= start_1;
       if (s_payload_axis_tvalid && s_payload_axis_tready) begin
         if ((word_counter <= qp_init_dma_transfer_length)) begin
           word_counter <= word_counter + 8;
         end
-      end else if (~start_1 && start_transfer) begin
+      end else if (~start_1 && start_transfer_wire) begin
         dma_length_reg <= qp_init_dma_transfer_length;
         word_counter   <= {32{1'b1}} - 8;
       end else if (~start_2 && start_1) begin
@@ -508,12 +516,12 @@ module RoCE_minimal_stack_64 #(
   ) Roce_tx_header_producer_instance (
       .clk                       (clk),
       .rst                       (rst),
-      .s_dma_length              (qp_init_dma_transfer_length),
-      .s_rem_qpn                 (qp_init_rem_qpn),
-      .s_rem_psn                 (qp_init_rem_psn),
-      .s_r_key                   (qp_init_r_key),
-      .s_rem_ip_addr             (qp_init_rem_ip_addr),
-      .s_rem_addr                (qp_init_rem_addr),
+      .s_dma_length              (qp_curr_dma_transfer_length),
+      .s_rem_qpn                 (qp_curr_rem_qpn),
+      .s_rem_psn                 (qp_curr_rem_psn),
+      .s_r_key                   (qp_curr_r_key),
+      .s_rem_ip_addr             (qp_curr_rem_ip_addr),
+      .s_rem_addr                (qp_curr_rem_addr),
       .s_is_immediate            (1'b0),
       .s_axis_tdata              (s_payload_fifo_axis_tdata),
       .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
@@ -825,17 +833,38 @@ module RoCE_minimal_stack_64 #(
       .s_roce_rx_aeth_ready   (m_roce_aeth_ready),
       .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
       .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
-      .qp_dma_transfer        (qp_update_dma_transfer_length),
-      .qp_r_key               (qp_update_r_key),
-      .qp_rem_qpn             (qp_update_rem_qpn),
-      .qp_loc_qpn             (qp_update_loc_qpn),
-      .qp_rem_psn             (qp_update_rem_psn),
-      .qp_loc_psn             (),
-      .qp_rem_ip_addr         (qp_update_rem_ip_addr),
-      .qp_rem_addr            (qp_update_rem_addr),
-      .udapte_qp_state        (update_qp_state),
-      .stop_transfer          ()
+      .last_acked_psn         (last_acked_psn),
+      .stop_transfer          (stop_transfer)
   );
+
+  reg [3:0] pmtu_shift;
+  reg [11:0] length_pmtu_mask;
+  reg new_transfer;
+
+  always @(posedge clk) begin
+    case (pmtu)
+      13'd256: begin
+        pmtu_shift <= 4'd8;
+        length_pmtu_mask = {4'h0, {8{1'b1}}};
+      end
+      13'd512: begin
+        pmtu_shift <= 4'd9;
+        length_pmtu_mask = {3'h0, {9{1'b1}}};
+      end
+      13'd1024: begin
+        pmtu_shift <= 4'd10;
+        length_pmtu_mask = {2'h0, {10{1'b1}}};
+      end
+      13'd2048: begin
+        pmtu_shift <= 4'd11;
+        length_pmtu_mask = {1'h0, {11{1'b1}}};
+      end
+      13'd4096: begin
+        pmtu_shift <= 4'd12;
+        length_pmtu_mask = {12{1'b1}};
+      end
+    endcase
+  end
 
   always @(posedge clk) begin
     if (start_transfer) begin
@@ -845,19 +874,39 @@ module RoCE_minimal_stack_64 #(
       qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
       qp_update_rem_psn_reg             <= qp_init_rem_psn;
       qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
-      qp_update_rem_addr_reg            <= qp_init_rem_addr;
+      qp_update_rem_addr_base_reg       <= qp_init_rem_addr;
+      qp_update_rem_addr_offset_reg     <= 32'd0;
+      sent_messages                     <= 32'd0;
     end else begin
-      if (update_qp_state) begin
-        qp_update_dma_transfer_length_reg <= qp_update_dma_transfer_length;
-        qp_update_r_key_reg               <= qp_update_r_key;
-        qp_update_rem_qpn_reg             <= qp_update_rem_qpn;
-        qp_update_loc_qpn_reg             <= qp_update_loc_qpn;
-        qp_update_rem_psn_reg             <= qp_update_rem_psn;
-        qp_update_rem_ip_addr_reg         <= qp_update_rem_ip_addr;
-        qp_update_rem_addr_reg            <= qp_update_rem_addr;
+      if (s_payload_axis_tvalid && s_payload_axis_tready && s_payload_axis_tlast) begin
+        //qp_update_dma_transfer_length_reg <= qp_update_dma_transfer_length_reg;
+        //qp_update_r_key_reg <= qp_update_r_key_reg;
+        //qp_update_rem_qpn_reg <= qp_update_rem_qpn_reg;
+        //qp_update_loc_qpn_reg <= qp_update_loc_qpn_reg;
+        if (|(qp_update_dma_transfer_length_reg[11:0] & length_pmtu_mask) == 1'b0) begin
+          qp_update_rem_psn_reg <= qp_update_rem_psn_reg + (qp_update_dma_transfer_length_reg >> pmtu_shift);
+        end else begin
+          qp_update_rem_psn_reg <= qp_update_rem_psn_reg + (qp_update_dma_transfer_length_reg >> pmtu_shift) + 1;
+        end
+
+        qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
+        qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
+        sent_messages <= sent_messages + 32'd1;
+        if (stop_transfer) begin
+          new_transfer  <= 1'b0;
+          sent_messages <= {32{1'b1}};
+        end else if (sent_messages < n_transfers - 32'd1) begin
+          new_transfer <= 1'b1;
+        end
+      end else begin
+        new_transfer <= 1'b0;
       end
-      start_transfer_reg <= start_transfer;
     end
+    if (stop_transfer) begin
+      new_transfer  <= 1'b0;
+      sent_messages <= {32{1'b1}};
+    end
+    start_transfer_reg <= start_transfer;
   end
 
   assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
@@ -866,9 +915,9 @@ module RoCE_minimal_stack_64 #(
   assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
   assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
   assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
-  assign qp_curr_rem_addr            = qp_update_rem_addr_reg;
+  assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
 
-  assign start_transfer_wire         = start_transfer_reg;
+  assign start_transfer_wire         = start_transfer_reg || new_transfer;
 
 
 
