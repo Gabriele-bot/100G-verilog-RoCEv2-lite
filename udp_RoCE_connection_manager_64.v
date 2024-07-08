@@ -376,7 +376,9 @@ module udp_RoCE_connection_manager_64 #(
   assign dma_transfer   = txmeta_dma_lentgh_reg;
   assign r_key          = qp_info_r_key_reg;
   assign rem_qpn        = qp_info_rem_qpn_reg;
+  assign loc_qpn        = qp_info_loc_qpn_reg;
   assign rem_psn        = qp_info_rem_psn_reg;
+  assign loc_psn        = qp_info_loc_psn_reg;
   assign rem_addr       = qp_info_rem_base_addr_reg + txmeta_rem_addr_offset_reg;
   assign start_transfer = txmeta_start_reg & metadata_valid_reg;
 

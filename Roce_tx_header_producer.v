@@ -17,6 +17,7 @@ module Roce_tx_header_producer #(
     input wire [31:0] s_r_key,
     input wire [31:0] s_rem_ip_addr,
     input wire [63:0] s_rem_addr,
+    input wire        s_is_immediate,
 
     /*
      * AXIS input
@@ -433,7 +434,7 @@ module Roce_tx_header_producer #(
             state_next            = STATE_ONLY;
             roce_bth_valid_next   = 1'b1;
             roce_reth_valid_next  = 1'b1;
-            roce_immdh_valid_next = 1'b0;
+            roce_immdh_valid_next = s_is_immediate;
             // TODO add option for immediate 
 
             ip_source_ip_next     = loc_ip_addr;
@@ -441,10 +442,16 @@ module Roce_tx_header_producer #(
 
             udp_source_port_next  = LOC_UDP_PORT;
             udp_dest_port_next    = RoCE_udp_port;
-            udp_length_next       = tx_metadata[31:0] + 12 + 16 + 8;
-            // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
+            if (s_is_immediate) begin
+              udp_length_next = tx_metadata[31:0] + 12 + 16 + 4 + 8;
+              // dma length (less than PMTU) + BTH + RETH + + IMMDH UDP HEADER 
+            end else begin
+              udp_length_next = tx_metadata[31:0] + 12 + 16 + 8;
+              // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
+            end
 
-            roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
+
+            roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_ONLY_IMD : RC_RDMA_WRITE_ONLY;
             roce_bth_p_key_next   = 16'hFFFF;
             roce_bth_psn_next     = qp_info[74:51];
             roce_bth_dest_qp_next = qp_conn[47:24];
@@ -508,13 +515,18 @@ module Roce_tx_header_producer #(
             state_next = STATE_LAST;
             roce_bth_valid_next = 1'b1;
             roce_reth_valid_next = 1'b0;
-            roce_immdh_valid_next = 1'b0;
+            roce_immdh_valid_next = s_is_immediate;
 
             if (roce_bth_valid_next) begin
-              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
-              // remaining length + BTH + UDP HEADER
+              if (s_is_immediate) begin
+                udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
+                // remaining length + BTH + UDP HEADER
+              end else begin
+                udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
+                // remaining length + BTH + UDP HEADER
+              end
             end
-            roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
+            roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
             roce_bth_psn_next     = psn_reg + 1;
             roce_bth_ack_req_next = 1'b1;
 
@@ -562,13 +574,18 @@ module Roce_tx_header_producer #(
             state_next = STATE_LAST;
             roce_bth_valid_next = 1'b1;
             roce_reth_valid_next = 1'b0;
-            roce_immdh_valid_next = 1'b0;
+            roce_immdh_valid_next = s_is_immediate;
 
             if (roce_bth_valid_next) begin
-              udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
-              // remaining length + BTH + UDP HEADER 
+              if (s_is_immediate) begin
+                udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8 + 4;  // no reth
+                // remaining length + BTH + UDP HEADER
+              end else begin
+                udp_length_next = remaining_length_reg - DATA_WIDTH / 8 + 12 + 8;  // no reth
+                // remaining length + BTH + UDP HEADER
+              end
             end
-            roce_bth_op_code_next = RC_RDMA_WRITE_LAST;
+            roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
             roce_bth_psn_next     = psn_reg + 1;
             roce_bth_ack_req_next = 1'b1;
 

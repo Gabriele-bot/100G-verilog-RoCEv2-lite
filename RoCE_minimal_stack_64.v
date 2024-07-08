@@ -278,13 +278,41 @@ module RoCE_minimal_stack_64 #(
   reg s_select_roce_reg = 1'b0;
 
 
-  wire [31:0] dma_transfer_length;
-  wire [23:0] rem_qpn;
-  wire [23:0] rem_psn;
-  wire [31:0] r_key;
-  wire [63:0] rem_addr;
-  wire [31:0] rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
+  wire [31:0] qp_init_dma_transfer_length;
+  wire [23:0] qp_init_rem_qpn;
+  wire [23:0] qp_init_loc_qpn;
+  wire [23:0] qp_init_rem_psn;
+  wire [31:0] qp_init_r_key;
+  wire [63:0] qp_init_rem_addr;
+  wire [31:0] qp_init_rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
+
+  wire [31:0] qp_update_dma_transfer_length;
+  wire [23:0] qp_update_rem_qpn;
+  wire [23:0] qp_update_loc_qpn;
+  wire [23:0] qp_update_rem_psn;
+  wire [31:0] qp_update_r_key;
+  wire [63:0] qp_update_rem_addr;
+  wire [31:0] qp_update_rem_ip_addr;
   wire start_transfer;
+  wire update_qp_state;
+
+  reg [31:0] qp_update_dma_transfer_length_reg;
+  reg [23:0] qp_update_rem_qpn_reg;
+  reg [23:0] qp_update_loc_qpn_reg;
+  reg [23:0] qp_update_rem_psn_reg;
+  reg [31:0] qp_update_r_key_reg;
+  reg [63:0] qp_update_rem_addr_reg;
+  reg [31:0] qp_update_rem_ip_addr_reg;
+  reg start_transfer_reg;
+
+  wire [31:0] qp_curr_dma_transfer_length;
+  wire [23:0] qp_curr_rem_qpn;
+  wire [23:0] qp_curr_loc_qpn;
+  wire [23:0] qp_curr_rem_psn;
+  wire [31:0] qp_curr_r_key;
+  wire [63:0] qp_curr_rem_addr;
+  wire [31:0] qp_curr_rem_ip_addr;
+  wire start_transfer_wire;
 
   wire metadata_valid;
 
@@ -333,11 +361,11 @@ module RoCE_minimal_stack_64 #(
       start_1 <= start_transfer;
       start_2 <= start_1;
       if (s_payload_axis_tvalid && s_payload_axis_tready) begin
-        if ((word_counter <= dma_transfer_length)) begin
+        if ((word_counter <= qp_init_dma_transfer_length)) begin
           word_counter <= word_counter + 8;
         end
       end else if (~start_1 && start_transfer) begin
-        dma_length_reg <= dma_transfer_length;
+        dma_length_reg <= qp_init_dma_transfer_length;
         word_counter   <= {32{1'b1}} - 8;
       end else if (~start_2 && start_1) begin
         word_counter <= 0;
@@ -480,12 +508,13 @@ module RoCE_minimal_stack_64 #(
   ) Roce_tx_header_producer_instance (
       .clk                       (clk),
       .rst                       (rst),
-      .s_dma_length              (dma_transfer_length),
-      .s_rem_qpn                 (rem_qpn),
-      .s_rem_psn                 (rem_psn),
-      .s_r_key                   (r_key),
-      .s_rem_ip_addr             (rem_ip_addr),
-      .s_rem_addr                (rem_addr),
+      .s_dma_length              (qp_init_dma_transfer_length),
+      .s_rem_qpn                 (qp_init_rem_qpn),
+      .s_rem_psn                 (qp_init_rem_psn),
+      .s_r_key                   (qp_init_r_key),
+      .s_rem_ip_addr             (qp_init_rem_ip_addr),
+      .s_rem_addr                (qp_init_rem_addr),
+      .s_is_immediate            (1'b0),
       .s_axis_tdata              (s_payload_fifo_axis_tdata),
       .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
       .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -713,11 +742,13 @@ module RoCE_minimal_stack_64 #(
       .s_udp_payload_axis_tready(rx_udp_cm_payload_axis_tready),
       .s_udp_payload_axis_tlast(rx_udp_cm_payload_axis_tlast),
       .s_udp_payload_axis_tuser(rx_udp_cm_payload_axis_tuser),
-      .dma_transfer(dma_transfer_length),
-      .r_key(r_key),
-      .rem_qpn(rem_qpn),
-      .rem_psn(rem_psn),
-      .rem_addr(rem_addr),
+      .dma_transfer(qp_init_dma_transfer_length),
+      .r_key(qp_init_r_key),
+      .rem_qpn(qp_init_rem_qpn),
+      .loc_qpn(qp_init_loc_qpn),
+      .rem_psn(qp_init_rem_psn),
+      .loc_psn(),
+      .rem_addr(qp_init_rem_addr),
       .start_transfer(start_transfer),
       .metadata_valid(metadata_valid),
       .busy()
@@ -729,34 +760,118 @@ module RoCE_minimal_stack_64 #(
   wire [63:0] latency_last_packet;
 
   RoCE_throughput_eval RoCE_throughput_eval_instance (
-      .clk(clk),
-      .rst(rst),
-      .start_i(start_transfer),
-      .n_transfers(32'd1),
-      .s_roce_rx_bth_valid(m_roce_bth_valid),
-      .s_roce_rx_bth_op_code(m_roce_bth_op_code),
-      .s_roce_rx_bth_p_key(m_roce_bth_p_key),
-      .s_roce_rx_bth_psn(m_roce_bth_psn),
-      .s_roce_rx_bth_dest_qp(m_roce_bth_dest_qp),
-      .s_roce_rx_bth_ack_req(m_roce_bth_ack_req),
-      .s_roce_rx_aeth_valid(m_roce_aeth_valid),
+      .clk                    (clk),
+      .rst                    (rst),
+      .start_i                (start_transfer),
+      .n_transfers            (32'd1),
+      .s_roce_rx_bth_valid    (m_roce_bth_valid),
+      .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
+      .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
+      .s_roce_rx_bth_psn      (m_roce_bth_psn),
+      .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
+      .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
+      .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
       .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
-      .s_roce_rx_aeth_msn(m_roce_aeth_msn),
-      .s_roce_tx_bth_valid(roce_bth_valid & roce_bth_ready),
-      .s_roce_tx_bth_op_code(roce_bth_op_code),
-      .s_roce_tx_bth_p_key(roce_bth_p_key),
-      .s_roce_tx_bth_psn(roce_bth_psn),
-      .s_roce_tx_bth_dest_qp(roce_bth_dest_qp),
-      .s_roce_tx_bth_ack_req(roce_bth_ack_req),
-      .s_roce_tx_reth_valid(roce_reth_valid),
-      .s_roce_tx_reth_v_addr(roce_reth_v_addr),
-      .s_roce_tx_reth_r_key(roce_reth_r_key),
-      .s_roce_tx_reth_length(roce_reth_length),
-      .tot_time_wo_ack_avg(tot_time_wo_ack_avg),
-      .tot_time_avg(tot_time_avg),
-      .latency_first_packet(latency_first_packet),
-      .latency_last_packet(latency_last_packet)
+      .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
+      .s_roce_tx_bth_valid    (roce_bth_valid & roce_bth_ready),
+      .s_roce_tx_bth_op_code  (roce_bth_op_code),
+      .s_roce_tx_bth_p_key    (roce_bth_p_key),
+      .s_roce_tx_bth_psn      (roce_bth_psn),
+      .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
+      .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
+      .s_roce_tx_reth_valid   (roce_reth_valid),
+      .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
+      .s_roce_tx_reth_r_key   (roce_reth_r_key),
+      .s_roce_tx_reth_length  (roce_reth_length),
+      .tot_time_wo_ack_avg    (tot_time_wo_ack_avg),
+      .tot_time_avg           (tot_time_avg),
+      .latency_first_packet   (latency_first_packet),
+      .latency_last_packet    (latency_last_packet)
   );
+
+  RoCE_qp_state_module #(
+      .REM_ADDR_WIDTH(16)
+  ) RoCE_qp_state_module_instance (
+      .clk                    (clk),
+      .rst                    (rst),
+      .rst_qp                 (start_transfer),
+      .qp_init_dma_transfer   (qp_init_dma_transfer_length),
+      .qp_init_r_key          (qp_init_r_key),
+      .qp_init_rem_qpn        (qp_init_rem_qpn),
+      .qp_init_loc_qpn        (qp_init_loc_qpn),
+      .qp_init_rem_psn        (qp_init_rem_psn),
+      .qp_init_loc_psn        (24'd0),
+      .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
+      .qp_init_rem_addr       (qp_init_rem_addr),
+      .s_roce_tx_bth_valid    (roce_bth_valid),
+      .s_roce_tx_bth_ready    (roce_bth_ready),
+      .s_roce_tx_bth_op_code  (roce_bth_op_code),
+      .s_roce_tx_bth_p_key    (roce_bth_p_key),
+      .s_roce_tx_bth_psn      (roce_bth_psn),
+      .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
+      .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
+      .s_roce_tx_reth_valid   (roce_reth_valid),
+      .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
+      .s_roce_tx_reth_r_key   (roce_reth_r_key),
+      .s_roce_tx_reth_length  (roce_reth_length),
+      .s_roce_rx_bth_valid    (m_roce_bth_valid),
+      .s_roce_rx_bth_ready    (m_roce_bth_ready),
+      .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
+      .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
+      .s_roce_rx_bth_psn      (m_roce_bth_psn),
+      .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
+      .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
+      .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
+      .s_roce_rx_aeth_ready   (m_roce_aeth_ready),
+      .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
+      .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
+      .qp_dma_transfer        (qp_update_dma_transfer_length),
+      .qp_r_key               (qp_update_r_key),
+      .qp_rem_qpn             (qp_update_rem_qpn),
+      .qp_loc_qpn             (qp_update_loc_qpn),
+      .qp_rem_psn             (qp_update_rem_psn),
+      .qp_loc_psn             (),
+      .qp_rem_ip_addr         (qp_update_rem_ip_addr),
+      .qp_rem_addr            (qp_update_rem_addr),
+      .udapte_qp_state        (update_qp_state),
+      .stop_transfer          ()
+  );
+
+  always @(posedge clk) begin
+    if (start_transfer) begin
+      qp_update_dma_transfer_length_reg <= qp_init_dma_transfer_length;
+      qp_update_r_key_reg               <= qp_init_r_key;
+      qp_update_rem_qpn_reg             <= qp_init_rem_qpn;
+      qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
+      qp_update_rem_psn_reg             <= qp_init_rem_psn;
+      qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
+      qp_update_rem_addr_reg            <= qp_init_rem_addr;
+    end else begin
+      if (update_qp_state) begin
+        qp_update_dma_transfer_length_reg <= qp_update_dma_transfer_length;
+        qp_update_r_key_reg               <= qp_update_r_key;
+        qp_update_rem_qpn_reg             <= qp_update_rem_qpn;
+        qp_update_loc_qpn_reg             <= qp_update_loc_qpn;
+        qp_update_rem_psn_reg             <= qp_update_rem_psn;
+        qp_update_rem_ip_addr_reg         <= qp_update_rem_ip_addr;
+        qp_update_rem_addr_reg            <= qp_update_rem_addr;
+      end
+      start_transfer_reg <= start_transfer;
+    end
+  end
+
+  assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
+  assign qp_curr_r_key               = qp_update_r_key_reg;
+  assign qp_curr_rem_qpn             = qp_update_rem_qpn_reg;
+  assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
+  assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
+  assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
+  assign qp_curr_rem_addr            = qp_update_rem_addr_reg;
+
+  assign start_transfer_wire         = start_transfer_reg;
+
+
+
 
   /*
   always @(posedge clk) begin
