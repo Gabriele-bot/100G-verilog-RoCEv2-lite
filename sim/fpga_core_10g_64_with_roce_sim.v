@@ -61,6 +61,8 @@ module top (
     input  wire [ 7:0] xgmii_rxc
 );
 
+  parameter  LOCAL_MAC   = 48'h02_00_00_00_00_00;
+
 
   wire [63:0]                                               rx_axis_tdata;
   wire [ 7:0]                                               rx_axis_tkeep;
@@ -206,7 +208,6 @@ module top (
   wire                                                      tx_fifo_udp_payload_axis_tuser;
 
   // Configuration
-  wire [47:0] local_mac   = 48'h02_00_00_00_00_00;
   wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10};
   wire [31:0] dest_ip     = {8'd22 , 8'd1  , 8'd212, 8'd11};
   wire [31:0] gateway_ip  = {8'd22 , 8'd1  , 8'd212,  8'd1};
@@ -310,7 +311,9 @@ module top (
       .TX_FIFO_DEPTH(4200),
       .TX_FRAME_FIFO(1),
       .RX_FIFO_DEPTH(4200),
-      .RX_FRAME_FIFO(1)
+      .RX_FRAME_FIFO(1),
+      .PFC_ENABLE(1'b1),
+      .LOCAL_MAC_ADDRESS(LOCAL_MAC)
   ) eth_mac_10g_fifo_inst (
       .rx_clk(xgmii_rx_clk),
       .rx_rst(xgmii_rx_rst),
@@ -581,7 +584,7 @@ module top (
       .udp_rx_error_payload_early_termination(),
       .udp_tx_error_payload_early_termination(),
       // Configuration
-      .local_mac(local_mac),
+      .local_mac(LOCAL_MAC),
       .local_ip(local_ip),
       .gateway_ip(gateway_ip),
       .subnet_mask(subnet_mask),

@@ -49,6 +49,7 @@ module RoCE_qp_state_module #(
 
 
     output wire [23:0] last_acked_psn,
+    output wire [23:0] last_nacked_psn,
     output wire stop_transfer
 
 
@@ -82,6 +83,7 @@ module RoCE_qp_state_module #(
 
   reg [23:0] last_psn;
   reg [23:0] last_acked_psn_reg;
+  reg [23:0] last_nacked_psn_reg;
 
   reg udapte_qp_state_reg;
   reg stop_transfer_reg;
@@ -129,16 +131,18 @@ module RoCE_qp_state_module #(
   // RX side 
   always @(posedge clk) begin
     if (rst_qp) begin
-      loc_qpn_reg        <= qp_init_loc_qpn;
-      loc_psn_reg        <= qp_init_loc_psn;
-      last_acked_psn_reg <= qp_init_rem_psn;
+      loc_qpn_reg         <= qp_init_loc_qpn;
+      loc_psn_reg         <= qp_init_loc_psn;
+      last_acked_psn_reg  <= qp_init_rem_psn;
+      last_nacked_psn_reg <= qp_init_rem_psn;
     end else begin
       if (s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == loc_qpn_reg) begin
         if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin
           last_acked_psn_reg <= s_roce_rx_bth_psn;
           stop_transfer_reg  <= 1'b0;
         end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
-          stop_transfer_reg <= 1'b1;
+          last_nacked_psn_reg <= s_roce_rx_bth_psn;
+          stop_transfer_reg   <= 1'b1;
         end
       end else begin
         stop_transfer_reg <= 1'b0;
@@ -148,6 +152,7 @@ module RoCE_qp_state_module #(
 
 
   assign last_acked_psn  = last_acked_psn_reg;
+  assign last_nacked_psn = last_nacked_psn_reg;
   assign stop_transfer   = stop_transfer_reg;
 
 endmodule

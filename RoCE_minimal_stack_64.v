@@ -299,7 +299,7 @@ module RoCE_minimal_stack_64 #(
   wire stop_transfer;
   wire last_acked_psn;
 
-  reg [31:0] n_transfers = 32'd6;
+  reg [31:0] n_transfers = 32'd60;
   reg [31:0] sent_messages = 32'd0;
 
   reg [31:0] qp_update_dma_transfer_length_reg;
@@ -767,11 +767,12 @@ module RoCE_minimal_stack_64 #(
   wire [63:0] latency_first_packet;
   wire [63:0] latency_last_packet;
 
-  RoCE_throughput_eval RoCE_throughput_eval_instance (
+
+
+  RoCE_latency_eval RoCE_latency_eval_instance (
       .clk                    (clk),
       .rst                    (rst),
       .start_i                (start_transfer),
-      .n_transfers            (32'd1),
       .s_roce_rx_bth_valid    (m_roce_bth_valid),
       .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
       .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
@@ -791,10 +792,24 @@ module RoCE_minimal_stack_64 #(
       .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
       .s_roce_tx_reth_r_key   (roce_reth_r_key),
       .s_roce_tx_reth_length  (roce_reth_length),
-      .tot_time_wo_ack_avg    (tot_time_wo_ack_avg),
-      .tot_time_avg           (tot_time_avg),
       .latency_first_packet   (latency_first_packet),
       .latency_last_packet    (latency_last_packet)
+  );
+
+  wire [15:0] RoCE_tx_n_valid_up;
+  wire [15:0] RoCE_tx_n_ready_up;
+  wire [15:0] RoCE_tx_n_both_up;
+
+  axis_handshake_monitor #(
+      .window_width(16)
+  ) axis_handshake_monitor_instance (
+      .clk(clk),
+      .rst(rst),
+      .s_axis_tvalid(m_roce_payload_axis_tvalid),
+      .m_axis_tready(m_roce_payload_axis_tready),
+      .n_valid_up(RoCE_tx_n_valid_up),
+      .n_ready_up(RoCE_tx_n_ready_up),
+      .n_both_up(RoCE_tx_n_both_up)
   );
 
   RoCE_qp_state_module #(
