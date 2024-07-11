@@ -297,9 +297,12 @@ module RoCE_minimal_stack_64 #(
   wire update_qp_state;
 
   wire stop_transfer;
-  wire last_acked_psn;
+  wire [23:0] last_acked_psn;
 
-  reg [31:0] n_transfers = 32'd60;
+  reg [23:0] last_acked_psn_reg;
+
+  wire [31:0] n_transfers;
+
   reg [31:0] sent_messages = 32'd0;
 
   reg [31:0] qp_update_dma_transfer_length_reg;
@@ -676,7 +679,7 @@ module RoCE_minimal_stack_64 #(
       .s_udp_dest_port(rx_udp_RoCE_dest_port),
       .s_udp_length(rx_udp_RoCE_length),
       .s_udp_checksum(rx_udp_RoCE_checksum),
-      .s_roce_computed_icrc(16'hDEADBEEF),
+      .s_roce_computed_icrc(32'hDEADBEEF),
       .s_udp_payload_axis_tdata(rx_udp_RoCE_payload_axis_tdata),
       .s_udp_payload_axis_tkeep(rx_udp_RoCE_payload_axis_tkeep),
       .s_udp_payload_axis_tvalid(rx_udp_RoCE_payload_axis_tvalid),
@@ -827,7 +830,7 @@ module RoCE_minimal_stack_64 #(
       .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
       .qp_init_rem_addr       (qp_init_rem_addr),
       .s_roce_tx_bth_valid    (roce_bth_valid),
-      .s_roce_tx_bth_ready    (roce_bth_ready),
+      .s_roce_tx_bth_ready    (),
       .s_roce_tx_bth_op_code  (roce_bth_op_code),
       .s_roce_tx_bth_p_key    (roce_bth_p_key),
       .s_roce_tx_bth_psn      (roce_bth_psn),
@@ -838,7 +841,7 @@ module RoCE_minimal_stack_64 #(
       .s_roce_tx_reth_r_key   (roce_reth_r_key),
       .s_roce_tx_reth_length  (roce_reth_length),
       .s_roce_rx_bth_valid    (m_roce_bth_valid),
-      .s_roce_rx_bth_ready    (m_roce_bth_ready),
+      .s_roce_rx_bth_ready    (),
       .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
       .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
       .s_roce_rx_bth_psn      (m_roce_bth_psn),
@@ -922,6 +925,12 @@ module RoCE_minimal_stack_64 #(
       sent_messages <= {32{1'b1}};
     end
     start_transfer_reg <= start_transfer;
+  end
+
+  always @(posedge clk) begin
+    if (stop_transfer) begin
+      last_acked_psn_reg <= last_acked_psn;
+    end
   end
 
   assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
