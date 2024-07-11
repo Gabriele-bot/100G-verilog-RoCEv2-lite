@@ -630,7 +630,7 @@ if (MAC_CTRL_ENABLE) begin : mac_ctrl
     );
 
     mac_pause_ctrl_rx #(
-        .MCF_PARAMS_SIZE(18),
+        .MCF_PARAMS_SIZE(MCF_PARAMS_SIZE),
         .PFC_ENABLE(PFC_ENABLE)
     )
     mac_pause_ctrl_rx_inst (

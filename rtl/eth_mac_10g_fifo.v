@@ -61,7 +61,9 @@ module eth_mac_10g_fifo #
     parameter TX_PTP_TAG_ENABLE = PTP_TS_ENABLE,
     parameter PTP_TAG_WIDTH = 16,
     parameter TX_USER_WIDTH = (PTP_TS_ENABLE ? (TX_PTP_TAG_ENABLE ? PTP_TAG_WIDTH : 0) + (TX_PTP_TS_CTRL_IN_TUSER ? 1 : 0) : 0) + 1,
-    parameter RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1
+    parameter RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1,
+    parameter PFC_ENABLE = 0,
+    parameter PAUSE_ENABLE = PFC_ENABLE
 )
 (
     input  wire                       rx_clk,
@@ -132,10 +134,23 @@ module eth_mac_10g_fifo #
      */
     input  wire [7:0]                 cfg_ifg,
     input  wire                       cfg_tx_enable,
-    input  wire                       cfg_rx_enable
+    input  wire                       cfg_rx_enable,
+    input  wire [47:0]                cfg_local_mac
 );
 
 parameter KEEP_WIDTH = DATA_WIDTH/8;
+
+parameter MAC_MULTICAST_ADDRESS = 48'h01_80_C2_00_00_01;
+
+parameter MAC_CONTROL_FRAME_ETH_TYPE = 16'h8808;
+
+parameter LFC_OPCODE = 16'h0001;
+parameter PFC_OPCODE = 16'h0101;
+
+parameter LFC_QUANTA  = 16'hffff;
+parameter LFC_REFRESH = 16'h7fff;
+parameter PFC_QUANTA  = {16'hffff, 16'hffff, 16'hffff, 16'hffff, 16'hffff, 16'hffff, 16'hffff, 16'hffff};
+parameter PFC_REFRESH = {16'h7fff, 16'h7fff, 16'h7fff, 16'h7fff, 16'h7fff, 16'h7fff, 16'h7fff, 16'h7fff};
 
 wire [DATA_WIDTH-1:0]      tx_fifo_axis_tdata;
 wire [KEEP_WIDTH-1:0]      tx_fifo_axis_tkeep;
@@ -194,6 +209,9 @@ reg [1:0] rx_sync_reg_1 = 2'd0;
 reg [1:0] rx_sync_reg_2 = 2'd0;
 reg [1:0] rx_sync_reg_3 = 2'd0;
 reg [1:0] rx_sync_reg_4 = 2'd0;
+
+wire [7:0] eth_rx_lfc_req;
+wire [7:0] eth_rx_pfc_req;
 
 assign rx_error_bad_frame = rx_sync_reg_3[0] ^ rx_sync_reg_4[0];
 assign rx_error_bad_fcs = rx_sync_reg_3[1] ^ rx_sync_reg_4[1];
@@ -338,7 +356,9 @@ eth_mac_10g #(
     .TX_PTP_TAG_ENABLE(TX_PTP_TAG_ENABLE),
     .TX_PTP_TAG_WIDTH(PTP_TAG_WIDTH),
     .TX_USER_WIDTH(TX_USER_WIDTH),
-    .RX_USER_WIDTH(RX_USER_WIDTH)
+    .RX_USER_WIDTH(RX_USER_WIDTH),
+    .PFC_ENABLE(PFC_ENABLE),
+    .PAUSE_ENABLE(PAUSE_ENABLE)
 )
 eth_mac_10g_inst (
     .tx_clk(tx_clk),
@@ -369,14 +389,73 @@ eth_mac_10g_inst (
     .tx_axis_ptp_ts(tx_axis_ptp_ts_96),
     .tx_axis_ptp_ts_tag(tx_axis_ptp_ts_tag),
     .tx_axis_ptp_ts_valid(tx_axis_ptp_ts_valid),
+    
+    /*
+     * Link-level Flow Control (LFC) (IEEE 802.3 annex 31B PAUSE)
+     */
+    .tx_lfc_req(1'b0),
+    .tx_lfc_resend(1'b0),
+    .rx_lfc_en(PAUSE_ENABLE),
+    .rx_lfc_req(eth_rx_lfc_req),
+    .rx_lfc_ack(1'b0),
+
+    /*
+     * Priority Flow Control (PFC) (IEEE 802.3 annex 31D PFC)
+     */
+    .tx_pfc_req(1'b0),
+    .tx_pfc_resend(1'b0),
+    .rx_pfc_en(PFC_ENABLE),
+    .rx_pfc_req(eth_rx_pfc_req),
+    .rx_pfc_ack(1'b0),
+    
+    /*
+     * Pause interface
+     */
+    .tx_lfc_pause_en(PAUSE_ENABLE),
+    .tx_pause_req(1'b0),
+    .tx_pause_ack(),
 
     .tx_error_underflow(tx_error_underflow_int),
     .rx_error_bad_frame(rx_error_bad_frame_int),
     .rx_error_bad_fcs(rx_error_bad_fcs_int),
 
+    /*
+     * Configuration
+     */
     .cfg_ifg(cfg_ifg),
     .cfg_tx_enable(cfg_tx_enable),
-    .cfg_rx_enable(cfg_rx_enable)
+    .cfg_rx_enable(cfg_rx_enable),
+    .cfg_mcf_rx_eth_dst_mcast(MAC_MULTICAST_ADDRESS),
+    .cfg_mcf_rx_check_eth_dst_mcast(1'b1),
+    .cfg_mcf_rx_eth_dst_ucast(48'd0),
+    .cfg_mcf_rx_check_eth_dst_ucast(1'b0),
+    .cfg_mcf_rx_eth_src(48'd0),
+    .cfg_mcf_rx_check_eth_src(1'b0),
+    .cfg_mcf_rx_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
+    .cfg_mcf_rx_opcode_lfc(LFC_OPCODE),
+    .cfg_mcf_rx_check_opcode_lfc(PAUSE_ENABLE),
+    .cfg_mcf_rx_opcode_pfc(PFC_OPCODE),
+    .cfg_mcf_rx_check_opcode_pfc(PFC_ENABLE),
+    .cfg_mcf_rx_forward(1'b0),
+    .cfg_mcf_rx_enable(PFC_ENABLE | PAUSE_ENABLE),
+    .cfg_tx_lfc_eth_dst(MAC_MULTICAST_ADDRESS),
+    .cfg_tx_lfc_eth_src(cfg_local_mac),
+    .cfg_tx_lfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
+    .cfg_tx_lfc_opcode(LFC_OPCODE),
+    .cfg_tx_lfc_en(PAUSE_ENABLE),
+    .cfg_tx_lfc_quanta(LFC_QUANTA),
+    .cfg_tx_lfc_refresh(LFC_REFRESH),
+    .cfg_tx_pfc_eth_dst(MAC_MULTICAST_ADDRESS),
+    .cfg_tx_pfc_eth_src(cfg_local_mac),
+    .cfg_tx_pfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
+    .cfg_tx_pfc_opcode(PFC_OPCODE),
+    .cfg_tx_pfc_en(PFC_ENABLE),
+    .cfg_tx_pfc_quanta(PFC_QUANTA),
+    .cfg_tx_pfc_refresh(PFC_REFRESH),
+    .cfg_rx_lfc_opcode(LFC_OPCODE),
+    .cfg_rx_lfc_en(PAUSE_ENABLE),
+    .cfg_rx_pfc_opcode(PFC_OPCODE),
+    .cfg_rx_pfc_en(PFC_ENABLE)
 );
 
 axis_async_fifo_adapter #(
