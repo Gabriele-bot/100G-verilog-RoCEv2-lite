@@ -33,6 +33,7 @@ THE SOFTWARE.
  */
 module eth_mac_10g_fifo #
 (
+    parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00,
     parameter DATA_WIDTH = 64,
     parameter CTRL_WIDTH = (DATA_WIDTH/8),
     parameter AXIS_DATA_WIDTH = DATA_WIDTH,
@@ -425,11 +426,12 @@ eth_mac_10g_inst (
     .cfg_ifg(cfg_ifg),
     .cfg_tx_enable(cfg_tx_enable),
     .cfg_rx_enable(cfg_rx_enable),
+    
     .cfg_mcf_rx_eth_dst_mcast(MAC_MULTICAST_ADDRESS),
     .cfg_mcf_rx_check_eth_dst_mcast(1'b1),
     .cfg_mcf_rx_eth_dst_ucast(48'd0),
     .cfg_mcf_rx_check_eth_dst_ucast(1'b0),
-    .cfg_mcf_rx_eth_src(48'd0),
+    .cfg_mcf_rx_eth_src(48'h0),
     .cfg_mcf_rx_check_eth_src(1'b0),
     .cfg_mcf_rx_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
     .cfg_mcf_rx_opcode_lfc(LFC_OPCODE),
@@ -439,14 +441,14 @@ eth_mac_10g_inst (
     .cfg_mcf_rx_forward(1'b0),
     .cfg_mcf_rx_enable(PFC_ENABLE | PAUSE_ENABLE),
     .cfg_tx_lfc_eth_dst(MAC_MULTICAST_ADDRESS),
-    .cfg_tx_lfc_eth_src(cfg_local_mac),
+    .cfg_tx_lfc_eth_src(LOCAL_MAC_ADDRESS),
     .cfg_tx_lfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
     .cfg_tx_lfc_opcode(LFC_OPCODE),
     .cfg_tx_lfc_en(PAUSE_ENABLE),
     .cfg_tx_lfc_quanta(LFC_QUANTA),
     .cfg_tx_lfc_refresh(LFC_REFRESH),
     .cfg_tx_pfc_eth_dst(MAC_MULTICAST_ADDRESS),
-    .cfg_tx_pfc_eth_src(cfg_local_mac),
+    .cfg_tx_pfc_eth_src(LOCAL_MAC_ADDRESS),
     .cfg_tx_pfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
     .cfg_tx_pfc_opcode(PFC_OPCODE),
     .cfg_tx_pfc_en(PFC_ENABLE),
