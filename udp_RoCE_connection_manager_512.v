@@ -158,14 +158,18 @@ module udp_RoCE_connection_manager_512 #(
 
     case (state_reg)
       STATE_IDLE: begin
-        metadata_valid_next = 1'b0;
+        metadata_valid_next  = 1'b0;
         // idle state - wait for header
         s_udp_hdr_ready_next = !m_udp_hdr_valid_next;
 
-        udp_port_next = 16'd0;
+        udp_port_next        = 16'd0;
+
+        qp_info_valid_next   = 1'b0;
+        txmeta_valid_next    = 1'b0;
+        txmeta_start_next    = 1'b0;
 
         if (s_udp_hdr_ready && s_udp_hdr_valid) begin
-          if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == 16'd44) begin
+          if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == 16'd52) begin
             state_next = STATE_READ_METADATA;
             udp_port_next = s_udp_dest_port;
             s_udp_hdr_ready_next = 1'b0;
@@ -272,12 +276,12 @@ module udp_RoCE_connection_manager_512 #(
 
   always @(posedge clk) begin
     if (rst) begin
-      state_reg <= STATE_IDLE;
-      s_udp_hdr_ready_reg <= 1'b0;
+      state_reg                     <= STATE_IDLE;
+      s_udp_hdr_ready_reg           <= 1'b0;
       s_udp_payload_axis_tready_reg <= 1'b0;
-      m_udp_hdr_valid_reg <= 1'b0;
-      busy_reg <= 1'b0;
-      metadata_valid_reg <= 1'b0;
+      m_udp_hdr_valid_reg           <= 1'b0;
+      busy_reg                      <= 1'b0;
+      metadata_valid_reg            <= 1'b0;
 
     end else begin
       state_reg                     <= state_next;

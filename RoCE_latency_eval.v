@@ -40,6 +40,8 @@ module RoCE_latency_eval (
      * TODO ADD 
      */
     // Performance results
+    output wire [63:0] transfer_time_tot,
+    output wire [63:0] transfer_time_single,
     output wire [63:0] latency_first_packet,
     output wire [63:0] latency_last_packet
 );
@@ -251,11 +253,13 @@ module RoCE_latency_eval (
         latency_tot_last_reg     <= latency_tot_last_reg + (free_running_ctr - last_stamp_fifo_out_data);
         latency_last_reg <= free_running_ctr - last_stamp_fifo_out_data;
         tot_time_reg <= free_running_ctr;
-        transfer_time_reg <= transfer_time_reg + (free_running_ctr - last_stamp_fifo_out_data);
+        transfer_time_reg <= free_running_ctr - tot_time_reg;
       end
     end
   end
 
+  assign transfer_time_tot    = tot_time_reg;
+  assign transfer_time_single = transfer_time_reg;
   assign latency_first_packet = latency_first_reg;
   assign latency_last_packet  = latency_last_reg;
 

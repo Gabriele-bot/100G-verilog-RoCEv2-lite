@@ -2,9 +2,7 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 
-module RoCE_minimal_stack_64 #(
-    parameter DATA_WIDTH = 64
-) (
+module RoCE_minimal_stack_64 (
     input wire clk,
     input wire rst,
 
@@ -91,7 +89,7 @@ module RoCE_minimal_stack_64 #(
     output wire        busy,
     output wire        error_payload_early_termination,
     /*
-     * configuration
+     * Configuration
      */
     input  wire [12:0] pmtu,
     input  wire [15:0] RoCE_udp_port,
@@ -99,26 +97,26 @@ module RoCE_minimal_stack_64 #(
 
 );
 
-  reg  [31:0] dma_length_reg = 32'd0;
-  reg         start_1;
-  reg         start_2;
+  reg [31:0] dma_length_reg = 32'd0;
+  reg start_1;
+  reg start_2;
 
   // UDP frame connections to CM                
-  wire        rx_udp_cm_hdr_valid;
-  wire        rx_udp_cm_hdr_ready;
+  wire rx_udp_cm_hdr_valid;
+  wire rx_udp_cm_hdr_ready;
   wire [47:0] rx_udp_cm_eth_dest_mac;
   wire [47:0] rx_udp_cm_eth_src_mac;
   wire [15:0] rx_udp_cm_eth_type;
-  wire [ 3:0] rx_udp_cm_ip_version;
-  wire [ 3:0] rx_udp_cm_ip_ihl;
-  wire [ 5:0] rx_udp_cm_ip_dscp;
-  wire [ 1:0] rx_udp_cm_ip_ecn;
+  wire [3:0] rx_udp_cm_ip_version;
+  wire [3:0] rx_udp_cm_ip_ihl;
+  wire [5:0] rx_udp_cm_ip_dscp;
+  wire [1:0] rx_udp_cm_ip_ecn;
   wire [15:0] rx_udp_cm_ip_length;
   wire [15:0] rx_udp_cm_ip_identification;
-  wire [ 2:0] rx_udp_cm_ip_flags;
+  wire [2:0] rx_udp_cm_ip_flags;
   wire [12:0] rx_udp_cm_ip_fragment_offset;
-  wire [ 7:0] rx_udp_cm_ip_ttl;
-  wire [ 7:0] rx_udp_cm_ip_protocol;
+  wire [7:0] rx_udp_cm_ip_ttl;
+  wire [7:0] rx_udp_cm_ip_protocol;
   wire [15:0] rx_udp_cm_ip_header_checksum;
   wire [31:0] rx_udp_cm_ip_source_ip;
   wire [31:0] rx_udp_cm_ip_dest_ip;
@@ -127,28 +125,28 @@ module RoCE_minimal_stack_64 #(
   wire [15:0] rx_udp_cm_length;
   wire [15:0] rx_udp_cm_checksum;
   wire [63:0] rx_udp_cm_payload_axis_tdata;
-  wire [ 7:0] rx_udp_cm_payload_axis_tkeep;
-  wire        rx_udp_cm_payload_axis_tvalid;
-  wire        rx_udp_cm_payload_axis_tready;
-  wire        rx_udp_cm_payload_axis_tlast;
-  wire        rx_udp_cm_payload_axis_tuser;
+  wire [7:0] rx_udp_cm_payload_axis_tkeep;
+  wire rx_udp_cm_payload_axis_tvalid;
+  wire rx_udp_cm_payload_axis_tready;
+  wire rx_udp_cm_payload_axis_tlast;
+  wire rx_udp_cm_payload_axis_tuser;
 
   // UDP frame connectionsto RoCE RX
-  wire        rx_udp_RoCE_hdr_valid;
-  wire        rx_udp_RoCE_hdr_ready;
+  wire rx_udp_RoCE_hdr_valid;
+  wire rx_udp_RoCE_hdr_ready;
   wire [47:0] rx_udp_RoCE_eth_dest_mac;
   wire [47:0] rx_udp_RoCE_eth_src_mac;
   wire [15:0] rx_udp_RoCE_eth_type;
-  wire [ 3:0] rx_udp_RoCE_ip_version;
-  wire [ 3:0] rx_udp_RoCE_ip_ihl;
-  wire [ 5:0] rx_udp_RoCE_ip_dscp;
-  wire [ 1:0] rx_udp_RoCE_ip_ecn;
+  wire [3:0] rx_udp_RoCE_ip_version;
+  wire [3:0] rx_udp_RoCE_ip_ihl;
+  wire [5:0] rx_udp_RoCE_ip_dscp;
+  wire [1:0] rx_udp_RoCE_ip_ecn;
   wire [15:0] rx_udp_RoCE_ip_length;
   wire [15:0] rx_udp_RoCE_ip_identification;
-  wire [ 2:0] rx_udp_RoCE_ip_flags;
+  wire [2:0] rx_udp_RoCE_ip_flags;
   wire [12:0] rx_udp_RoCE_ip_fragment_offset;
-  wire [ 7:0] rx_udp_RoCE_ip_ttl;
-  wire [ 7:0] rx_udp_RoCE_ip_protocol;
+  wire [7:0] rx_udp_RoCE_ip_ttl;
+  wire [7:0] rx_udp_RoCE_ip_protocol;
   wire [15:0] rx_udp_RoCE_ip_header_checksum;
   wire [31:0] rx_udp_RoCE_ip_source_ip;
   wire [31:0] rx_udp_RoCE_ip_dest_ip;
@@ -157,82 +155,51 @@ module RoCE_minimal_stack_64 #(
   wire [15:0] rx_udp_RoCE_length;
   wire [15:0] rx_udp_RoCE_checksum;
   wire [63:0] rx_udp_RoCE_payload_axis_tdata;
-  wire [ 7:0] rx_udp_RoCE_payload_axis_tkeep;
-  wire        rx_udp_RoCE_payload_axis_tvalid;
-  wire        rx_udp_RoCE_payload_axis_tready;
-  wire        rx_udp_RoCE_payload_axis_tlast;
-  wire        rx_udp_RoCE_payload_axis_tuser;
+  wire [7:0] rx_udp_RoCE_payload_axis_tkeep;
+  wire rx_udp_RoCE_payload_axis_tvalid;
+  wire rx_udp_RoCE_payload_axis_tready;
+  wire rx_udp_RoCE_payload_axis_tlast;
+  wire rx_udp_RoCE_payload_axis_tuser;
 
   wire [63:0] s_payload_axis_tdata;
-  wire [ 7:0] s_payload_axis_tkeep;
-  wire        s_payload_axis_tvalid;
-  wire        s_payload_axis_tlast;
-  wire        s_payload_axis_tuser;
-  wire        s_payload_axis_tready;
+  wire [7:0] s_payload_axis_tkeep;
+  wire s_payload_axis_tvalid;
+  wire s_payload_axis_tlast;
+  wire s_payload_axis_tuser;
+  wire s_payload_axis_tready;
 
   wire [63:0] s_payload_fifo_axis_tdata;
-  wire [ 7:0] s_payload_fifo_axis_tkeep;
-  wire        s_payload_fifo_axis_tvalid;
-  wire        s_payload_fifo_axis_tlast;
-  wire        s_payload_fifo_axis_tuser;
-  wire        s_payload_fifo_axis_tready;
-
-  wire [63:0] m_udp_payload_axis_not_masked_tdata;
-  wire [ 7:0] m_udp_payload_axis_not_masked_tkeep;
-  wire        m_udp_payload_axis_not_masked_tvalid;
-  wire        m_udp_payload_axis_not_masked_tlast;
-  wire        m_udp_payload_axis_not_masked_tuser;
-  wire        m_udp_payload_axis_not_masked_tready;
-
-  wire [63:0] m_udp_payload_axis_masked_tdata;
-  wire [ 7:0] m_udp_payload_axis_masked_tkeep;
-  wire        m_udp_payload_axis_masked_tvalid;
-  wire        m_udp_payload_axis_masked_tlast;
-  wire        m_udp_payload_axis_masked_tuser;
-  wire        m_udp_payload_axis_masked_tready;
-
-  wire [63:0] m_udp_payload_axis_to_icrc_tdata;
-  wire [ 7:0] m_udp_payload_axis_to_icrc_tkeep;
-  wire        m_udp_payload_axis_to_icrc_tvalid;
-  wire        m_udp_payload_axis_to_icrc_tlast;
-  wire        m_udp_payload_axis_to_icrc_tuser;
-  wire        m_udp_payload_axis_to_icrc_tready;
-
-  wire [63:0] m_udp_payload_axis_to_mask_tdata;
-  wire [ 7:0] m_udp_payload_axis_to_mask_tkeep;
-  wire        m_udp_payload_axis_to_mask_tvalid;
-  wire        m_udp_payload_axis_to_mask_tlast;
-  wire        m_udp_payload_axis_to_mask_tuser;
-  wire        m_udp_payload_axis_to_mask_tready;
+  wire [7:0] s_payload_fifo_axis_tkeep;
+  wire s_payload_fifo_axis_tvalid;
+  wire s_payload_fifo_axis_tlast;
+  wire s_payload_fifo_axis_tuser;
+  wire s_payload_fifo_axis_tready;
 
   wire [63:0] m_roce_payload_axis_tdata;
-  wire [ 7:0] m_roce_payload_axis_tkeep;
-  wire        m_roce_payload_axis_tvalid;
-  wire        m_roce_payload_axis_tlast;
-  wire        m_roce_payload_axis_tuser;
-  wire        m_roce_payload_axis_tready;
+  wire [7:0] m_roce_payload_axis_tkeep;
+  wire m_roce_payload_axis_tvalid;
+  wire m_roce_payload_axis_tlast;
+  wire m_roce_payload_axis_tuser;
+  wire m_roce_payload_axis_tready;
 
-  wire        roce_bth_valid;
-  wire        roce_reth_valid;
-  wire        roce_immdh_valid;
-  wire        roce_bth_ready;
-  wire        roce_reth_ready;
-  wire        roce_immdh_ready;
+  wire roce_bth_valid;
+  wire roce_reth_valid;
+  wire roce_immdh_valid;
+  wire roce_bth_ready;
+  wire roce_reth_ready;
+  wire roce_immdh_ready;
 
-  wire [ 7:0] roce_bth_op_code;
+  wire [7:0] roce_bth_op_code;
   wire [15:0] roce_bth_p_key;
   wire [23:0] roce_bth_psn;
   wire [23:0] roce_bth_dest_qp;
-  wire        roce_bth_ack_req;
+  wire roce_bth_ack_req;
 
   wire [63:0] roce_reth_v_addr;
   wire [31:0] roce_reth_r_key;
   wire [31:0] roce_reth_length;
 
   wire [31:0] roce_immdh_data;
-
-  wire        udp_hdr_valid_int;
-  reg m_udp_hdr_valid_1, m_udp_hdr_valid_2;
 
   wire [47:0] eth_dest_mac;
   wire [47:0] eth_src_mac;
@@ -253,7 +220,6 @@ module RoCE_minimal_stack_64 #(
   wire [15:0] udp_dest_port;
   wire [15:0] udp_length;
   wire [15:0] udp_checksum;
-
 
   wire m_roce_bth_valid;
   wire m_roce_bth_ready;
@@ -395,7 +361,6 @@ module RoCE_minimal_stack_64 #(
   assign s_payload_axis_tlast = (word_counter + 8 >= dma_length_reg) ? 1'b1 : 1'b0;
   assign s_payload_axis_tuser = 1'b0;
 
-
   always @(posedge clk) begin
     if (rst) begin
       s_select_udp_reg  <= 1'b0;
@@ -515,7 +480,7 @@ module RoCE_minimal_stack_64 #(
 
 
   Roce_tx_header_producer #(
-      .DATA_WIDTH(DATA_WIDTH)
+      .DATA_WIDTH(64)
   ) Roce_tx_header_producer_instance (
       .clk                       (clk),
       .rst                       (rst),
@@ -896,7 +861,7 @@ module RoCE_minimal_stack_64 #(
       qp_update_rem_addr_offset_reg     <= 32'd0;
       sent_messages                     <= 32'd0;
     end else begin
-      if (s_payload_axis_tvalid && s_payload_axis_tready && s_payload_axis_tlast) begin
+      if (roce_bth_valid && roce_bth_ready && roce_reth_valid) begin
         //qp_update_dma_transfer_length_reg <= qp_update_dma_transfer_length_reg;
         //qp_update_r_key_reg <= qp_update_r_key_reg;
         //qp_update_rem_qpn_reg <= qp_update_rem_qpn_reg;
@@ -909,6 +874,8 @@ module RoCE_minimal_stack_64 #(
 
         qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
         qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
+      end
+      if (s_payload_axis_tvalid && s_payload_axis_tready && s_payload_axis_tlast) begin
         sent_messages <= sent_messages + 32'd1;
         if (stop_transfer) begin
           new_transfer  <= 1'b0;
@@ -944,38 +911,6 @@ module RoCE_minimal_stack_64 #(
   assign start_transfer_wire         = start_transfer_reg || new_transfer;
 
 
-
-
-  /*
-  always @(posedge clk) begin
-    m_udp_hdr_valid_1 <= udp_hdr_valid_int;
-    m_udp_hdr_valid_2 <= m_udp_hdr_valid_1;
-  end
-
-  assign m_udp_hdr_valid = m_udp_hdr_valid_2;
-
-  
-  axis_RoCE_icrc_insert_64 #(
-      .ENABLE_PADDING  (0),
-      .MIN_FRAME_LENGTH(64)
-  ) axis_RoCE_icrc_insert_64_instance (
-      .clk(clk),
-      .rst(rst),
-      .s_axis_tdata(m_udp_payload_axis_not_masked_tdata),
-      .s_axis_tkeep(m_udp_payload_axis_not_masked_tkeep),
-      .s_axis_tvalid(m_udp_payload_axis_not_masked_tvalid),
-      .s_axis_tready(m_udp_payload_axis_not_masked_tready),
-      .s_axis_tlast(m_udp_payload_axis_not_masked_tlast),
-      .s_axis_tuser(m_udp_payload_axis_not_masked_tuser),
-      .m_axis_tdata (m_udp_payload_axis_tdata),
-      .m_axis_tkeep (m_udp_payload_axis_tkeep),
-      .m_axis_tvalid(m_udp_payload_axis_tvalid),
-      .m_axis_tready(m_udp_payload_axis_tready),
-      .m_axis_tlast (m_udp_payload_axis_tlast),
-      .m_axis_tuser (m_udp_payload_axis_tuser),
-      .busy()
-  );
-*/
 endmodule
 
 `resetall

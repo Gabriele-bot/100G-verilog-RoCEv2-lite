@@ -429,15 +429,17 @@ Received_r_key = 0
 
 data_stream = []
 
-dma_length_set  = 20000
+dma_length_set  = 200000
 r_key_set        = 0x1234
 starting_psn_set = 10
 rem_qpn_set = 0x11
+base_addr = 0x987654321
 
-send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
-send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set)
 
-send_txmeta(rem_ip_addr="22.1.212.10", rem_addr=0x1234567, rdma_length=dma_length_set, start_flag=0x1)
+send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+
+send_txmeta(rem_ip_addr="22.1.212.10", rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
 
 
 ETH_P_ALL = 3  # not defined in socket module, sadly...

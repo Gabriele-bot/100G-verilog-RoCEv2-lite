@@ -468,14 +468,14 @@ separate AXI stream.
 
   always @(posedge clk) begin
     if (rst) begin
-      state_reg <= STATE_IDLE;
-      s_udp_hdr_ready_reg <= 1'b0;
-      s_udp_payload_axis_tready_reg <= 1'b0;
-      m_roce_bth_valid_reg <= 1'b0;
-      m_roce_aeth_valid_reg <= 1'b0;
-      busy_reg <= 1'b0;
+      state_reg                          <= STATE_IDLE;
+      s_udp_hdr_ready_reg                <= 1'b0;
+      s_udp_payload_axis_tready_reg      <= 1'b0;
+      m_roce_bth_valid_reg               <= 1'b0;
+      m_roce_aeth_valid_reg              <= 1'b0;
+      busy_reg                           <= 1'b0;
       error_header_early_termination_reg <= 1'b0;
-      error_not_roce_ack_reg <= 1'b0;
+      error_not_roce_ack_reg             <= 1'b0;
     end else begin
       state_reg <= state_next;
 
