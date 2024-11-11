@@ -195,7 +195,8 @@ module udp_complete_512 #(
     input wire [31:0] local_ip,
     input wire [31:0] gateway_ip,
     input wire [31:0] subnet_mask,
-    input wire        clear_arp_cache
+    input wire        clear_arp_cache,
+    input wire [15:0] RoCE_udp_port
 );
 
   wire eth_tx_from_ip_hdr_valid;
@@ -843,7 +844,9 @@ module udp_complete_512 #(
       .tx_busy(udp_tx_busy),
       .rx_error_header_early_termination(udp_rx_error_header_early_termination),
       .rx_error_payload_early_termination(udp_rx_error_payload_early_termination),
-      .tx_error_payload_early_termination(udp_tx_error_payload_early_termination)
+      .tx_error_payload_early_termination(udp_tx_error_payload_early_termination),
+      // Config
+      .RoCE_udp_port(RoCE_udp_port)
   );
 
 endmodule

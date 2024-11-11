@@ -119,7 +119,7 @@ module cmac_gty_wrapper #(
     input  wire                       tx_axis_tvalid,
     output wire                       tx_axis_tready,
     input  wire                       tx_axis_tlast,
-    input  wire [           16+1-1:0] tx_axis_tuser,
+    input  wire                       tx_axis_tuser,
 
     input  wire [79:0] tx_ptp_time,
     output wire [79:0] tx_ptp_ts,
@@ -139,7 +139,7 @@ module cmac_gty_wrapper #(
     output wire [AXIS_KEEP_WIDTH-1:0] rx_axis_tkeep,
     output wire                       rx_axis_tvalid,
     output wire                       rx_axis_tlast,
-    output wire [           80+1-1:0] rx_axis_tuser,
+    output wire                       rx_axis_tuser,
 
     input wire [79:0] rx_ptp_time,
 
@@ -1348,22 +1348,22 @@ module cmac_gty_wrapper #(
   wire                       cmac_tx_axis_tvalid;
   wire                       cmac_tx_axis_tready;
   wire                       cmac_tx_axis_tlast;
-  wire [           16+1-1:0] cmac_tx_axis_tuser;
+  wire                       cmac_tx_axis_tuser;
 
   wire [AXIS_DATA_WIDTH-1:0] cmac_rx_axis_tdata;
   wire [AXIS_KEEP_WIDTH-1:0] cmac_rx_axis_tkeep;
   wire                       cmac_rx_axis_tvalid;
   wire                       cmac_rx_axis_tlast;
   wire                       cmac_rx_axis_tuser;
-  wire [               79:0] cmac_rx_ptp_ts;
+  wire                       cmac_rx_ptp_ts;
 
   cmac_pad #(
       .DATA_WIDTH(AXIS_DATA_WIDTH),
       .KEEP_WIDTH(AXIS_KEEP_WIDTH),
-      .USER_WIDTH(16 + 1)
+      .USER_WIDTH(1)
   ) cmac_pad_inst (
       .clk(tx_clk),
-      .rst(tx_rst),
+      .rst(tx_rst),s
 
       .s_axis_tdata (tx_axis_tdata),
       .s_axis_tkeep (tx_axis_tkeep),
@@ -1490,7 +1490,7 @@ module cmac_gty_wrapper #(
       .rx_lane_aligner_fill_17(cmac_rx_lane_aligner_fill[7*17+:7]),
       .rx_lane_aligner_fill_18(cmac_rx_lane_aligner_fill[7*18+:7]),
       .rx_lane_aligner_fill_19(cmac_rx_lane_aligner_fill[7*19+:7]),
-      
+
       /*
       .rx_ptp_tstamp_out(cmac_rx_ptp_ts),
       .rx_ptp_pcslane_out(),
@@ -1677,7 +1677,7 @@ module cmac_gty_wrapper #(
       .stat_rx_pcsl_number_17(cmac_stat_rx_pcsl_number[5*17+:5]),
       .stat_rx_pcsl_number_18(cmac_stat_rx_pcsl_number[5*18+:5]),
       .stat_rx_pcsl_number_19(cmac_stat_rx_pcsl_number[5*19+:5]),
-      
+
       /*
       .ctl_tx_systemtimerin(tx_ptp_time),
       .stat_tx_ptp_fifo_read_error(cmac_stat_tx_ptp_fifo_read_error),
@@ -1754,7 +1754,7 @@ module cmac_gty_wrapper #(
       .tx_axis_tdata (cmac_tx_axis_tdata),
       .tx_axis_tlast (cmac_tx_axis_tlast),
       .tx_axis_tkeep (cmac_tx_axis_tkeep),
-      .tx_axis_tuser (cmac_tx_axis_tuser[0]),
+      .tx_axis_tuser (cmac_tx_axis_tuser),
 
       .tx_ovfout(),
       .tx_unfout(),

@@ -164,7 +164,12 @@ module udp_512 #(
     output wire tx_busy,
     output wire rx_error_header_early_termination,
     output wire rx_error_payload_early_termination,
-    output wire tx_error_payload_early_termination
+    output wire tx_error_payload_early_termination,
+
+    /*
+     * Config 
+     */
+    input wire [15:0] RoCE_udp_port
 );
 
   wire         tx_udp_hdr_valid;
@@ -193,8 +198,75 @@ module udp_512 #(
   wire         tx_udp_payload_axis_tready;
   wire         tx_udp_payload_axis_tlast;
   wire         tx_udp_payload_axis_tuser;
-
+ 
+  /* 
   udp_ip_rx_512 udp_ip_rx_512_inst (
+      .clk(clk),
+      .rst(rst),
+      // IP frame input
+      .s_ip_hdr_valid(s_ip_hdr_valid),
+      .s_ip_hdr_ready(s_ip_hdr_ready),
+      .s_eth_dest_mac(s_ip_eth_dest_mac),
+      .s_eth_src_mac(s_ip_eth_src_mac),
+      .s_eth_type(s_ip_eth_type),
+      .s_ip_version(s_ip_version),
+      .s_ip_ihl(s_ip_ihl),
+      .s_ip_dscp(s_ip_dscp),
+      .s_ip_ecn(s_ip_ecn),
+      .s_ip_length(s_ip_length),
+      .s_ip_identification(s_ip_identification),
+      .s_ip_flags(s_ip_flags),
+      .s_ip_fragment_offset(s_ip_fragment_offset),
+      .s_ip_ttl(s_ip_ttl),
+      .s_ip_protocol(s_ip_protocol),
+      .s_ip_header_checksum(s_ip_header_checksum),
+      .s_ip_source_ip(s_ip_source_ip),
+      .s_ip_dest_ip(s_ip_dest_ip),
+      .s_ip_payload_axis_tdata(s_ip_payload_axis_tdata),
+      .s_ip_payload_axis_tkeep(s_ip_payload_axis_tkeep),
+      .s_ip_payload_axis_tvalid(s_ip_payload_axis_tvalid),
+      .s_ip_payload_axis_tready(s_ip_payload_axis_tready),
+      .s_ip_payload_axis_tlast(s_ip_payload_axis_tlast),
+      .s_ip_payload_axis_tuser(s_ip_payload_axis_tuser),
+      // UDP frame output
+      .m_udp_hdr_valid(m_udp_hdr_valid),
+      .m_udp_hdr_ready(m_udp_hdr_ready),
+      .m_eth_dest_mac(m_udp_eth_dest_mac),
+      .m_eth_src_mac(m_udp_eth_src_mac),
+      .m_eth_type(m_udp_eth_type),
+      .m_ip_version(m_udp_ip_version),
+      .m_ip_ihl(m_udp_ip_ihl),
+      .m_ip_dscp(m_udp_ip_dscp),
+      .m_ip_ecn(m_udp_ip_ecn),
+      .m_ip_length(m_udp_ip_length),
+      .m_ip_identification(m_udp_ip_identification),
+      .m_ip_flags(m_udp_ip_flags),
+      .m_ip_fragment_offset(m_udp_ip_fragment_offset),
+      .m_ip_ttl(m_udp_ip_ttl),
+      .m_ip_protocol(m_udp_ip_protocol),
+      .m_ip_header_checksum(m_udp_ip_header_checksum),
+      .m_ip_source_ip(m_udp_ip_source_ip),
+      .m_ip_dest_ip(m_udp_ip_dest_ip),
+      .m_udp_source_port(m_udp_source_port),
+      .m_udp_dest_port(m_udp_dest_port),
+      .m_udp_length(m_udp_length),
+      .m_udp_checksum(m_udp_checksum),
+      .m_udp_payload_axis_tdata(m_udp_payload_axis_tdata),
+      .m_udp_payload_axis_tkeep(m_udp_payload_axis_tkeep),
+      .m_udp_payload_axis_tvalid(m_udp_payload_axis_tvalid),
+      .m_udp_payload_axis_tready(m_udp_payload_axis_tready),
+      .m_udp_payload_axis_tlast(m_udp_payload_axis_tlast),
+      .m_udp_payload_axis_tuser(m_udp_payload_axis_tuser),
+      // Status signals
+      .busy(rx_busy),
+      .error_header_early_termination(rx_error_header_early_termination),
+      .error_payload_early_termination(rx_error_payload_early_termination)
+  );
+  */
+
+  udp_ip_rx_test #(
+    .DATA_WIDTH(512)
+  ) udp_ip_rx_512_inst (
       .clk(clk),
       .rst(rst),
       // IP frame input
@@ -385,6 +457,74 @@ module udp_512 #(
 
   endgenerate
 
+  udp_ip_tx_test #(
+    .DATA_WIDTH(512)
+  ) udp_ip_tx_512_inst (
+      .clk(clk),
+      .rst(rst),
+      // UDP frame input
+      .s_udp_hdr_valid(tx_udp_hdr_valid),
+      .s_udp_hdr_ready(tx_udp_hdr_ready),
+      .s_eth_dest_mac(tx_udp_eth_dest_mac),
+      .s_eth_src_mac(tx_udp_eth_src_mac),
+      .s_eth_type(tx_udp_eth_type),
+      .s_ip_version(tx_udp_ip_version),
+      .s_ip_ihl(tx_udp_ip_ihl),
+      .s_ip_dscp(tx_udp_ip_dscp),
+      .s_ip_ecn(tx_udp_ip_ecn),
+      .s_ip_identification(tx_udp_ip_identification),
+      .s_ip_flags(tx_udp_ip_flags),
+      .s_ip_fragment_offset(tx_udp_ip_fragment_offset),
+      .s_ip_ttl(tx_udp_ip_ttl),
+      .s_ip_protocol(8'h11),
+      .s_ip_header_checksum(tx_udp_ip_header_checksum),
+      .s_ip_source_ip(tx_udp_ip_source_ip),
+      .s_ip_dest_ip(tx_udp_ip_dest_ip),
+      .s_udp_source_port(tx_udp_source_port),
+      .s_udp_dest_port(tx_udp_dest_port),
+      .s_udp_length(tx_udp_length),
+      .s_udp_checksum(tx_udp_checksum),
+      .s_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
+      .s_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
+      .s_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
+      .s_udp_payload_axis_tready(tx_udp_payload_axis_tready),
+      .s_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
+      .s_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
+      // IP frame output
+      .m_ip_hdr_valid(m_ip_hdr_valid),
+      .m_ip_hdr_ready(m_ip_hdr_ready),
+      .m_eth_dest_mac(m_ip_eth_dest_mac),
+      .m_eth_src_mac(m_ip_eth_src_mac),
+      .m_eth_type(m_ip_eth_type),
+      .m_ip_version(m_ip_version),
+      .m_ip_ihl(m_ip_ihl),
+      .m_ip_dscp(m_ip_dscp),
+      .m_ip_ecn(m_ip_ecn),
+      .m_ip_length(m_ip_length),
+      .m_ip_identification(m_ip_identification),
+      .m_ip_flags(m_ip_flags),
+      .m_ip_fragment_offset(m_ip_fragment_offset),
+      .m_ip_ttl(m_ip_ttl),
+      .m_ip_protocol(m_ip_protocol),
+      .m_ip_header_checksum(m_ip_header_checksum),
+      .m_ip_source_ip(m_ip_source_ip),
+      .m_ip_dest_ip(m_ip_dest_ip),
+      .m_is_roce_packet(m_is_roce_packet),
+      .m_ip_payload_axis_tdata(m_ip_payload_axis_tdata),
+      .m_ip_payload_axis_tkeep(m_ip_payload_axis_tkeep),
+      .m_ip_payload_axis_tvalid(m_ip_payload_axis_tvalid),
+      .m_ip_payload_axis_tready(m_ip_payload_axis_tready),
+      .m_ip_payload_axis_tlast(m_ip_payload_axis_tlast),
+      .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
+      // Status signals
+      .busy(tx_busy),
+      //.error_payload_early_termination(tx_error_payload_early_termination),
+      // Config
+      .RoCE_udp_port(RoCE_udp_port)
+  );
+  assign tx_error_payload_early_termination = 1'b0;
+  
+  /* 
   udp_ip_tx_512 udp_ip_tx_512_inst (
       .clk(clk),
       .rst(rst),
@@ -444,8 +584,11 @@ module udp_512 #(
       .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
       // Status signals
       .busy(tx_busy),
-      .error_payload_early_termination(tx_error_payload_early_termination)
+      .error_payload_early_termination(tx_error_payload_early_termination),
+      // Config
+      .RoCE_udp_port(RoCE_udp_port)
   );
+  */
 
 endmodule
 

@@ -154,7 +154,9 @@ module ip_512 (
   /*
  * IP frame processing
  */
-  ip_eth_rx_512 ip_eth_rx_512_inst (
+ ip_eth_rx_test #(
+  .DATA_WIDTH(512)
+) ip_eth_rx_512_inst (
       .clk(clk),
       .rst(rst),
       // Ethernet frame input
@@ -202,6 +204,53 @@ module ip_512 (
       .error_invalid_checksum(rx_error_invalid_checksum)
   );
 
+  ip_eth_tx_test #(
+    .DATA_WIDTH(512)
+  ) ip_eth_tx_512_inst (
+      .clk(clk),
+      .rst(rst),
+      // IP frame input
+      .s_ip_hdr_valid(outgoing_ip_hdr_valid_reg),
+      .s_ip_hdr_ready(outgoing_ip_hdr_ready),
+      .s_eth_dest_mac(outgoing_eth_dest_mac_reg),
+      .s_eth_src_mac(local_mac),
+      .s_eth_type(16'h0800),
+      .s_ip_dscp(s_ip_dscp),
+      .s_ip_ecn(s_ip_ecn),
+      .s_ip_length(s_ip_length),
+      .s_ip_identification(16'd0),
+      .s_ip_flags(3'b010),
+      .s_ip_fragment_offset(13'd0),
+      .s_ip_ttl(s_ip_ttl),
+      .s_ip_protocol(s_ip_protocol),
+      .s_ip_source_ip(s_ip_source_ip),
+      .s_ip_dest_ip(s_ip_dest_ip),
+      .s_is_roce_packet(s_is_roce_packet),
+      .s_ip_payload_axis_tdata(s_ip_payload_axis_tdata),
+      .s_ip_payload_axis_tkeep(s_ip_payload_axis_tkeep),
+      .s_ip_payload_axis_tvalid(s_ip_payload_axis_tvalid),
+      .s_ip_payload_axis_tready(outgoing_ip_payload_axis_tready),
+      .s_ip_payload_axis_tlast(s_ip_payload_axis_tlast),
+      .s_ip_payload_axis_tuser(s_ip_payload_axis_tuser),
+      // Ethernet frame output
+      .m_eth_hdr_valid(m_eth_hdr_valid),
+      .m_eth_hdr_ready(m_eth_hdr_ready),
+      .m_eth_dest_mac(m_eth_dest_mac),
+      .m_eth_src_mac(m_eth_src_mac),
+      .m_eth_type(m_eth_type),
+      .m_is_roce_packet(m_is_roce_packet),
+      .m_eth_payload_axis_tdata(m_eth_payload_axis_tdata),
+      .m_eth_payload_axis_tkeep(m_eth_payload_axis_tkeep),
+      .m_eth_payload_axis_tvalid(m_eth_payload_axis_tvalid),
+      .m_eth_payload_axis_tready(m_eth_payload_axis_tready),
+      .m_eth_payload_axis_tlast(m_eth_payload_axis_tlast),
+      .m_eth_payload_axis_tuser(m_eth_payload_axis_tuser),
+      // Status signals
+      .busy(tx_busy)
+      //.error_payload_early_termination(tx_error_payload_early_termination)
+  );
+  assign tx_error_payload_early_termination = 1'b0;
+  /* 
   ip_eth_tx_512 ip_eth_tx_512_inst (
       .clk(clk),
       .rst(rst),
@@ -245,6 +294,8 @@ module ip_512 (
       .busy(tx_busy),
       .error_payload_early_termination(tx_error_payload_early_termination)
   );
+
+  */
 
   reg s_ip_hdr_ready_reg = 1'b0, s_ip_hdr_ready_next;
 

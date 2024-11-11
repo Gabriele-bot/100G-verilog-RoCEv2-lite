@@ -11,6 +11,7 @@ SYN_FILES += rtl/eth_xcvr_phy_wrapper.v
 SYN_FILES += rtl/eth_xcvr_phy_quad_wrapper.v
 SYN_FILES += rtl/debounce_switch.v
 SYN_FILES += rtl/sync_signal.v
+SYN_FILES += lib/eth/rtl/lfsr.v
 SYN_FILES += lib/eth/rtl/eth_axis_rx.v
 SYN_FILES += lib/eth/rtl/eth_axis_tx.v
 SYN_FILES += lib/eth/rtl/udp_complete_512.v
@@ -27,7 +28,7 @@ SYN_FILES += lib/eth/rtl/arp.v
 SYN_FILES += lib/eth/rtl/arp_cache.v
 SYN_FILES += lib/eth/rtl/arp_eth_rx.v
 SYN_FILES += lib/eth/rtl/arp_eth_tx.v
-SYN_FILES += lib/eth//rtl/eth_demux.v
+SYN_FILES += lib/eth/rtl/eth_demux.v
 SYN_FILES += lib/eth/rtl/eth_arb_mux.v
 SYN_FILES += lib/eth/lib/axis/rtl/arbiter.v
 SYN_FILES += lib/eth/lib/axis/rtl/priority_encoder.v
@@ -61,6 +62,7 @@ XDC_FILES += lib/eth/lib/axis/syn/vivado/axis_async_fifo.tcl
 XDC_FILES += lib/eth/lib/axis/syn/vivado/sync_reset.tcl
 XDC_FILES += ip/constraints/cmac_gty_wrapper.tcl
 XDC_FILES += ip/constraints/cmac_gty_ch_wrapper.tcl
+XDC_FILES += ip/constraints/cmac_palacement.xdc
 
 # IP
 #IP_TCL_FILES = ip/gig_ethernet_pcs_pma_0.tcl
