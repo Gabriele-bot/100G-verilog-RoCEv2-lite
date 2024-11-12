@@ -30,6 +30,7 @@ THE SOFTWARE.
  * UDP block, IP interface (64 bit datapath)
  */
 module udp_512 #(
+    parameter DATA_WIDTH = 512,
     parameter CHECKSUM_GEN_ENABLE = 0,
     parameter CHECKSUM_PAYLOAD_FIFO_DEPTH = 2048,
     parameter CHECKSUM_HEADER_FIFO_DEPTH = 8
@@ -332,12 +333,77 @@ module udp_512 #(
   generate
 
     if (CHECKSUM_GEN_ENABLE) begin
-      // TODO add support for checksum 512
-      /*
-      udp_checksum_gen_64 #(
+      if (DATA_WIDTH > 64) begin
+        udp_checksum_gen_test #(
+            .DATA_WIDTH(512),
+            .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
+            .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
+        ) udp_checksum_gen_test_inst (
+            .clk(clk),
+            .rst(rst),
+            // UDP frame input
+            .s_udp_hdr_valid(s_udp_hdr_valid),
+            .s_udp_hdr_ready(s_udp_hdr_ready),
+            .s_eth_dest_mac(s_udp_eth_dest_mac),
+            .s_eth_src_mac(s_udp_eth_src_mac),
+            .s_eth_type(s_udp_eth_type),
+            .s_ip_version(s_udp_ip_version),
+            .s_ip_ihl(s_udp_ip_ihl),
+            .s_ip_dscp(s_udp_ip_dscp),
+            .s_ip_ecn(s_udp_ip_ecn),
+            .s_ip_identification(s_udp_ip_identification),
+            .s_ip_flags(s_udp_ip_flags),
+            .s_ip_fragment_offset(s_udp_ip_fragment_offset),
+            .s_ip_ttl(s_udp_ip_ttl),
+            .s_ip_header_checksum(s_udp_ip_header_checksum),
+            .s_ip_source_ip(s_udp_ip_source_ip),
+            .s_ip_dest_ip(s_udp_ip_dest_ip),
+            .s_udp_source_port(s_udp_source_port),
+            .s_udp_dest_port(s_udp_dest_port),
+            .s_udp_payload_axis_tdata(s_udp_payload_axis_tdata),
+            .s_udp_payload_axis_tkeep(s_udp_payload_axis_tkeep),
+            .s_udp_payload_axis_tvalid(s_udp_payload_axis_tvalid),
+            .s_udp_payload_axis_tready(s_udp_payload_axis_tready),
+            .s_udp_payload_axis_tlast(s_udp_payload_axis_tlast),
+            .s_udp_payload_axis_tuser(s_udp_payload_axis_tuser),
+            // UDP frame output
+            .m_udp_hdr_valid(tx_udp_hdr_valid),
+            .m_udp_hdr_ready(tx_udp_hdr_ready),
+            .m_eth_dest_mac(tx_udp_eth_dest_mac),
+            .m_eth_src_mac(tx_udp_eth_src_mac),
+            .m_eth_type(tx_udp_eth_type),
+            .m_ip_version(tx_udp_ip_version),
+            .m_ip_ihl(tx_udp_ip_ihl),
+            .m_ip_dscp(tx_udp_ip_dscp),
+            .m_ip_ecn(tx_udp_ip_ecn),
+            .m_ip_length(),
+            .m_ip_identification(tx_udp_ip_identification),
+            .m_ip_flags(tx_udp_ip_flags),
+            .m_ip_fragment_offset(tx_udp_ip_fragment_offset),
+            .m_ip_ttl(tx_udp_ip_ttl),
+            .m_ip_header_checksum(tx_udp_ip_header_checksum),
+            .m_ip_source_ip(tx_udp_ip_source_ip),
+            .m_ip_dest_ip(tx_udp_ip_dest_ip),
+            .m_udp_source_port(tx_udp_source_port),
+            .m_udp_dest_port(tx_udp_dest_port),
+            .m_udp_length(tx_udp_length),
+            .m_udp_checksum(tx_udp_checksum),
+            .m_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
+            .m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
+            .m_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
+            .m_udp_payload_axis_tready(tx_udp_payload_axis_tready),
+            .m_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
+            .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
+            // Status signals
+            .busy()
+        );
+        //end else if (DATA_WIDTH == 64)begin
+      end else begin
+        checksum_gen_64 #(
+          .DATA_WIDTH(512),
           .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
           .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
-      ) udp_checksum_gen_64_inst (
+          ) udp_checksum_gen_test_inst (
           .clk(clk),
           .rst(rst),
           // UDP frame input
@@ -395,34 +461,8 @@ module udp_512 #(
           .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
           // Status signals
           .busy()
-      );
-      */
-      assign tx_udp_hdr_valid = s_udp_hdr_valid;
-      assign s_udp_hdr_ready = tx_udp_hdr_ready;
-      assign tx_udp_eth_dest_mac = s_udp_eth_dest_mac;
-      assign tx_udp_eth_src_mac = s_udp_eth_src_mac;
-      assign tx_udp_eth_type = s_udp_eth_type;
-      assign tx_udp_ip_version = s_udp_ip_version;
-      assign tx_udp_ip_ihl = s_udp_ip_ihl;
-      assign tx_udp_ip_dscp = s_udp_ip_dscp;
-      assign tx_udp_ip_ecn = s_udp_ip_ecn;
-      assign tx_udp_ip_identification = s_udp_ip_identification;
-      assign tx_udp_ip_flags = s_udp_ip_flags;
-      assign tx_udp_ip_fragment_offset = s_udp_ip_fragment_offset;
-      assign tx_udp_ip_ttl = s_udp_ip_ttl;
-      assign tx_udp_ip_header_checksum = s_udp_ip_header_checksum;
-      assign tx_udp_ip_source_ip = s_udp_ip_source_ip;
-      assign tx_udp_ip_dest_ip = s_udp_ip_dest_ip;
-      assign tx_udp_source_port = s_udp_source_port;
-      assign tx_udp_dest_port = s_udp_dest_port;
-      assign tx_udp_length = s_udp_length;
-      assign tx_udp_checksum = s_udp_checksum;
-      assign tx_udp_payload_axis_tdata = s_udp_payload_axis_tdata;
-      assign tx_udp_payload_axis_tkeep = s_udp_payload_axis_tkeep;
-      assign tx_udp_payload_axis_tvalid = s_udp_payload_axis_tvalid;
-      assign s_udp_payload_axis_tready = tx_udp_payload_axis_tready;
-      assign tx_udp_payload_axis_tlast = s_udp_payload_axis_tlast;
-      assign tx_udp_payload_axis_tuser = s_udp_payload_axis_tuser;
+        );
+      end
 
     end else begin
 
