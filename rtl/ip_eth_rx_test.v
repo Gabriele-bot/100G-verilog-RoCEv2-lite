@@ -268,6 +268,8 @@ always @* begin
 
     word_count_next = word_count_reg;
 
+    m_ip_hdr_valid_next = m_ip_hdr_valid_reg && !m_ip_hdr_ready;
+
     // TODO check this shit
     s_eth_hdr_ready_next = !m_ip_hdr_valid_next;
     store_eth_hdr = 1'b0;
@@ -276,8 +278,6 @@ always @* begin
 
     flush_save = 1'b0;
     transfer_in_save = 1'b0;
-
-    m_ip_hdr_valid_next = m_ip_hdr_valid_reg && !m_ip_hdr_ready;
 
     if (s_eth_hdr_ready && s_eth_hdr_valid) begin
         s_eth_hdr_ready_next = 1'b0;

@@ -651,7 +651,7 @@ always @(posedge clk) begin
         hdr_valid_reg <= 1'b0;
         busy_reg <= 1'b0;
 
-        for (j = 0; i < ADDER_STEPS; j = j + 1) begin
+        for (j = 0; j < ADDER_STEPS; j = j + 1) begin
             checksum_temp_reg[j] <= 22'd0;
         end
     end else begin
