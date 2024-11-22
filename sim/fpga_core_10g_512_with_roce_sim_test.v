@@ -1,27 +1,3 @@
-/*
-
-Copyright (c) 2014-2021 Alex Forencich
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-
-*/
-
 // Language: Verilog 2001
 
 `resetall `timescale 1ns / 1ps `default_nettype none
@@ -62,176 +38,187 @@ module top (
 );
 
 
-  wire [63:0] rx_axis_tdata;
-  wire [7:0] rx_axis_tkeep;
-  wire rx_axis_tvalid;
-  wire rx_axis_tready;
-  wire rx_axis_tlast;
-  wire rx_axis_tuser;
+  wire [ 63:0]                                               rx_axis_tdata;
+  wire [  7:0]                                               rx_axis_tkeep;
+  wire                                                       rx_axis_tvalid;
+  wire                                                       rx_axis_tready;
+  wire                                                       rx_axis_tlast;
+  wire                                                       rx_axis_tuser;
 
-  wire [63:0] tx_axis_tdata;
-  wire [7:0] tx_axis_tkeep;
-  wire tx_axis_tvalid;
-  wire tx_axis_tready;
-  wire tx_axis_tlast;
-  wire tx_axis_tuser;
+  wire [ 63:0]                                               tx_axis_tdata;
+  wire [  7:0]                                               tx_axis_tkeep;
+  wire                                                       tx_axis_tvalid;
+  wire                                                       tx_axis_tready;
+  wire                                                       tx_axis_tlast;
+  wire                                                       tx_axis_tuser;
 
-  wire [511:0] rx_512_axis_tdata;
-  wire [63:0] rx_512_axis_tkeep;
-  wire rx_512_axis_tvalid;
-  wire rx_512_axis_tready;
-  wire rx_512_axis_tlast;
-  wire rx_512_axis_tuser;
+  wire [ 63:0]                                               tx_to_pad_axis_tdata;
+  wire [  7:0]                                               tx_to_pad_axis_tkeep;
+  wire                                                       tx_to_pad_axis_tvalid;
+  wire                                                       tx_to_pad_axis_tready;
+  wire                                                       tx_to_pad_axis_tlast;
+  wire                                                       tx_to_pad_axis_tuser;
 
-  wire [511:0] tx_512_axis_tdata;
-  wire [63:0] tx_512_axis_tkeep;
-  wire tx_512_axis_tvalid;
-  wire tx_512_axis_tready;
-  wire tx_512_axis_tlast;
-  wire tx_512_axis_tuser;
+  wire [511:0]                                               rx_512_axis_tdata;
+  wire [ 63:0]                                               rx_512_axis_tkeep;
+  wire                                                       rx_512_axis_tvalid;
+  wire                                                       rx_512_axis_tready;
+  wire                                                       rx_512_axis_tlast;
+  wire                                                       rx_512_axis_tuser;
 
-  wire [511:0] tx_512_fifo_axis_tdata;
-  wire [63:0] tx_512_fifo_axis_tkeep;
-  wire tx_512_fifo_axis_tvalid;
-  wire tx_512_fifo_axis_tready;
-  wire tx_512_fifo_axis_tlast;
-  wire tx_512_fifo_axis_tuser;
+  wire [511:0]                                               tx_512_axis_tdata;
+  wire [ 63:0]                                               tx_512_axis_tkeep;
+  wire                                                       tx_512_axis_tvalid;
+  wire                                                       tx_512_axis_tready;
+  wire                                                       tx_512_axis_tlast;
+  wire                                                       tx_512_axis_tuser;
+
+  wire [511:0]                                               tx_512_fifo_axis_tdata;
+  wire [ 63:0]                                               tx_512_fifo_axis_tkeep;
+  wire                                                       tx_512_fifo_axis_tvalid;
+  wire                                                       tx_512_fifo_axis_tready;
+  wire                                                       tx_512_fifo_axis_tlast;
+  wire                                                       tx_512_fifo_axis_tuser;
 
   // Ethernet frame between Ethernet modules and UDP stack
-  wire rx_eth_hdr_ready;
-  wire rx_eth_hdr_valid;
-  wire [47:0] rx_eth_dest_mac;
-  wire [47:0] rx_eth_src_mac;
-  wire [15:0] rx_eth_type;
-  wire [511:0] rx_eth_payload_axis_tdata;
-  wire [63:0] rx_eth_payload_axis_tkeep;
-  wire rx_eth_payload_axis_tvalid;
-  wire rx_eth_payload_axis_tready;
-  wire rx_eth_payload_axis_tlast;
-  wire rx_eth_payload_axis_tuser;
+  wire                                                       rx_eth_hdr_ready;
+  wire                                                       rx_eth_hdr_valid;
+  wire [ 47:0]                                               rx_eth_dest_mac;
+  wire [ 47:0]                                               rx_eth_src_mac;
+  wire [ 15:0]                                               rx_eth_type;
+  wire [511:0]                                               rx_eth_payload_axis_tdata;
+  wire [ 63:0]                                               rx_eth_payload_axis_tkeep;
+  wire                                                       rx_eth_payload_axis_tvalid;
+  wire                                                       rx_eth_payload_axis_tready;
+  wire                                                       rx_eth_payload_axis_tlast;
+  wire                                                       rx_eth_payload_axis_tuser;
 
-  wire tx_eth_hdr_ready;
-  wire tx_eth_hdr_valid;
-  wire [47:0] tx_eth_dest_mac;
-  wire [47:0] tx_eth_src_mac;
-  wire [15:0] tx_eth_type;
-  wire [511:0] tx_eth_payload_axis_tdata;
-  wire [63:0] tx_eth_payload_axis_tkeep;
-  wire tx_eth_payload_axis_tvalid;
-  wire tx_eth_payload_axis_tready;
-  wire tx_eth_payload_axis_tlast;
-  wire tx_eth_payload_axis_tuser;
+  wire                                                       tx_eth_hdr_ready;
+  wire                                                       tx_eth_hdr_valid;
+  wire [ 47:0]                                               tx_eth_dest_mac;
+  wire [ 47:0]                                               tx_eth_src_mac;
+  wire [ 15:0]                                               tx_eth_type;
+  wire [511:0]                                               tx_eth_payload_axis_tdata;
+  wire [ 63:0]                                               tx_eth_payload_axis_tkeep;
+  wire                                                       tx_eth_payload_axis_tvalid;
+  wire                                                       tx_eth_payload_axis_tready;
+  wire                                                       tx_eth_payload_axis_tlast;
+  wire                                                       tx_eth_payload_axis_tuser;
 
   // IP frame connections
-  wire rx_ip_hdr_valid;
-  wire rx_ip_hdr_ready;
-  wire [47:0] rx_ip_eth_dest_mac;
-  wire [47:0] rx_ip_eth_src_mac;
-  wire [15:0] rx_ip_eth_type;
-  wire [3:0] rx_ip_version;
-  wire [3:0] rx_ip_ihl;
-  wire [5:0] rx_ip_dscp;
-  wire [1:0] rx_ip_ecn;
-  wire [15:0] rx_ip_length;
-  wire [15:0] rx_ip_identification;
-  wire [2:0] rx_ip_flags;
-  wire [12:0] rx_ip_fragment_offset;
-  wire [7:0] rx_ip_ttl;
-  wire [7:0] rx_ip_protocol;
-  wire [15:0] rx_ip_header_checksum;
-  wire [31:0] rx_ip_source_ip;
-  wire [31:0] rx_ip_dest_ip;
-  wire [511:0] rx_ip_payload_axis_tdata;
-  wire [63:0] rx_ip_payload_axis_tkeep;
-  wire rx_ip_payload_axis_tvalid;
-  wire rx_ip_payload_axis_tready;
-  wire rx_ip_payload_axis_tlast;
-  wire rx_ip_payload_axis_tuser;
+  wire                                                       rx_ip_hdr_valid;
+  wire                                                       rx_ip_hdr_ready;
+  wire [ 47:0]                                               rx_ip_eth_dest_mac;
+  wire [ 47:0]                                               rx_ip_eth_src_mac;
+  wire [ 15:0]                                               rx_ip_eth_type;
+  wire [  3:0]                                               rx_ip_version;
+  wire [  3:0]                                               rx_ip_ihl;
+  wire [  5:0]                                               rx_ip_dscp;
+  wire [  1:0]                                               rx_ip_ecn;
+  wire [ 15:0]                                               rx_ip_length;
+  wire [ 15:0]                                               rx_ip_identification;
+  wire [  2:0]                                               rx_ip_flags;
+  wire [ 12:0]                                               rx_ip_fragment_offset;
+  wire [  7:0]                                               rx_ip_ttl;
+  wire [  7:0]                                               rx_ip_protocol;
+  wire [ 15:0]                                               rx_ip_header_checksum;
+  wire [ 31:0]                                               rx_ip_source_ip;
+  wire [ 31:0]                                               rx_ip_dest_ip;
+  wire [511:0]                                               rx_ip_payload_axis_tdata;
+  wire [ 63:0]                                               rx_ip_payload_axis_tkeep;
+  wire                                                       rx_ip_payload_axis_tvalid;
+  wire                                                       rx_ip_payload_axis_tready;
+  wire                                                       rx_ip_payload_axis_tlast;
+  wire                                                       rx_ip_payload_axis_tuser;
 
-  wire tx_ip_hdr_valid;
-  wire tx_ip_hdr_ready;
-  wire [5:0] tx_ip_dscp;
-  wire [1:0] tx_ip_ecn;
-  wire [15:0] tx_ip_length;
-  wire [7:0] tx_ip_ttl;
-  wire [7:0] tx_ip_protocol;
-  wire [31:0] tx_ip_source_ip;
-  wire [31:0] tx_ip_dest_ip;
-  wire [511:0] tx_ip_payload_axis_tdata;
-  wire [63:0] tx_ip_payload_axis_tkeep;
-  wire tx_ip_payload_axis_tvalid;
-  wire tx_ip_payload_axis_tready;
-  wire tx_ip_payload_axis_tlast;
-  wire tx_ip_payload_axis_tuser;
+  wire                                                       tx_ip_hdr_valid;
+  wire                                                       tx_ip_hdr_ready;
+  wire [  5:0]                                               tx_ip_dscp;
+  wire [  1:0]                                               tx_ip_ecn;
+  wire [ 15:0]                                               tx_ip_length;
+  wire [  7:0]                                               tx_ip_ttl;
+  wire [  7:0]                                               tx_ip_protocol;
+  wire [ 31:0]                                               tx_ip_source_ip;
+  wire [ 31:0]                                               tx_ip_dest_ip;
+  wire [511:0]                                               tx_ip_payload_axis_tdata;
+  wire [ 63:0]                                               tx_ip_payload_axis_tkeep;
+  wire                                                       tx_ip_payload_axis_tvalid;
+  wire                                                       tx_ip_payload_axis_tready;
+  wire                                                       tx_ip_payload_axis_tlast;
+  wire                                                       tx_ip_payload_axis_tuser;
 
   // UDP frame connections
-  wire rx_udp_hdr_valid;
-  wire rx_udp_hdr_ready;
-  wire [47:0] rx_udp_eth_dest_mac;
-  wire [47:0] rx_udp_eth_src_mac;
-  wire [15:0] rx_udp_eth_type;
-  wire [3:0] rx_udp_ip_version;
-  wire [3:0] rx_udp_ip_ihl;
-  wire [5:0] rx_udp_ip_dscp;
-  wire [1:0] rx_udp_ip_ecn;
-  wire [15:0] rx_udp_ip_length;
-  wire [15:0] rx_udp_ip_identification;
-  wire [2:0] rx_udp_ip_flags;
-  wire [12:0] rx_udp_ip_fragment_offset;
-  wire [7:0] rx_udp_ip_ttl;
-  wire [7:0] rx_udp_ip_protocol;
-  wire [15:0] rx_udp_ip_header_checksum;
-  wire [31:0] rx_udp_ip_source_ip;
-  wire [31:0] rx_udp_ip_dest_ip;
-  wire [15:0] rx_udp_source_port;
-  wire [15:0] rx_udp_dest_port;
-  wire [15:0] rx_udp_length;
-  wire [15:0] rx_udp_checksum;
-  wire [511:0] rx_udp_payload_axis_tdata;
-  wire [63:0] rx_udp_payload_axis_tkeep;
-  wire rx_udp_payload_axis_tvalid;
-  wire rx_udp_payload_axis_tready;
-  wire rx_udp_payload_axis_tlast;
-  wire rx_udp_payload_axis_tuser;
+  wire                                                       rx_udp_hdr_valid;
+  wire                                                       rx_udp_hdr_ready;
+  wire [ 47:0]                                               rx_udp_eth_dest_mac;
+  wire [ 47:0]                                               rx_udp_eth_src_mac;
+  wire [ 15:0]                                               rx_udp_eth_type;
+  wire [  3:0]                                               rx_udp_ip_version;
+  wire [  3:0]                                               rx_udp_ip_ihl;
+  wire [  5:0]                                               rx_udp_ip_dscp;
+  wire [  1:0]                                               rx_udp_ip_ecn;
+  wire [ 15:0]                                               rx_udp_ip_length;
+  wire [ 15:0]                                               rx_udp_ip_identification;
+  wire [  2:0]                                               rx_udp_ip_flags;
+  wire [ 12:0]                                               rx_udp_ip_fragment_offset;
+  wire [  7:0]                                               rx_udp_ip_ttl;
+  wire [  7:0]                                               rx_udp_ip_protocol;
+  wire [ 15:0]                                               rx_udp_ip_header_checksum;
+  wire [ 31:0]                                               rx_udp_ip_source_ip;
+  wire [ 31:0]                                               rx_udp_ip_dest_ip;
+  wire [ 15:0]                                               rx_udp_source_port;
+  wire [ 15:0]                                               rx_udp_dest_port;
+  wire [ 15:0]                                               rx_udp_length;
+  wire [ 15:0]                                               rx_udp_checksum;
+  wire [511:0]                                               rx_udp_payload_axis_tdata;
+  wire [ 63:0]                                               rx_udp_payload_axis_tkeep;
+  wire                                                       rx_udp_payload_axis_tvalid;
+  wire                                                       rx_udp_payload_axis_tready;
+  wire                                                       rx_udp_payload_axis_tlast;
+  wire                                                       rx_udp_payload_axis_tuser;
 
-  wire tx_udp_hdr_valid;
-  wire tx_udp_hdr_ready;
-  wire [5:0] tx_udp_ip_dscp;
-  wire [1:0] tx_udp_ip_ecn;
-  wire [7:0] tx_udp_ip_ttl;
-  wire [31:0] tx_udp_ip_source_ip;
-  wire [31:0] tx_udp_ip_dest_ip;
-  wire [15:0] tx_udp_source_port;
-  wire [15:0] tx_udp_dest_port;
-  wire [15:0] tx_udp_length;
-  wire [15:0] tx_udp_checksum;
-  wire [511:0] tx_udp_payload_axis_tdata;
-  wire [63:0] tx_udp_payload_axis_tkeep;
-  wire tx_udp_payload_axis_tvalid;
-  wire tx_udp_payload_axis_tready;
-  wire tx_udp_payload_axis_tlast;
-  wire tx_udp_payload_axis_tuser;
+  wire                                                       tx_udp_hdr_valid;
+  wire                                                       tx_udp_hdr_ready;
+  wire [  5:0]                                               tx_udp_ip_dscp;
+  wire [  1:0]                                               tx_udp_ip_ecn;
+  wire [  7:0]                                               tx_udp_ip_ttl;
+  wire [ 31:0]                                               tx_udp_ip_source_ip;
+  wire [ 31:0]                                               tx_udp_ip_dest_ip;
+  wire [ 15:0]                                               tx_udp_source_port;
+  wire [ 15:0]                                               tx_udp_dest_port;
+  wire [ 15:0]                                               tx_udp_length;
+  wire [ 15:0]                                               tx_udp_checksum;
+  wire [511:0]                                               tx_udp_payload_axis_tdata;
+  wire [ 63:0]                                               tx_udp_payload_axis_tkeep;
+  wire                                                       tx_udp_payload_axis_tvalid;
+  wire                                                       tx_udp_payload_axis_tready;
+  wire                                                       tx_udp_payload_axis_tlast;
+  wire                                                       tx_udp_payload_axis_tuser;
 
-  wire [511:0] rx_fifo_udp_payload_axis_tdata;
-  wire [63:0] rx_fifo_udp_payload_axis_tkeep;
-  wire rx_fifo_udp_payload_axis_tvalid;
-  wire rx_fifo_udp_payload_axis_tready;
-  wire rx_fifo_udp_payload_axis_tlast;
-  wire rx_fifo_udp_payload_axis_tuser;
+  wire [511:0]                                               rx_fifo_udp_payload_axis_tdata;
+  wire [ 63:0]                                               rx_fifo_udp_payload_axis_tkeep;
+  wire                                                       rx_fifo_udp_payload_axis_tvalid;
+  wire                                                       rx_fifo_udp_payload_axis_tready;
+  wire                                                       rx_fifo_udp_payload_axis_tlast;
+  wire                                                       rx_fifo_udp_payload_axis_tuser;
 
-  wire [511:0] tx_fifo_udp_payload_axis_tdata;
-  wire [63:0] tx_fifo_udp_payload_axis_tkeep;
-  wire tx_fifo_udp_payload_axis_tvalid;
-  wire tx_fifo_udp_payload_axis_tready;
-  wire tx_fifo_udp_payload_axis_tlast;
-  wire tx_fifo_udp_payload_axis_tuser;
+  wire [511:0]                                               tx_fifo_udp_payload_axis_tdata;
+  wire [ 63:0]                                               tx_fifo_udp_payload_axis_tkeep;
+  wire                                                       tx_fifo_udp_payload_axis_tvalid;
+  wire                                                       tx_fifo_udp_payload_axis_tready;
+  wire                                                       tx_fifo_udp_payload_axis_tlast;
+  wire                                                       tx_fifo_udp_payload_axis_tuser;
 
   // Configuration
-  wire [47:0] local_mac   = 48'h02_00_00_00_00_00;
-  wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10};
-  wire [31:0] dest_ip     = {8'd22 , 8'd1  , 8'd212, 8'd11};
-  wire [31:0] gateway_ip  = {8'd22 , 8'd1  , 8'd212,  8'd1};
-  wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255,  8'd0};
+
+  wire [ 12:0] pmtu = 13'd2048;
+  wire [ 15:0] RoCE_udp_port = 16'h12b7;
+
+  wire [ 47:0] local_mac = 48'h02_00_00_00_00_00;
+  wire [ 31:0] local_ip = {8'd22, 8'd1, 8'd212, 8'd10};
+  wire [ 31:0] dest_ip = {8'd22, 8'd1, 8'd212, 8'd11};
+  wire [ 31:0] gateway_ip = {8'd22, 8'd1, 8'd212, 8'd1};
+  wire [ 31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0};
 
   // IP ports not used
   assign rx_ip_hdr_ready = 1;
@@ -328,9 +315,9 @@ module top (
       .ENABLE_PADDING(1),
       .ENABLE_DIC(1),
       .MIN_FRAME_LENGTH(64),
-      .TX_FIFO_DEPTH(4096),
+      .TX_FIFO_DEPTH(4200),
       .TX_FRAME_FIFO(1),
-      .RX_FIFO_DEPTH(4096),
+      .RX_FIFO_DEPTH(4200),
       .RX_FRAME_FIFO(1)
   ) eth_mac_10g_fifo_inst (
       .rx_clk(xgmii_rx_clk),
@@ -373,44 +360,6 @@ module top (
       .cfg_rx_enable(1'b1)
   );
 
-
-  // tap port mux logic
-  // sw[3] enable
-  // sw[2] select 0 rx, 1 tx
-
-  reg [1:0] mac_rx_tdest;
-  reg [1:0] tx_tdest;
-  reg [1:0] gig_rx_tdest;
-
-  always @* begin
-    if (sw[3]) begin
-      if (sw[2]) begin
-        // Tap on TX path
-        // MAC RX out -> stack RX in
-        // stack TX out -> gig TX in
-        // gig RX out -> MAC TX in
-        mac_rx_tdest = 2'd1;
-        tx_tdest = 2'd2;
-        gig_rx_tdest = 2'd0;
-      end else begin
-        // Tap on RX path
-        // MAC RX out -> gig TX in
-        // stack TX out -> MAC TX in
-        // gig RX out -> stack RX in
-        mac_rx_tdest = 2'd2;
-        tx_tdest = 2'd0;
-        gig_rx_tdest = 2'd1;
-      end
-    end else begin
-      // Tap disabled
-      // MAC RX out -> stack RX in
-      // stack TX out -> MAC TX in
-      // gig RX out -> blackhole
-      mac_rx_tdest = 2'd1;
-      tx_tdest = 2'd0;
-      gig_rx_tdest = 2'd3;
-    end
-  end
 
   axis_adapter #(
       .S_DATA_WIDTH(64),
@@ -456,13 +405,53 @@ module top (
       .s_axis_tlast(tx_512_axis_tlast),
       .s_axis_tuser(tx_512_axis_tuser),
       // AXI output
-      .m_axis_tdata(tx_axis_tdata),
-      .m_axis_tkeep(tx_axis_tkeep),
+      .m_axis_tdata( tx_to_pad_axis_tdata),
+      .m_axis_tkeep( tx_to_pad_axis_tkeep),
+      .m_axis_tvalid(tx_to_pad_axis_tvalid),
+      .m_axis_tready(tx_to_pad_axis_tready),
+      .m_axis_tlast( tx_to_pad_axis_tlast),
+      .m_axis_tuser( tx_to_pad_axis_tuser)
+  );
+
+  axis_frame_length_adjust #(
+    .DATA_WIDTH(64),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(8),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1)
+  ) tx_axis_frame_length_adjust_inst (
+
+      .clk(clk),
+      .rst(rst),
+      // AXI input
+      .s_axis_tdata( tx_to_pad_axis_tdata),
+      .s_axis_tkeep( tx_to_pad_axis_tkeep),
+      .s_axis_tvalid(tx_to_pad_axis_tvalid),
+      .s_axis_tready(tx_to_pad_axis_tready),
+      .s_axis_tlast( tx_to_pad_axis_tlast),
+      .s_axis_tuser( tx_to_pad_axis_tuser),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
+      // AXI output
+      .m_axis_tdata( tx_axis_tdata),
+      .m_axis_tkeep( tx_axis_tkeep),
       .m_axis_tvalid(tx_axis_tvalid),
       .m_axis_tready(tx_axis_tready),
-      .m_axis_tlast(tx_axis_tlast),
-      .m_axis_tuser(tx_axis_tuser)
+      .m_axis_tlast( tx_axis_tlast),
+      .m_axis_tuser( tx_axis_tuser),
+      .m_axis_tid(),
+      .m_axis_tdest(),
+      //stat
+      .status_ready(1'b1),
+      //cfg
+      .length_min(60),
+      .length_max(9600)
+
   );
+
+
 
 
   eth_axis_rx #(
@@ -523,7 +512,7 @@ module top (
   );
 
   axis_fifo #(
-      .DEPTH(2048),
+      .DEPTH(40960),
       .DATA_WIDTH(512),
       .KEEP_ENABLE(1),
       .KEEP_WIDTH(64),
@@ -531,7 +520,7 @@ module top (
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
       .USER_WIDTH(1),
-      .FRAME_FIFO(0)
+      .FRAME_FIFO(1)
   ) eth_tx_axis_fifo (
       .clk(clk),
       .rst(rst),
@@ -563,7 +552,7 @@ module top (
   );
 
   udp_complete_512 #(
-      .UDP_CHECKSUM_GEN_ENABLE(1)
+      .UDP_CHECKSUM_GEN_ENABLE(0)
   ) udp_complete_inst (
       .clk(clk),
       .rst(rst),
@@ -698,21 +687,11 @@ module top (
       .local_ip(local_ip),
       .gateway_ip(gateway_ip),
       .subnet_mask(subnet_mask),
-      .clear_arp_cache(1'b0)
+      .clear_arp_cache(1'b0),
+      .RoCE_udp_port(RoCE_udp_port)
   );
 
   assign rx_fifo_udp_payload_axis_tready = 1'b1;
-
-
-  wire [31:0] dma_transfer_length;
-  wire [23:0] rem_qpn;
-  wire [23:0] rem_psn;
-  wire [31:0] r_key;
-  wire [47:0] rem_addr;
-  wire [31:0] rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
-  wire start_transfer;
-
-  wire metadata_valid;
 
   // ROCE TX inst
   RoCE_minimal_stack_512 RoCE_minimal_stack_512_instance (
@@ -776,54 +755,11 @@ module top (
       .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
       .busy(),
       .error_payload_early_termination(),
-      .pmtu(13'd2048),
-      .RoCE_udp_port(16'h12B7),
+      .pmtu(pmtu),
+      .RoCE_udp_port(RoCE_udp_port),
       .loc_ip_addr(local_ip)
   );
 
-  /*
-axis_fifo #(
-    .DEPTH(8192),
-    .DATA_WIDTH(64),
-    .KEEP_ENABLE(1),
-    .KEEP_WIDTH(8),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .FRAME_FIFO(0)
-)
-udp_payload_fifo (
-    .clk(clk),
-    .rst(rst),
-
-    // AXI input
-    .s_axis_tdata(rx_fifo_udp_payload_axis_tdata),
-    .s_axis_tkeep(rx_fifo_udp_payload_axis_tkeep),
-    .s_axis_tvalid(rx_fifo_udp_payload_axis_tvalid),
-    .s_axis_tready(rx_fifo_udp_payload_axis_tready),
-    .s_axis_tlast(rx_fifo_udp_payload_axis_tlast),
-    .s_axis_tid(0),
-    .s_axis_tdest(0),
-    .s_axis_tuser(rx_fifo_udp_payload_axis_tuser),
-
-    // AXI output
-    .m_axis_tdata(tx_fifo_udp_payload_axis_tdata),
-    .m_axis_tkeep(tx_fifo_udp_payload_axis_tkeep),
-    .m_axis_tvalid(tx_fifo_udp_payload_axis_tvalid),
-    .m_axis_tready(tx_fifo_udp_payload_axis_tready),
-    .m_axis_tlast(tx_fifo_udp_payload_axis_tlast),
-    .m_axis_tid(),
-    .m_axis_tdest(),
-    .m_axis_tuser(tx_fifo_udp_payload_axis_tuser),
-
-    // Status
-    .status_overflow(),
-    .status_bad_frame(),
-    .status_good_frame()
-);
-
-*/
 endmodule
 
 `resetall

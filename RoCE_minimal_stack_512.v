@@ -467,7 +467,7 @@ module RoCE_minimal_stack_512 (
   assign s_payload_axis_tkeep = s_payload_axis_tlast ? ((count2keep(
       remaining_words
   ) == 7'd0) ? {64{1'b1}} : count2keep(
-      remaining_words
+      remaining_words - 64
   )) : {64{1'b1}};
   assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
   assign s_payload_axis_tlast = (word_counter + 64 >= dma_length_reg) ? 1'b1 : 1'b0;
@@ -593,8 +593,10 @@ module RoCE_minimal_stack_512 (
   Roce_tx_header_producer #(
       .DATA_WIDTH(512)
   ) Roce_tx_header_producer_instance (
-      .clk                       (clk),
-      .rst                       (rst),
+    .clk                       (clk),
+    .rst                       (rst),
+    .s_dma_meta_valid          (start_1),
+    .s_dma_meta_ready          (),
       .s_dma_length              (qp_curr_dma_transfer_length),
       .s_rem_qpn                 (qp_curr_rem_qpn),
       .s_rem_psn                 (qp_curr_rem_psn),

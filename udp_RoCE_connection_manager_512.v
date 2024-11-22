@@ -313,6 +313,8 @@ module udp_RoCE_connection_manager_512 #(
         txmeta_rem_addr_offset_reg <= txmeta_rem_addr_offset_next;
         txmeta_dma_lentgh_reg      <= txmeta_dma_lentgh_next;
         txmeta_rem_udp_port_reg    <= txmeta_rem_udp_port_next;
+      end else begin
+        txmeta_start_reg           <= 1'b0;
       end
 
       busy_reg <= state_next != STATE_IDLE;
