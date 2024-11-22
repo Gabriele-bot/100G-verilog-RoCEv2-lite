@@ -309,6 +309,7 @@ always @* begin
         s_ip_hdr_ready_next = 1'b0;
         s_ip_payload_axis_tready_next = 1'b1;
         store_ip_hdr = 1'b1;
+        word_count_next = s_ip_length;
     end
 
     m_eth_dest_mac_next = m_eth_dest_mac_reg;

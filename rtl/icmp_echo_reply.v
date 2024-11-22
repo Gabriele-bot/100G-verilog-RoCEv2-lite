@@ -36,7 +36,10 @@ module icmp_echo_reply #(
     // If disabled, tkeep assumed to be 1'b1
     parameter KEEP_ENABLE = (DATA_WIDTH>8),
     // tkeep signal width (words per cycle)
-    parameter KEEP_WIDTH = (DATA_WIDTH/8)
+    parameter KEEP_WIDTH = (DATA_WIDTH/8),
+    // Checksum parameters
+    parameter CHECKSUM_PAYLOAD_FIFO_DEPTH = 256,
+    parameter CHECKSUM_HEADER_FIFO_DEPTH  = 8
 ) (
     input wire clk,
     input wire rst,
@@ -161,6 +164,7 @@ module icmp_echo_reply #(
     wire tx_icmp_hdr_ready;
     wire [5:0]  tx_icmp_ip_dscp;
     wire [1:0]  tx_icmp_ip_ecn;
+    wire [15:0] tx_icmp_ip_length;
     wire [15:0] tx_icmp_ip_identification;
     wire [2:0]  tx_icmp_ip_flags;
     wire [12:0] tx_icmp_ip_fragment_offset;
@@ -178,23 +182,30 @@ module icmp_echo_reply #(
     wire tx_icmp_payload_axis_tlast;
     wire tx_icmp_payload_axis_tuser;
 
+    wire tx_post_checksum_icmp_hdr_valid;
+    wire tx_post_checksum_icmp_hdr_ready;
+    wire [5:0]  tx_post_checksum_icmp_ip_dscp;
+    wire [1:0]  tx_post_checksum_icmp_ip_ecn;
+    wire [15:0] tx_post_checksum_icmp_ip_length;
+    wire [15:0] tx_post_checksum_icmp_ip_identification;
+    wire [2:0]  tx_post_checksum_icmp_ip_flags;
+    wire [12:0] tx_post_checksum_icmp_ip_fragment_offset;
+    wire [7:0]  tx_post_checksum_icmp_ip_ttl;
+    wire [31:0] tx_post_checksum_icmp_ip_source_ip;
+    wire [31:0] tx_post_checksum_icmp_ip_dest_ip;
+    wire [7:0]  tx_post_checksum_icmp_type;
+    wire [7:0]  tx_post_checksum_icmp_code;
+    wire [15:0] tx_post_checksum_icmp_checksum;
+    wire [31:0] tx_post_checksum_icmp_roh;
+    wire [DATA_WIDTH-1:0] tx_post_checksum_icmp_payload_axis_tdata;
+    wire [KEEP_WIDTH-1:0] tx_post_checksum_icmp_payload_axis_tkeep;
+    wire tx_post_checksum_icmp_payload_axis_tvalid;
+    wire tx_post_checksum_icmp_payload_axis_tready;
+    wire tx_post_checksum_icmp_payload_axis_tlast;
+    wire tx_post_checksum_icmp_payload_axis_tuser;
+
     // Dirty Hack, need to compute the real chack sum
     wire [16:0] temp_cecksum;
-
-    // FIFO signals
-    wire [DATA_WIDTH-1:0] tx_fifo_icmp_payload_axis_tdata;
-    wire [KEEP_WIDTH-1:0] tx_fifo_icmp_payload_axis_tkeep;
-    wire                  tx_fifo_icmp_payload_axis_tvalid;
-    wire                  tx_fifo_icmp_payload_axis_tready;
-    wire                  tx_fifo_icmp_payload_axis_tlast;
-    wire                  tx_fifo_icmp_payload_axis_tuser;
-
-    wire [DATA_WIDTH-1:0] rx_fifo_icmp_payload_axis_tdata;
-    wire [KEEP_WIDTH-1:0] rx_fifo_icmp_payload_axis_tkeep;
-    wire                  rx_fifo_icmp_payload_axis_tvalid;
-    wire                  rx_fifo_icmp_payload_axis_tready;
-    wire                  rx_fifo_icmp_payload_axis_tlast;
-    wire                  rx_fifo_icmp_payload_axis_tuser;
 
 
     // ICMP Echo Reply when ICMP Echo Request and dest IP equal local IP
@@ -223,9 +234,10 @@ module icmp_echo_reply #(
     end
 
     assign tx_icmp_hdr_valid = rx_icmp_hdr_valid && match_cond;
-    assign rx_icmp_hdr_ready = (m_ip_hdr_ready && match_cond) || no_match;
+    assign rx_icmp_hdr_ready = (tx_icmp_hdr_ready && match_cond) || no_match;
     assign tx_icmp_ip_dscp = rx_icmp_ip_dscp;
     assign tx_icmp_ip_ecn = rx_icmp_ip_ecn;
+    assign tx_icmp_ip_length = rx_icmp_ip_length;
     assign tx_icmp_ip_identification = rx_icmp_ip_identification + 16'd1;
     assign tx_icmp_ip_flags = rx_icmp_ip_flags;
     assign tx_icmp_ip_fragment_offset = rx_icmp_ip_fragment_offset;
@@ -240,19 +252,12 @@ module icmp_echo_reply #(
     assign tx_icmp_checksum = rx_icmp_checksum[15:8] >= 8'hf8 ? rx_icmp_checksum + 16'h0801 : rx_icmp_checksum + 16'h0800;
     assign tx_icmp_roh= rx_icmp_roh;
 
-    assign tx_icmp_payload_axis_tdata = tx_fifo_icmp_payload_axis_tdata;
-    assign tx_icmp_payload_axis_tkeep = tx_fifo_icmp_payload_axis_tkeep;
-    assign tx_icmp_payload_axis_tvalid = tx_fifo_icmp_payload_axis_tvalid;
-    assign tx_fifo_icmp_payload_axis_tready = tx_icmp_payload_axis_tready;
-    assign tx_icmp_payload_axis_tlast = tx_fifo_icmp_payload_axis_tlast;
-    assign tx_icmp_payload_axis_tuser = tx_fifo_icmp_payload_axis_tuser;
-
-    assign rx_fifo_icmp_payload_axis_tdata = rx_icmp_payload_axis_tdata;
-    assign rx_fifo_icmp_payload_axis_tkeep = rx_icmp_payload_axis_tkeep;
-    assign rx_fifo_icmp_payload_axis_tvalid = rx_icmp_payload_axis_tvalid && match_cond_reg;
-    assign rx_icmp_payload_axis_tready = (rx_fifo_icmp_payload_axis_tready && match_cond_reg) || no_match_reg;
-    assign rx_fifo_icmp_payload_axis_tlast = rx_icmp_payload_axis_tlast;
-    assign rx_fifo_icmp_payload_axis_tuser = rx_icmp_payload_axis_tuser;
+    assign tx_icmp_payload_axis_tdata = rx_icmp_payload_axis_tdata;
+    assign tx_icmp_payload_axis_tkeep = rx_icmp_payload_axis_tkeep;
+    assign tx_icmp_payload_axis_tvalid = rx_icmp_payload_axis_tvalid && match_cond_reg;
+    assign rx_icmp_payload_axis_tready = (tx_icmp_payload_axis_tready && match_cond_reg) || no_match_reg;
+    assign tx_icmp_payload_axis_tlast = rx_icmp_payload_axis_tlast;
+    assign tx_icmp_payload_axis_tuser = rx_icmp_payload_axis_tuser;
 
     icmp_ip_rx #(
         .DATA_WIDTH(512)
@@ -319,39 +324,110 @@ module icmp_echo_reply #(
         .error_payload_early_termination(rx_error_payload_early_termination)
     );
 
+    icmp_checksum_gen #(
+      .DATA_WIDTH(DATA_WIDTH),
+      .ADDER_STEPS(4),
+      .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
+      .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
+      ) icmp_checksum_gen_test_inst (
+      .clk(clk),
+      .rst(rst),
+      // ICMP frame input
+      .s_icmp_hdr_valid(tx_icmp_hdr_valid),
+      .s_icmp_hdr_ready(tx_icmp_hdr_ready),
+      .s_eth_dest_mac(0),
+      .s_eth_src_mac(0),
+      .s_eth_type(0),
+      .s_ip_version(4'h4),
+      .s_ip_ihl(4'h5),
+      .s_ip_dscp(tx_icmp_ip_dscp),
+      .s_ip_ecn(tx_icmp_ip_ecn),
+      .s_ip_length(tx_icmp_ip_length),
+      .s_ip_identification(tx_icmp_ip_identification),
+      .s_ip_flags(tx_icmp_ip_flags),
+      .s_ip_fragment_offset(tx_icmp_ip_fragment_offset),
+      .s_ip_ttl(tx_icmp_ip_ttl),
+      .s_ip_protocol(8'h01),
+      .s_ip_header_checksum(0),
+      .s_ip_source_ip(tx_icmp_ip_source_ip),
+      .s_ip_dest_ip(tx_icmp_ip_dest_ip),
+      .s_icmp_type(tx_icmp_type),
+      .s_icmp_code(tx_icmp_code),
+      .s_icmp_checksum(tx_icmp_checksum),
+      .s_icmp_roh(tx_icmp_roh),
+      .s_icmp_payload_axis_tdata(tx_icmp_payload_axis_tdata),
+      .s_icmp_payload_axis_tkeep(tx_icmp_payload_axis_tkeep),
+      .s_icmp_payload_axis_tvalid(tx_icmp_payload_axis_tvalid),
+      .s_icmp_payload_axis_tready(tx_icmp_payload_axis_tready),
+      .s_icmp_payload_axis_tlast(tx_icmp_payload_axis_tlast),
+      .s_icmp_payload_axis_tuser(tx_icmp_payload_axis_tuser),
+      // ICMP frame output
+      .m_icmp_hdr_valid(tx_post_checksum_icmp_hdr_valid),
+      .m_icmp_hdr_ready(tx_post_checksum_icmp_hdr_ready),
+      .m_eth_dest_mac(),
+      .m_eth_src_mac(),
+      .m_eth_type(),
+      .m_ip_version(),
+      .m_ip_ihl(),
+      .m_ip_dscp(tx_post_checksum_icmp_ip_dscp),
+      .m_ip_ecn(tx_post_checksum_icmp_ip_ecn),
+      .m_ip_length(tx_post_checksum_icmp_ip_length),
+      .m_ip_identification(tx_post_checksum_icmp_ip_identification),
+      .m_ip_flags(tx_post_checksum_icmp_ip_flags),
+      .m_ip_fragment_offset(tx_post_checksum_icmp_ip_fragment_offset),
+      .m_ip_ttl(tx_post_checksum_icmp_ip_ttl),
+      .m_ip_protocol(),
+      .m_ip_header_checksum(),
+      .m_ip_source_ip(tx_post_checksum_icmp_ip_source_ip),
+      .m_ip_dest_ip(tx_post_checksum_icmp_ip_dest_ip),
+      .m_icmp_type(tx_post_checksum_icmp_type),
+      .m_icmp_code(tx_post_checksum_icmp_code),
+      .m_icmp_checksum(tx_post_checksum_icmp_checksum),
+      .m_icmp_roh(tx_post_checksum_icmp_roh),
+      .m_icmp_payload_axis_tdata(tx_post_checksum_icmp_payload_axis_tdata),
+      .m_icmp_payload_axis_tkeep(tx_post_checksum_icmp_payload_axis_tkeep),
+      .m_icmp_payload_axis_tvalid(tx_post_checksum_icmp_payload_axis_tvalid),
+      .m_icmp_payload_axis_tready(tx_post_checksum_icmp_payload_axis_tready),
+      .m_icmp_payload_axis_tlast(tx_post_checksum_icmp_payload_axis_tlast),
+      .m_icmp_payload_axis_tuser(tx_post_checksum_icmp_payload_axis_tuser),
+      // Status signals
+      .busy()
+    );
+
     icmp_ip_tx #(
         .DATA_WIDTH(512)
     ) icmp_ip_tx_inst (
         .clk(clk),
         .rst(rst),
         // ICMP frame input
-        .s_icmp_hdr_valid(tx_icmp_hdr_valid),
-        .s_icmp_hdr_ready(tx_icmp_hdr_ready),
+        .s_icmp_hdr_valid(tx_post_checksum_icmp_hdr_valid),
+        .s_icmp_hdr_ready(tx_post_checksum_icmp_hdr_ready),
         .s_eth_dest_mac(0),
         .s_eth_src_mac(0),
         .s_eth_type(0),
         .s_ip_version(4'h4),
         .s_ip_ihl(4'h5),
-        .s_ip_dscp(tx_icmp_ip_dscp),
-        .s_ip_ecn(tx_icmp_ip_ecn),
-        .s_ip_identification(tx_icmp_ip_identification),
-        .s_ip_flags(tx_icmp_ip_flags),
-        .s_ip_fragment_offset(tx_icmp_ip_fragment_offset),
-        .s_ip_ttl(tx_icmp_ip_ttl),
+        .s_ip_dscp(tx_post_checksum_icmp_ip_dscp),
+        .s_ip_ecn(tx_post_checksum_icmp_ip_ecn),
+        .s_ip_length(tx_post_checksum_icmp_ip_length),
+        .s_ip_identification(tx_post_checksum_icmp_ip_identification),
+        .s_ip_flags(tx_post_checksum_icmp_ip_flags),
+        .s_ip_fragment_offset(tx_post_checksum_icmp_ip_fragment_offset),
+        .s_ip_ttl(tx_post_checksum_icmp_ip_ttl),
         .s_ip_protocol(8'h01),
         .s_ip_header_checksum(0),
-        .s_ip_source_ip(tx_icmp_ip_source_ip),
-        .s_ip_dest_ip(tx_icmp_ip_dest_ip),
-        .s_icmp_type(tx_icmp_type),
-        .s_icmp_code(tx_icmp_code),
-        .s_icmp_checksum(tx_icmp_checksum),
-        .s_icmp_roh(tx_icmp_roh),
-        .s_icmp_payload_axis_tdata(tx_icmp_payload_axis_tdata),
-        .s_icmp_payload_axis_tkeep(tx_icmp_payload_axis_tkeep),
-        .s_icmp_payload_axis_tvalid(tx_icmp_payload_axis_tvalid),
-        .s_icmp_payload_axis_tready(tx_icmp_payload_axis_tready),
-        .s_icmp_payload_axis_tlast(tx_icmp_payload_axis_tlast),
-        .s_icmp_payload_axis_tuser(tx_icmp_payload_axis_tuser),
+        .s_ip_source_ip(tx_post_checksum_icmp_ip_source_ip),
+        .s_ip_dest_ip(tx_post_checksum_icmp_ip_dest_ip),
+        .s_icmp_type(tx_post_checksum_icmp_type),
+        .s_icmp_code(tx_post_checksum_icmp_code),
+        .s_icmp_checksum(tx_post_checksum_icmp_checksum),
+        .s_icmp_roh(tx_post_checksum_icmp_roh),
+        .s_icmp_payload_axis_tdata(tx_post_checksum_icmp_payload_axis_tdata),
+        .s_icmp_payload_axis_tkeep(tx_post_checksum_icmp_payload_axis_tkeep),
+        .s_icmp_payload_axis_tvalid(tx_post_checksum_icmp_payload_axis_tvalid),
+        .s_icmp_payload_axis_tready(tx_post_checksum_icmp_payload_axis_tready),
+        .s_icmp_payload_axis_tlast(tx_post_checksum_icmp_payload_axis_tlast),
+        .s_icmp_payload_axis_tuser(tx_post_checksum_icmp_payload_axis_tuser),
         // IP frame output
         .m_ip_hdr_valid(m_ip_hdr_valid),
         .m_ip_hdr_ready(m_ip_hdr_ready),
@@ -380,47 +456,6 @@ module icmp_echo_reply #(
         .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
         // Status signals
         .busy(tx_busy)
-    );
-
-    axis_fifo #(
-        .DEPTH(256),
-        .DATA_WIDTH(DATA_WIDTH),
-        .KEEP_ENABLE(KEEP_ENABLE),
-        .KEEP_WIDTH(KEEP_WIDTH),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .FRAME_FIFO(0)
-    )
-    icmp_payload_fifo (
-        .clk(clk),
-        .rst(rst),
-
-        // AXI input
-        .s_axis_tdata(rx_fifo_icmp_payload_axis_tdata),
-        .s_axis_tkeep(rx_fifo_icmp_payload_axis_tkeep),
-        .s_axis_tvalid(rx_fifo_icmp_payload_axis_tvalid),
-        .s_axis_tready(rx_fifo_icmp_payload_axis_tready),
-        .s_axis_tlast(rx_fifo_icmp_payload_axis_tlast),
-        .s_axis_tid(0),
-        .s_axis_tdest(0),
-        .s_axis_tuser(rx_fifo_icmp_payload_axis_tuser),
-
-        // AXI output
-        .m_axis_tdata(tx_fifo_icmp_payload_axis_tdata),
-        .m_axis_tkeep(tx_fifo_icmp_payload_axis_tkeep),
-        .m_axis_tvalid(tx_fifo_icmp_payload_axis_tvalid),
-        .m_axis_tready(tx_fifo_icmp_payload_axis_tready),
-        .m_axis_tlast(tx_fifo_icmp_payload_axis_tlast),
-        .m_axis_tid(),
-        .m_axis_tdest(),
-        .m_axis_tuser(tx_fifo_icmp_payload_axis_tuser),
-
-        // Status
-        .status_overflow(),
-        .status_bad_frame(),
-        .status_good_frame()
     );
 
 

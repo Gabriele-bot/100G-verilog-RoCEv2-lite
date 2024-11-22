@@ -170,7 +170,7 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire [47:0] ip_tx_eth_dest_mac;
   wire [47:0] ip_tx_eth_src_mac;
   wire [15:0] ip_tx_eth_type;
-  wire ip_tx_is_roce_packet;
+  wire ip_tx_eth_is_roce_packet;
   wire [511:0] ip_tx_eth_payload_axis_tdata;
   wire [63:0] ip_tx_eth_payload_axis_tkeep;
   wire ip_tx_eth_payload_axis_tvalid;
@@ -233,6 +233,7 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire [15:0] ip_tx_header_checksum;
   wire [31:0] ip_tx_source_ip;
   wire [31:0] ip_tx_dest_ip;
+  wire        ip_tx_is_roce_packet;
   wire [511:0] ip_tx_payload_axis_tdata;
   wire [63:0] ip_tx_payload_axis_tkeep;
   wire ip_tx_payload_axis_tvalid;
@@ -487,7 +488,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .s_eth_dest_mac({ip_tx_eth_dest_mac, arp_tx_eth_dest_mac}),
       .s_eth_src_mac({ip_tx_eth_src_mac, arp_tx_eth_src_mac}),
       .s_eth_type({ip_tx_eth_type, arp_tx_eth_type}),
-      .s_is_roce_packet({ip_tx_is_roce_packet, 1'b0}),
+      .s_is_roce_packet({ip_tx_eth_is_roce_packet, 1'b0}),
       .s_eth_payload_axis_tdata({ip_tx_eth_payload_axis_tdata, arp_tx_eth_payload_512_axis_tdata}),
       .s_eth_payload_axis_tkeep({ip_tx_eth_payload_axis_tkeep, arp_tx_eth_payload_512_axis_tkeep}),
       .s_eth_payload_axis_tvalid({ip_tx_eth_payload_axis_tvalid, arp_tx_eth_payload_512_axis_tvalid}),
@@ -548,7 +549,7 @@ This module integrates the IP and ARP modules for a complete IP stack
   .s_ip_header_checksum(0),
   .s_ip_source_ip({s_ip_source_ip, icmp_tx_ip_source_ip}),
   .s_ip_dest_ip({s_ip_dest_ip, icmp_tx_ip_dest_ip}),
-  .s_is_roce_packet({s_is_roce_packet, icmp_tx_is_roce_packet}),
+  .s_is_roce_packet({s_is_roce_packet, 1'b0}),
   .s_ip_payload_axis_tdata({s_ip_payload_axis_tdata, icmp_tx_ip_payload_axis_tdata}),
   .s_ip_payload_axis_tkeep({s_ip_payload_axis_tkeep, icmp_tx_ip_payload_axis_tkeep}),
   .s_ip_payload_axis_tvalid({s_ip_payload_axis_tvalid, icmp_tx_ip_payload_axis_tvalid}),
@@ -611,7 +612,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .m_eth_dest_mac(ip_tx_eth_dest_mac),
       .m_eth_src_mac(ip_tx_eth_src_mac),
       .m_eth_type(ip_tx_eth_type),
-      .m_is_roce_packet(ip_tx_is_roce_packet),
+      .m_is_roce_packet(ip_tx_eth_is_roce_packet),
       .m_eth_payload_axis_tdata(ip_tx_eth_payload_axis_tdata),
       .m_eth_payload_axis_tkeep(ip_tx_eth_payload_axis_tkeep),
       .m_eth_payload_axis_tvalid(ip_tx_eth_payload_axis_tvalid),
@@ -688,7 +689,9 @@ This module integrates the IP and ARP modules for a complete IP stack
  icmp_echo_reply #(
   .DATA_WIDTH(512),
   .KEEP_ENABLE(1),
-  .KEEP_WIDTH(64)
+  .KEEP_WIDTH(64),
+  .CHECKSUM_PAYLOAD_FIFO_DEPTH(512),
+  .CHECKSUM_HEADER_FIFO_DEPTH(8)
  ) icmp_echo_reply_inst (
    .clk(clk),
    .rst(rst),

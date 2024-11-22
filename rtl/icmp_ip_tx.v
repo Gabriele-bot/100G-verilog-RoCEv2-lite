@@ -131,7 +131,7 @@ end
 
 /*
 
-icmp Frame
+ICMP Frame
 
  Field                       Length
  Destination MAC address     6 octets
