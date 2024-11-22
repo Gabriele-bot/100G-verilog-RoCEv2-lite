@@ -231,7 +231,8 @@ reg                   m_ip_payload_axis_tlast_int;
 reg                   m_ip_payload_axis_tuser_int;
 wire                  m_ip_payload_axis_tready_int_early;
 
-wire [15:0] udp_length_roce_int;
+wire [ 15:0] udp_length_roce_int;
+reg  [ 15:0] udp_length_roce_reg;
 
 reg [19:0] hdr_sum_temp_reg = 20'd0, hdr_sum_temp_next;
 reg [19:0] hdr_sum_reg = 20'd0, hdr_sum_next;
@@ -367,8 +368,13 @@ always @* begin
             `_HEADER_FIELD_(1,  udp_source_port_reg[0*8 +: 8])
             `_HEADER_FIELD_(2,  udp_dest_port_reg[1*8 +: 8])
             `_HEADER_FIELD_(3,  udp_dest_port_reg[0*8 +: 8])
-            `_HEADER_FIELD_(4,  udp_length_reg[1*8 +: 8])
-            `_HEADER_FIELD_(5,  udp_length_reg[0*8 +: 8])
+            if (s_udp_dest_port == RoCE_udp_port) begin
+                `_HEADER_FIELD_(4,  udp_length_roce_reg[1*8 +: 8])
+                `_HEADER_FIELD_(5,  udp_length_roce_reg[0*8 +: 8])
+            end else begin
+                `_HEADER_FIELD_(4,  udp_length_reg[1*8 +: 8])
+                `_HEADER_FIELD_(5,  udp_length_reg[0*8 +: 8])
+            end
             `_HEADER_FIELD_(6,  udp_checksum_reg[1*8 +: 8])
             `_HEADER_FIELD_(7,  udp_checksum_reg[0*8 +: 8])
 
@@ -430,6 +436,7 @@ always @(posedge clk) begin
             udp_length_reg <= s_udp_length;
         end
         udp_checksum_reg <= s_udp_checksum;
+        udp_length_roce_reg <= s_udp_length + 16'd4;
     end
 
     if (transfer_in_save) begin
