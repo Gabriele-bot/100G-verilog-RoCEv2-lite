@@ -168,7 +168,9 @@ wire                  m_udp_payload_axis_tready_int_early;
 
 assign s_udp_hdr_ready = s_udp_hdr_ready_reg;
 
-assign s_udp_payload_axis_tready = (m_udp_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+//assign s_udp_payload_axis_tready = (m_udp_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+assign s_eth_payload_axis_tready = m_udp_payload_axis_tready_int_reg << grant_encoded;
+
 
 assign m_udp_hdr_valid = m_udp_hdr_valid_reg;
 assign m_eth_dest_mac = m_eth_dest_mac_reg;
@@ -289,7 +291,8 @@ always @* begin
     // pass through selected packet data
     m_udp_payload_axis_tdata_int  = current_s_tdata;
     m_udp_payload_axis_tkeep_int  = current_s_tkeep;
-    m_udp_payload_axis_tvalid_int = current_s_tvalid && m_udp_payload_axis_tready_int_reg && grant_valid;
+    //m_udp_payload_axis_tvalid_int = current_s_tvalid && m_udp_payload_axis_tready_int_reg && grant_valid;
+    m_udp_payload_axis_tvalid_int = current_s_tvalid && m_udp_payload_axis_tready_int_reg;
     m_udp_payload_axis_tlast_int  = current_s_tlast;
     m_udp_payload_axis_tid_int    = current_s_tid;
     m_udp_payload_axis_tdest_int  = current_s_tdest;
@@ -361,7 +364,8 @@ assign m_udp_payload_axis_tdest  = DEST_ENABLE ? m_udp_payload_axis_tdest_reg : 
 assign m_udp_payload_axis_tuser  = USER_ENABLE ? m_udp_payload_axis_tuser_reg : {USER_WIDTH{1'b0}};
 
 // enable ready input next cycle if output is ready or if both output registers are empty
-assign m_udp_payload_axis_tready_int_early = m_udp_payload_axis_tready || (!temp_m_udp_payload_axis_tvalid_reg && !m_udp_payload_axis_tvalid_reg);
+//assign m_udp_payload_axis_tready_int_early = m_udp_payload_axis_tready || (!temp_m_udp_payload_axis_tvalid_reg && !m_udp_payload_axis_tvalid_reg);
+assign m_udp_payload_axis_tready_int_early = (m_udp_payload_axis_tready || (!temp_m_udp_payload_axis_tvalid_reg && !m_udp_payload_axis_tvalid_reg)) && grant_valid;
 
 always @* begin
     // transfer sink ready state to source

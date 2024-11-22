@@ -134,7 +134,7 @@ module ip_arb_mux #(
   reg [15:0] m_ip_header_checksum_reg = 16'd0, m_ip_header_checksum_next;
   reg [31:0] m_ip_source_ip_reg = 32'd0, m_ip_source_ip_next;
   reg [31:0] m_ip_dest_ip_reg = 32'd0, m_ip_dest_ip_next;
-  reg [31:0] m_is_roce_packet_reg = 32'd0, m_is_roce_packet_next;
+  reg        m_is_roce_packet_reg = 1'b0, m_is_roce_packet_next;
 
   wire [   S_COUNT-1:0] request;
   wire [   S_COUNT-1:0] acknowledge;
@@ -155,7 +155,8 @@ module ip_arb_mux #(
 
   assign s_ip_hdr_ready = s_ip_hdr_ready_reg;
 
-  assign s_ip_payload_axis_tready = (m_ip_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+  //assign s_ip_payload_axis_tready = (m_ip_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+  assign s_ip_payload_axis_tready = m_ip_payload_axis_tready_int_reg << grant_encoded;
 
   assign m_ip_hdr_valid = m_ip_hdr_valid_reg;
   assign m_eth_dest_mac = m_eth_dest_mac_reg;
@@ -266,7 +267,8 @@ module ip_arb_mux #(
     // pass through selected packet data
     m_ip_payload_axis_tdata_int = current_s_tdata;
     m_ip_payload_axis_tkeep_int = current_s_tkeep;
-    m_ip_payload_axis_tvalid_int = current_s_tvalid && m_ip_payload_axis_tready_int_reg && grant_valid;
+    //m_ip_payload_axis_tvalid_int = current_s_tvalid && m_ip_payload_axis_tready_int_reg && grant_valid;
+    m_ip_payload_axis_tvalid_int = current_s_tvalid && m_ip_payload_axis_tready_int_reg;
     m_ip_payload_axis_tlast_int = current_s_tlast;
     m_ip_payload_axis_tid_int = current_s_tid;
     m_ip_payload_axis_tdest_int = current_s_tdest;
@@ -335,7 +337,8 @@ module ip_arb_mux #(
   assign m_ip_payload_axis_tuser = USER_ENABLE ? m_ip_payload_axis_tuser_reg : {USER_WIDTH{1'b0}};
 
   // enable ready input next cycle if output is ready or if both output registers are empty
-  assign m_ip_payload_axis_tready_int_early = m_ip_payload_axis_tready || (!temp_m_ip_payload_axis_tvalid_reg && !m_ip_payload_axis_tvalid_reg);
+  //assign m_ip_payload_axis_tready_int_early = m_ip_payload_axis_tready || (!temp_m_ip_payload_axis_tvalid_reg && !m_ip_payload_axis_tvalid_reg)
+  assign m_ip_payload_axis_tready_int_early = (m_ip_payload_axis_tready || (!temp_m_ip_payload_axis_tvalid_reg && !m_ip_payload_axis_tvalid_reg)) && grant_valid;
 
   always @* begin
     // transfer sink ready state to source

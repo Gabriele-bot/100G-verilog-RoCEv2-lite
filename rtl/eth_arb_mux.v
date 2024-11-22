@@ -116,7 +116,8 @@ module eth_arb_mux #(
 
   assign s_eth_hdr_ready = s_eth_hdr_ready_reg;
 
-  assign s_eth_payload_axis_tready = (m_eth_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+  //assign s_eth_payload_axis_tready = (m_eth_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+  assign s_eth_payload_axis_tready = m_eth_payload_axis_tready_int_reg << grant_encoded;
 
   assign m_eth_hdr_valid = m_eth_hdr_valid_reg;
   assign m_eth_dest_mac = m_eth_dest_mac_reg;
@@ -188,7 +189,8 @@ module eth_arb_mux #(
     // pass through selected packet data
     m_eth_payload_axis_tdata_int = current_s_tdata;
     m_eth_payload_axis_tkeep_int = current_s_tkeep;
-    m_eth_payload_axis_tvalid_int = current_s_tvalid && m_eth_payload_axis_tready_int_reg && grant_valid;
+    //m_eth_payload_axis_tvalid_int = current_s_tvalid && m_eth_payload_axis_tready_int_reg && grant_valid;
+    m_eth_payload_axis_tvalid_int = current_s_tvalid && m_eth_payload_axis_tready_int_reg;
     m_eth_payload_axis_tlast_int = current_s_tlast;
     m_eth_payload_axis_tid_int = current_s_tid;
     m_eth_payload_axis_tdest_int = current_s_tdest;
@@ -244,7 +246,8 @@ module eth_arb_mux #(
   assign m_eth_payload_axis_tuser = USER_ENABLE ? m_eth_payload_axis_tuser_reg : {USER_WIDTH{1'b0}};
 
   // enable ready input next cycle if output is ready or if both output registers are empty
-  assign m_eth_payload_axis_tready_int_early = m_eth_payload_axis_tready || (!temp_m_eth_payload_axis_tvalid_reg && !m_eth_payload_axis_tvalid_reg);
+  //assign m_eth_payload_axis_tready_int_early = m_eth_payload_axis_tready || (!temp_m_eth_payload_axis_tvalid_reg && !m_eth_payload_axis_tvalid_reg);
+  assign m_eth_payload_axis_tready_int_early = (m_eth_payload_axis_tready || (!temp_m_eth_payload_axis_tvalid_reg && !m_eth_payload_axis_tvalid_reg)) && grant_valid;
 
   always @* begin
     // transfer sink ready state to source
