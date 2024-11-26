@@ -13,7 +13,8 @@ import "DPI-C" context function int xgmii_read(longint xgmiiTxd, byte xgmiiTxc);
 export "DPI-C" task xgmii_write;
 export "DPI-C" task xgmii_idle;
 
-logic clk156_25;
+logic clk20;
+logic clk160;
 logic extRst;
 logic mem_clk;
 logic mem_rst;
@@ -28,7 +29,8 @@ logic [63:0] xgmiiRxd;
 
 // generazione clocks
 initial begin
-    clk156_25 <= 0;
+    clk160 <= 0;
+    clk20  <= 0;
     mem_clk   <= 0;
     c0_sys_clk_p <= 0;
     c0_sys_clk_n <= 0;
@@ -43,10 +45,16 @@ initial begin
     #1.666 mem_clk <= 0;
   end
   
-always
+  always
   begin
-    #3.200 clk156_25 <= 1;
-    #3.200 clk156_25 <= 0;
+    #25.00 clk20 <= 1;
+    #25.00 clk20 <= 0;
+  end
+  
+  always
+  begin
+    #3.125 clk160 <= 1;
+    #3.125 clk160 <= 0;
   end
   
   always
@@ -69,12 +77,13 @@ always
     c1_sys_clk_n <= 1;
   end
 
-default clocking clk @(posedge clk156_25);
+default clocking clk @(posedge clk160);
 endclocking
 
 
 top #() top0 (
-        .clk(clk156_25),
+        .clk_x1(clk20),
+        .clk_x8(clk160),
 	.rst(extRst),
 
         .btnu(1'b0),
@@ -85,11 +94,11 @@ top #() top0 (
         .sw(4'd0),
 	.led(),
 	
-	.xgmii_tx_clk(clk156_25),
+	.xgmii_tx_clk(clk160),
         .xgmii_tx_rst(extRst),
         .xgmii_txd(xgmiiTxd),
         .xgmii_txc(xgmiiTxc),
-        .xgmii_rx_clk(clk156_25),
+        .xgmii_rx_clk(clk160),
         .xgmii_rx_rst(extRst),
         .xgmii_rxd(xgmiiRxd),
         .xgmii_rxc(xgmiiRxc)
@@ -127,7 +136,7 @@ end
  * xgmii_read
  */
 reg ret_reg;
-always @(posedge clk156_25) begin
+always @(posedge clk160) begin
 	if (extRst) begin
 		ret_reg <= 0;
 	end else begin
@@ -141,7 +150,7 @@ end
  * @data
  */
 task xgmii_write(input longint data, input byte control);
-	@(posedge clk156_25) begin
+	@(posedge clk160) begin
 		xgmiiRxc <= control;
 		xgmiiRxd <= data;
 	end
@@ -151,7 +160,7 @@ endtask
  * xgmii_idle
  */
 task xgmii_idle;
-	@(posedge clk156_25) begin
+	@(posedge clk160) begin
 		xgmiiRxc <= 8'b11111111;
 		xgmiiRxd <= 64'h0707070707070707;
 	end

@@ -204,6 +204,13 @@ module icmp_echo_reply #(
     wire tx_post_checksum_icmp_payload_axis_tlast;
     wire tx_post_checksum_icmp_payload_axis_tuser;
 
+    wire [DATA_WIDTH-1:0] tx_pipeline_ip_payload_axis_tdata;
+    wire [KEEP_WIDTH-1:0] tx_pipeline_ip_payload_axis_tkeep;
+    wire                  tx_pipeline_ip_payload_axis_tvalid;
+    wire                  tx_pipeline_ip_payload_axis_tready;
+    wire                  tx_pipeline_ip_payload_axis_tlast;
+    wire                  tx_pipeline_ip_payload_axis_tuser;
+
     // Dirty Hack, need to compute the real chack sum
     wire [16:0] temp_cecksum;
 
@@ -422,12 +429,12 @@ module icmp_echo_reply #(
         .s_icmp_code(tx_post_checksum_icmp_code),
         .s_icmp_checksum(tx_post_checksum_icmp_checksum),
         .s_icmp_roh(tx_post_checksum_icmp_roh),
-        .s_icmp_payload_axis_tdata(tx_post_checksum_icmp_payload_axis_tdata),
-        .s_icmp_payload_axis_tkeep(tx_post_checksum_icmp_payload_axis_tkeep),
+        .s_icmp_payload_axis_tdata( tx_post_checksum_icmp_payload_axis_tdata),
+        .s_icmp_payload_axis_tkeep( tx_post_checksum_icmp_payload_axis_tkeep),
         .s_icmp_payload_axis_tvalid(tx_post_checksum_icmp_payload_axis_tvalid),
         .s_icmp_payload_axis_tready(tx_post_checksum_icmp_payload_axis_tready),
-        .s_icmp_payload_axis_tlast(tx_post_checksum_icmp_payload_axis_tlast),
-        .s_icmp_payload_axis_tuser(tx_post_checksum_icmp_payload_axis_tuser),
+        .s_icmp_payload_axis_tlast( tx_post_checksum_icmp_payload_axis_tlast),
+        .s_icmp_payload_axis_tuser( tx_post_checksum_icmp_payload_axis_tuser),
         // IP frame output
         .m_ip_hdr_valid(m_ip_hdr_valid),
         .m_ip_hdr_ready(m_ip_hdr_ready),
@@ -448,15 +455,43 @@ module icmp_echo_reply #(
         .m_ip_source_ip(m_ip_source_ip),
         .m_ip_dest_ip(m_ip_dest_ip),
         .m_is_roce_packet(m_is_roce_packet),
-        .m_ip_payload_axis_tdata(m_ip_payload_axis_tdata),
-        .m_ip_payload_axis_tkeep(m_ip_payload_axis_tkeep),
-        .m_ip_payload_axis_tvalid(m_ip_payload_axis_tvalid),
-        .m_ip_payload_axis_tready(m_ip_payload_axis_tready),
-        .m_ip_payload_axis_tlast(m_ip_payload_axis_tlast),
-        .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
+        .m_ip_payload_axis_tdata( tx_pipeline_ip_payload_axis_tdata),
+        .m_ip_payload_axis_tkeep( tx_pipeline_ip_payload_axis_tkeep),
+        .m_ip_payload_axis_tvalid(tx_pipeline_ip_payload_axis_tvalid),
+        .m_ip_payload_axis_tready(tx_pipeline_ip_payload_axis_tready),
+        .m_ip_payload_axis_tlast( tx_pipeline_ip_payload_axis_tlast),
+        .m_ip_payload_axis_tuser( tx_pipeline_ip_payload_axis_tuser),
         // Status signals
         .busy(tx_busy)
     );
+
+    axis_pipeline_register #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .REG_TYPE(1),
+    .LENGTH(2)
+  ) eth_tx_pipeline_inst (
+    .clk(clk),
+    .rst(rst),
+
+    .s_axis_tdata (tx_pipeline_ip_payload_axis_tdata),
+    .s_axis_tkeep (tx_pipeline_ip_payload_axis_tkeep),
+    .s_axis_tvalid(tx_pipeline_ip_payload_axis_tvalid),
+    .s_axis_tready(tx_pipeline_ip_payload_axis_tready),
+    .s_axis_tlast (tx_pipeline_ip_payload_axis_tlast),
+    .s_axis_tuser (tx_pipeline_ip_payload_axis_tuser),
+
+    .m_axis_tdata (m_ip_payload_axis_tdata),
+    .m_axis_tkeep (m_ip_payload_axis_tkeep),
+    .m_axis_tvalid(m_ip_payload_axis_tvalid),
+    .m_axis_tready(m_ip_payload_axis_tready),
+    .m_axis_tlast (m_ip_payload_axis_tlast),
+    .m_axis_tuser (m_ip_payload_axis_tuser)
+  );
 
 
 endmodule

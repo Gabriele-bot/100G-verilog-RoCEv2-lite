@@ -88,6 +88,7 @@ module eth_arb_mux #(
   parameter CL_S_COUNT = $clog2(S_COUNT);
 
   reg frame_reg = 1'b0, frame_next;
+  reg single_frame_pkt_reg = 1'b0, single_frame_pkt_next;
 
   reg [S_COUNT-1:0] s_eth_hdr_ready_reg = {S_COUNT{1'b0}}, s_eth_hdr_ready_next;
 
@@ -100,7 +101,9 @@ module eth_arb_mux #(
   wire [   S_COUNT-1:0] request;
   wire [   S_COUNT-1:0] acknowledge;
   wire [   S_COUNT-1:0] grant;
+  reg  [   S_COUNT-1:0] grant_del;
   wire                  grant_valid;
+  reg                   grant_valid_del;
   wire [CL_S_COUNT-1:0] grant_encoded;
 
   // internal datapath
@@ -152,11 +155,18 @@ module eth_arb_mux #(
       .grant_encoded(grant_encoded)
   );
 
-  assign request = s_eth_hdr_valid & ~grant;
+  always @(posedge clk) begin
+    grant_del <= grant;
+    grant_valid_del <= grant_valid;
+  end
+
+  //assign request = (s_eth_hdr_valid & ~s_eth_hdr_valid_del) & ~grant;
+  assign request = s_eth_hdr_valid & ~grant & ~grant_del;
   assign acknowledge = grant & s_eth_payload_axis_tvalid & s_eth_payload_axis_tready & s_eth_payload_axis_tlast;
 
   always @* begin
     frame_next = frame_reg;
+    single_frame_pkt_next = single_frame_pkt_reg;
 
     s_eth_hdr_ready_next = {S_COUNT{1'b0}};
 
@@ -171,12 +181,17 @@ module eth_arb_mux #(
       if (s_eth_payload_axis_tlast[grant_encoded]) begin
         frame_next = 1'b0;
       end
+    end else if (single_frame_pkt_reg) begin
+      frame_next = 1'b0;
     end
 
-    if (!frame_reg && grant_valid && (m_eth_hdr_ready || !m_eth_hdr_valid)) begin
+    if ((!frame_reg) && grant_valid && (m_eth_hdr_ready || !m_eth_hdr_valid)) begin
+    //if ((!frame_reg) && grant_valid && (m_eth_hdr_ready || !m_eth_hdr_valid)) begin
       // start of frame
       frame_next = 1'b1;
 
+      single_frame_pkt_next = s_eth_payload_axis_tlast[grant_encoded];
+      
       s_eth_hdr_ready_next = grant;
 
       m_eth_hdr_valid_next = 1'b1;
@@ -184,6 +199,10 @@ module eth_arb_mux #(
       m_eth_src_mac_next = s_eth_src_mac[grant_encoded*48+:48];
       m_eth_type_next = s_eth_type[grant_encoded*16+:16];
       m_is_roce_packet_next = s_is_roce_packet[grant_encoded*1+:1];
+    end
+
+    if (single_frame_pkt_reg) begin
+      single_frame_pkt_next = 1'b0;
     end
 
     // pass through selected packet data
@@ -199,6 +218,7 @@ module eth_arb_mux #(
 
   always @(posedge clk) begin
     frame_reg <= frame_next;
+    single_frame_pkt_reg <= single_frame_pkt_next;
 
     s_eth_hdr_ready_reg <= s_eth_hdr_ready_next;
 
@@ -210,6 +230,7 @@ module eth_arb_mux #(
 
     if (rst) begin
       frame_reg <= 1'b0;
+      single_frame_pkt_reg <= 1'b0;
       s_eth_hdr_ready_reg <= {S_COUNT{1'b0}};
       m_eth_hdr_valid_reg <= 1'b0;
     end

@@ -183,19 +183,13 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire [47:0] arp_rx_eth_dest_mac;
   wire [47:0] arp_rx_eth_src_mac;
   wire [15:0] arp_rx_eth_type;
-  wire [63:0] arp_rx_eth_payload_axis_tdata;
-  wire [7:0] arp_rx_eth_payload_axis_tkeep;
+  wire [511:0] arp_rx_eth_payload_axis_tdata;
+  wire [63:0] arp_rx_eth_payload_axis_tkeep;
   wire arp_rx_eth_payload_axis_tvalid;
   wire arp_rx_eth_payload_axis_tready;
   wire arp_rx_eth_payload_axis_tlast;
   wire arp_rx_eth_payload_axis_tuser;
   
-  wire [511:0] arp_rx_eth_payload_512_axis_tdata;
-  wire [63:0]  arp_rx_eth_payload_512_axis_tkeep;
-  wire         arp_rx_eth_payload_512_axis_tvalid;
-  wire         arp_rx_eth_payload_512_axis_tready;
-  wire         arp_rx_eth_payload_512_axis_tlast;
-  wire         arp_rx_eth_payload_512_axis_tuser;
   
 
   wire arp_tx_eth_hdr_valid;
@@ -203,19 +197,19 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire [47:0] arp_tx_eth_dest_mac;
   wire [47:0] arp_tx_eth_src_mac;
   wire [15:0] arp_tx_eth_type;
-  wire [63:0] arp_tx_eth_payload_axis_tdata;
-  wire [7:0] arp_tx_eth_payload_axis_tkeep;
-  wire arp_tx_eth_payload_axis_tvalid;
-  wire arp_tx_eth_payload_axis_tready;
-  wire arp_tx_eth_payload_axis_tlast;
-  wire arp_tx_eth_payload_axis_tuser;
-  
-  wire [511:0] arp_tx_eth_payload_512_axis_tdata;
-  wire [63:0]  arp_tx_eth_payload_512_axis_tkeep;
-  wire         arp_tx_eth_payload_512_axis_tvalid;
-  wire         arp_tx_eth_payload_512_axis_tready;
-  wire         arp_tx_eth_payload_512_axis_tlast;
-  wire         arp_tx_eth_payload_512_axis_tuser;
+  wire [511:0] arp_tx_eth_payload_axis_tdata;
+  wire [63:0]  arp_tx_eth_payload_axis_tkeep;
+  wire         arp_tx_eth_payload_axis_tvalid;
+  wire         arp_tx_eth_payload_axis_tready;
+  wire         arp_tx_eth_payload_axis_tlast;
+  wire         arp_tx_eth_payload_axis_tuser;
+
+  wire [511:0] arp_tx_eth_payload_pipeline_axis_tdata;
+  wire [63:0]  arp_tx_eth_payload_pipeline_axis_tkeep;
+  wire         arp_tx_eth_payload_pipeline_axis_tvalid;
+  wire         arp_tx_eth_payload_pipeline_axis_tready;
+  wire         arp_tx_eth_payload_pipeline_axis_tlast;
+  wire         arp_tx_eth_payload_pipeline_axis_tuser;
 
   // IP
   wire ip_tx_hdr_valid;
@@ -393,11 +387,11 @@ This module integrates the IP and ARP modules for a complete IP stack
   assign arp_rx_eth_dest_mac = s_eth_dest_mac;
   assign arp_rx_eth_src_mac = s_eth_src_mac;
   assign arp_rx_eth_type = 16'h0806;
-  assign arp_rx_eth_payload_512_axis_tdata = s_eth_payload_axis_tdata;
-  assign arp_rx_eth_payload_512_axis_tkeep = s_eth_payload_axis_tkeep;
-  assign arp_rx_eth_payload_512_axis_tvalid = s_select_arp_reg && s_eth_payload_axis_tvalid;
-  assign arp_rx_eth_payload_512_axis_tlast = s_eth_payload_axis_tlast;
-  assign arp_rx_eth_payload_512_axis_tuser = s_eth_payload_axis_tuser;
+  assign arp_rx_eth_payload_axis_tdata = s_eth_payload_axis_tdata;
+  assign arp_rx_eth_payload_axis_tkeep = s_eth_payload_axis_tkeep;
+  assign arp_rx_eth_payload_axis_tvalid = s_select_arp_reg && s_eth_payload_axis_tvalid;
+  assign arp_rx_eth_payload_axis_tlast = s_eth_payload_axis_tlast;
+  assign arp_rx_eth_payload_axis_tuser = s_eth_payload_axis_tuser;
 
   assign s_eth_hdr_ready = (s_select_ip && ip_rx_eth_hdr_ready) ||
                          (s_select_arp && arp_rx_eth_hdr_ready) ||
@@ -469,6 +463,34 @@ This module integrates the IP and ARP modules for a complete IP stack
   /*
  * Output arbiter
  */
+  axis_pipeline_register #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .REG_TYPE(0),
+    .LENGTH(1)
+  ) eth_tx_pipeline_inst (
+    .clk(clk),
+    .rst(rst),
+
+    .s_axis_tdata (arp_tx_eth_payload_axis_tdata),
+    .s_axis_tkeep (arp_tx_eth_payload_axis_tkeep),
+    .s_axis_tvalid(arp_tx_eth_payload_axis_tvalid),
+    .s_axis_tready(arp_tx_eth_payload_axis_tready),
+    .s_axis_tlast (arp_tx_eth_payload_axis_tlast),
+    .s_axis_tuser (arp_tx_eth_payload_axis_tuser),
+
+    .m_axis_tdata (arp_tx_eth_payload_pipeline_axis_tdata),
+    .m_axis_tkeep (arp_tx_eth_payload_pipeline_axis_tkeep),
+    .m_axis_tvalid(arp_tx_eth_payload_pipeline_axis_tvalid),
+    .m_axis_tready(arp_tx_eth_payload_pipeline_axis_tready),
+    .m_axis_tlast (arp_tx_eth_payload_pipeline_axis_tlast),
+    .m_axis_tuser (arp_tx_eth_payload_pipeline_axis_tuser)
+  );
+  
   eth_arb_mux #(
       .S_COUNT(2),
       .DATA_WIDTH(512),
@@ -489,14 +511,14 @@ This module integrates the IP and ARP modules for a complete IP stack
       .s_eth_src_mac({ip_tx_eth_src_mac, arp_tx_eth_src_mac}),
       .s_eth_type({ip_tx_eth_type, arp_tx_eth_type}),
       .s_is_roce_packet({ip_tx_eth_is_roce_packet, 1'b0}),
-      .s_eth_payload_axis_tdata({ip_tx_eth_payload_axis_tdata, arp_tx_eth_payload_512_axis_tdata}),
-      .s_eth_payload_axis_tkeep({ip_tx_eth_payload_axis_tkeep, arp_tx_eth_payload_512_axis_tkeep}),
-      .s_eth_payload_axis_tvalid({ip_tx_eth_payload_axis_tvalid, arp_tx_eth_payload_512_axis_tvalid}),
-      .s_eth_payload_axis_tready({ip_tx_eth_payload_axis_tready, arp_tx_eth_payload_512_axis_tready}),
-      .s_eth_payload_axis_tlast({ip_tx_eth_payload_axis_tlast, arp_tx_eth_payload_512_axis_tlast}),
+      .s_eth_payload_axis_tdata( {ip_tx_eth_payload_axis_tdata,  arp_tx_eth_payload_pipeline_axis_tdata}),
+      .s_eth_payload_axis_tkeep( {ip_tx_eth_payload_axis_tkeep,  arp_tx_eth_payload_pipeline_axis_tkeep}),
+      .s_eth_payload_axis_tvalid({ip_tx_eth_payload_axis_tvalid, arp_tx_eth_payload_pipeline_axis_tvalid}),
+      .s_eth_payload_axis_tready({ip_tx_eth_payload_axis_tready, arp_tx_eth_payload_pipeline_axis_tready}),
+      .s_eth_payload_axis_tlast( {ip_tx_eth_payload_axis_tlast,  arp_tx_eth_payload_pipeline_axis_tlast}),
       .s_eth_payload_axis_tid(0),
       .s_eth_payload_axis_tdest(0),
-      .s_eth_payload_axis_tuser({ip_tx_eth_payload_axis_tuser, arp_tx_eth_payload_512_axis_tuser}),
+      .s_eth_payload_axis_tuser({ip_tx_eth_payload_axis_tuser, arp_tx_eth_payload_pipeline_axis_tuser}),
       // Ethernet frame output
       .m_eth_hdr_valid(m_eth_hdr_valid),
       .m_eth_hdr_ready(m_eth_hdr_ready),
@@ -754,9 +776,9 @@ This module integrates the IP and ARP modules for a complete IP stack
  * ARP module
  */
   arp #(
-      .DATA_WIDTH(64),
+      .DATA_WIDTH(512),
       .KEEP_ENABLE(1),
-      .KEEP_WIDTH(8),
+      .KEEP_WIDTH(64),
       .CACHE_ADDR_WIDTH(ARP_CACHE_ADDR_WIDTH),
       .REQUEST_RETRY_COUNT(ARP_REQUEST_RETRY_COUNT),
       .REQUEST_RETRY_INTERVAL(ARP_REQUEST_RETRY_INTERVAL),
@@ -770,12 +792,12 @@ This module integrates the IP and ARP modules for a complete IP stack
       .s_eth_dest_mac(arp_rx_eth_dest_mac),
       .s_eth_src_mac(arp_rx_eth_src_mac),
       .s_eth_type(arp_rx_eth_type),
-      .s_eth_payload_axis_tdata(arp_rx_eth_payload_axis_tdata),
-      .s_eth_payload_axis_tkeep(arp_rx_eth_payload_axis_tkeep),
+      .s_eth_payload_axis_tdata (arp_rx_eth_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep (arp_rx_eth_payload_axis_tkeep),
       .s_eth_payload_axis_tvalid(arp_rx_eth_payload_axis_tvalid),
       .s_eth_payload_axis_tready(arp_rx_eth_payload_axis_tready),
-      .s_eth_payload_axis_tlast(arp_rx_eth_payload_axis_tlast),
-      .s_eth_payload_axis_tuser(arp_rx_eth_payload_axis_tuser),
+      .s_eth_payload_axis_tlast (arp_rx_eth_payload_axis_tlast),
+      .s_eth_payload_axis_tuser (arp_rx_eth_payload_axis_tuser),
       // Ethernet frame output
       .m_eth_hdr_valid(arp_tx_eth_hdr_valid),
       .m_eth_hdr_ready(arp_tx_eth_hdr_ready),
@@ -804,57 +826,6 @@ This module integrates the IP and ARP modules for a complete IP stack
       .clear_cache(clear_arp_cache)
   );
   
-  axis_adapter #(
-      .S_DATA_WIDTH(512),
-      .M_DATA_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) rx_512_to_64_arp_axis_adapter_inst (
-      .clk(clk),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata( arp_rx_eth_payload_512_axis_tdata),  
-      .s_axis_tkeep( arp_rx_eth_payload_512_axis_tkeep),  
-      .s_axis_tvalid(arp_rx_eth_payload_512_axis_tvalid), 
-      .s_axis_tready(arp_rx_eth_payload_512_axis_tready), 
-      .s_axis_tlast( arp_rx_eth_payload_512_axis_tlast),  
-      .s_axis_tuser( arp_rx_eth_payload_512_axis_tuser),   
-      // AXI output
-      .m_axis_tdata( arp_rx_eth_payload_axis_tdata),
-      .m_axis_tkeep( arp_rx_eth_payload_axis_tkeep),
-      .m_axis_tvalid(arp_rx_eth_payload_axis_tvalid),
-      .m_axis_tready(arp_rx_eth_payload_axis_tready),
-      .m_axis_tlast( arp_rx_eth_payload_axis_tlast),
-      .m_axis_tuser( arp_rx_eth_payload_axis_tuser)
-  );
-  
-  axis_adapter #(
-      .S_DATA_WIDTH(64),
-      .M_DATA_WIDTH(512),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) tx_axis_64_to_512_arp_axis_adapter_inst (
-      .clk(clk),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata( arp_tx_eth_payload_axis_tdata),
-      .s_axis_tkeep( arp_tx_eth_payload_axis_tkeep),
-      .s_axis_tvalid(arp_tx_eth_payload_axis_tvalid),
-      .s_axis_tready(arp_tx_eth_payload_axis_tready),
-      .s_axis_tlast( arp_tx_eth_payload_axis_tlast),
-      .s_axis_tuser( arp_tx_eth_payload_axis_tuser),
-      // AXI output
-      .m_axis_tdata( arp_tx_eth_payload_512_axis_tdata), 
-      .m_axis_tkeep( arp_tx_eth_payload_512_axis_tkeep), 
-      .m_axis_tvalid(arp_tx_eth_payload_512_axis_tvalid),
-      .m_axis_tready(arp_tx_eth_payload_512_axis_tready),
-      .m_axis_tlast( arp_tx_eth_payload_512_axis_tlast), 
-      .m_axis_tuser( arp_tx_eth_payload_512_axis_tuser) 
-  );
 
 endmodule
 

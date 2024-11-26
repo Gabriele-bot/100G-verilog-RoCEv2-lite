@@ -114,6 +114,7 @@ module ip_arb_mux #(
   parameter CL_S_COUNT = $clog2(S_COUNT);
 
   reg frame_reg = 1'b0, frame_next;
+  reg single_frame_pkt_reg = 1'b0, single_frame_pkt_next;
 
   reg [S_COUNT-1:0] s_ip_hdr_ready_reg = {S_COUNT{1'b0}}, s_ip_hdr_ready_next;
 
@@ -139,7 +140,9 @@ module ip_arb_mux #(
   wire [   S_COUNT-1:0] request;
   wire [   S_COUNT-1:0] acknowledge;
   wire [   S_COUNT-1:0] grant;
+  reg  [   S_COUNT-1:0] grant_del;
   wire                  grant_valid;
+  reg                   grant_valid_del;
   wire [CL_S_COUNT-1:0] grant_encoded;
 
   // internal datapath
@@ -204,8 +207,14 @@ module ip_arb_mux #(
       .grant_encoded(grant_encoded)
   );
 
-  assign request = s_ip_hdr_valid & ~grant;
+  always @(posedge clk) begin
+    grant_del <= grant;
+    grant_valid_del <= grant_valid;
+  end
+
+  assign request = s_ip_hdr_valid & ~grant & ~grant_del;
   assign acknowledge = grant & s_ip_payload_axis_tvalid & s_ip_payload_axis_tready & s_ip_payload_axis_tlast;
+  
 
   always @* begin
     frame_next = frame_reg;
@@ -236,6 +245,8 @@ module ip_arb_mux #(
       if (s_ip_payload_axis_tlast[grant_encoded]) begin
         frame_next = 1'b0;
       end
+    end else if (single_frame_pkt_reg) begin
+      frame_next = 1'b0;
     end
 
     if (!frame_reg && grant_valid && (m_ip_hdr_ready || !m_ip_hdr_valid)) begin
@@ -243,6 +254,8 @@ module ip_arb_mux #(
       frame_next = 1'b1;
 
       s_ip_hdr_ready_next = grant;
+
+      single_frame_pkt_next = s_ip_payload_axis_tlast[grant_encoded];
 
       m_ip_hdr_valid_next = 1'b1;
       m_eth_dest_mac_next = s_eth_dest_mac[grant_encoded*48+:48];
@@ -264,6 +277,10 @@ module ip_arb_mux #(
       m_is_roce_packet_next = s_is_roce_packet[grant_encoded*1+:1];
     end
 
+    if (single_frame_pkt_reg) begin
+      single_frame_pkt_next = 1'b0;
+    end
+
     // pass through selected packet data
     m_ip_payload_axis_tdata_int = current_s_tdata;
     m_ip_payload_axis_tkeep_int = current_s_tkeep;
@@ -277,6 +294,7 @@ module ip_arb_mux #(
 
   always @(posedge clk) begin
     frame_reg <= frame_next;
+    single_frame_pkt_reg <= single_frame_pkt_next;
 
     s_ip_hdr_ready_reg <= s_ip_hdr_ready_next;
 
@@ -301,6 +319,7 @@ module ip_arb_mux #(
 
     if (rst) begin
       frame_reg <= 1'b0;
+      single_frame_pkt_reg <= 1'b0;
       s_ip_hdr_ready_reg <= {S_COUNT{1'b0}};
       m_ip_hdr_valid_reg <= 1'b0;
     end
