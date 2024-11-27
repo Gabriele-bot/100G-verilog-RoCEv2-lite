@@ -158,17 +158,24 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
   localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
-  localparam [3:0]
-    STATE_IDLE = 4'd0,
-    STATE_WAIT_HEADER = 4'd1,
-    STATE_WAIT_PAYLOAD = 4'd2,
-    STATE_WRITE_BTH = 4'd3,
-    STATE_WRITE_BTH_IMMDH = 4'd4,
-    STATE_WRITE_BTH_RETH = 4'd5,
-    STATE_WRITE_BTH_RETH_IMMDH = 4'd6,
-    STATE_WRITE_PAYLOAD = 4'd7,
-    STATE_WRITE_PAYLOAD_LAST = 4'd8,
-    STATE_WAIT_LAST = 4'd9;
+  // TODO improove the FSM..
+  localparam [4:0]
+    STATE_IDLE = 5'd0,
+    STATE_WAIT_HEADER = 5'd1,
+    STATE_WAIT_PAYLOAD = 5'd2,
+    STATE_WRITE_BTH = 5'd3,
+    STATE_WRITE_BTH_IMMDH = 5'd4,
+    STATE_WRITE_BTH_RETH = 5'd5,
+    STATE_WRITE_BTH_RETH_IMMDH = 5'd6,
+    STATE_WRITE_PAYLOAD_96 = 5'd7,
+    STATE_WRITE_PAYLOAD_96_LAST = 5'd8,
+    STATE_WRITE_PAYLOAD_128 = 5'd9,
+    STATE_WRITE_PAYLOAD_128_LAST = 5'd10,
+    STATE_WRITE_PAYLOAD_224 = 5'd11,
+    STATE_WRITE_PAYLOAD_224_LAST = 5'd12,
+    STATE_WRITE_PAYLOAD_256 = 5'd13,
+    STATE_WRITE_PAYLOAD_256_LAST = 5'd14,
+    STATE_WAIT_LAST = 5'd15;
 
   reg [3:0] state_reg = STATE_IDLE, state_next;
 
@@ -236,21 +243,40 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
   reg error_payload_early_termination_reg = 1'b0, error_payload_early_termination_next;
 
   reg [512:0] save_roce_payload_axis_tdata_reg = 512'd0;
-  reg [63:0] save_roce_payload_axis_tkeep_reg = 64'd0;
-  reg save_roce_payload_axis_tlast_reg = 1'b0;
-  reg save_roce_payload_axis_tuser_reg = 1'b0;
+  reg [ 63:0] save_roce_payload_axis_tkeep_reg = 64'd0;
+  reg         save_roce_payload_axis_tlast_reg = 1'b0;
+  reg         save_roce_payload_axis_tuser_reg = 1'b0;
 
   reg [511:0] shift_roce_payload_axis_tdata;
-  reg [63:0] shift_roce_payload_axis_tkeep;
-  reg [511:0] shift_roce_payload_bth_axis_tdata;
-  reg [63:0] shift_roce_payload_bth_axis_tkeep;
-  reg [511:0] shift_roce_payload_reth_axis_tdata;
-  reg [63:0] shift_roce_payload_reth_axis_tkeep;
-  reg shift_roce_payload_axis_tvalid;
-  reg shift_roce_payload_axis_tlast;
-  reg shift_roce_payload_axis_tuser;
-  reg shift_roce_payload_s_tready;
-  reg shift_roce_payload_extra_cycle_reg = 1'b0;
+  reg [ 63:0] shift_roce_payload_axis_tkeep;
+  reg [511:0] shift_roce_payload_96_axis_tdata;
+  reg [ 63:0] shift_roce_payload_96_axis_tkeep;
+  reg [511:0] shift_roce_payload_128_axis_tdata;
+  reg [ 63:0] shift_roce_payload_128_axis_tkeep;
+  reg [511:0] shift_roce_payload_224_axis_tdata;
+  reg [ 63:0] shift_roce_payload_224_axis_tkeep;
+  reg [511:0] shift_roce_payload_256_axis_tdata;
+  reg [ 63:0] shift_roce_payload_256_axis_tkeep;
+  reg         shift_roce_payload_96_axis_tvalid;
+  reg         shift_roce_payload_128_axis_tvalid;
+  reg         shift_roce_payload_224_axis_tvalid;
+  reg         shift_roce_payload_256_axis_tvalid;
+  reg         shift_roce_payload_96_axis_tlast;
+  reg         shift_roce_payload_96_axis_tuser;
+  reg         shift_roce_payload_128_axis_tlast;
+  reg         shift_roce_payload_128_axis_tuser;
+  reg         shift_roce_payload_224_axis_tlast;
+  reg         shift_roce_payload_224_axis_tuser;
+  reg         shift_roce_payload_256_axis_tlast;
+  reg         shift_roce_payload_256_axis_tuser;
+  reg         shift_roce_payload_96_s_tready;
+  reg         shift_roce_payload_128_s_tready;
+  reg         shift_roce_payload_224_s_tready;
+  reg         shift_roce_payload_256_s_tready;
+  reg         shift_roce_payload_96_extra_cycle_reg = 1'b0;
+  reg         shift_roce_payload_128_extra_cycle_reg = 1'b0;
+  reg         shift_roce_payload_224_extra_cycle_reg = 1'b0;
+  reg         shift_roce_payload_256_extra_cycle_reg = 1'b0;
   reg shift_roce_payload_late_header_reg = 1'b0, shift_roce_payload_late_header_next;
 
   // internal datapath
@@ -262,7 +288,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
   reg          m_udp_payload_axis_tuser_int;
   wire         m_udp_payload_axis_tready_int_early;
 
-  reg  [  8:0] roce_header_length_bits_int;
+  reg [8:0] roce_header_length_bits_reg, roce_header_length_bits_next;
 
 
   assign s_roce_bth_ready                = s_roce_bth_ready_reg;
@@ -441,110 +467,89 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
   endfunction
 
   always @* begin
-    shift_roce_payload_bth_axis_tdata[95:0]   = save_roce_payload_axis_tdata_reg[511:416];
-    shift_roce_payload_bth_axis_tkeep[11:0]   = save_roce_payload_axis_tkeep_reg[63:52];
+    shift_roce_payload_96_axis_tdata[95:0]   = save_roce_payload_axis_tdata_reg[511:416];
+    shift_roce_payload_96_axis_tkeep[11:0]   = save_roce_payload_axis_tkeep_reg[63:52];
 
-    shift_roce_payload_reth_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[511:288];
-    shift_roce_payload_reth_axis_tkeep[27:0]  = save_roce_payload_axis_tkeep_reg[63:36];
+    shift_roce_payload_128_axis_tdata[127:0] = save_roce_payload_axis_tdata_reg[511:384];
+    shift_roce_payload_128_axis_tkeep[15:0]  = save_roce_payload_axis_tkeep_reg[63:48];
 
-    if (roce_header_length_bits_int == 96) begin
-      shift_roce_payload_axis_tdata[95:0] = save_roce_payload_axis_tdata_reg[511:416];
-      shift_roce_payload_axis_tkeep[11:0] = save_roce_payload_axis_tkeep_reg[63:52];
-    end else if (roce_header_length_bits_int == 128) begin
-      shift_roce_payload_axis_tdata[127:0] = save_roce_payload_axis_tdata_reg[511:384];
-      shift_roce_payload_axis_tkeep[15:0]  = save_roce_payload_axis_tkeep_reg[63:48];
-    end else if (roce_header_length_bits_int == 224) begin
-      shift_roce_payload_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[511:288];
-      shift_roce_payload_axis_tkeep[27:0]  = save_roce_payload_axis_tkeep_reg[63:36];
-    end else if (roce_header_length_bits_int == 256) begin
-      shift_roce_payload_axis_tdata[255:0] = save_roce_payload_axis_tdata_reg[511:256];
-      shift_roce_payload_axis_tkeep[31:0]  = save_roce_payload_axis_tkeep_reg[63:32];
-    end
-    if (shift_roce_payload_extra_cycle_reg) begin
-      shift_roce_payload_bth_axis_tdata[511:96]   = 416'd0;
-      shift_roce_payload_bth_axis_tkeep[63:12]    = 52'd0;
-      shift_roce_payload_reth_axis_tdata[511:224] = 288'd0;
-      shift_roce_payload_reth_axis_tkeep[63:28]   = 36'd0;
-      if (roce_header_length_bits_int == 96) begin
-        shift_roce_payload_axis_tdata[511:96] = 416'd0;  //should pad to zero
-        shift_roce_payload_axis_tkeep[63:12]  = 52'd0;  //should pad to zero
-      end else if (roce_header_length_bits_int == 128) begin
-        shift_roce_payload_axis_tdata[511:128] = 384'd0;  //should pad to zero
-        shift_roce_payload_axis_tkeep[63:16]   = 48'd0;  //should pad to zero
-      end else if (roce_header_length_bits_int == 224) begin
-        shift_roce_payload_axis_tdata[511:224] = 288'd0;  //should pad to zero
-        shift_roce_payload_axis_tkeep[63:28]   = 36'd0;  //should pad to zero
-      end else if (roce_header_length_bits_int == 256) begin
-        shift_roce_payload_axis_tdata[511:256] = 256'd0;  //should pad to zero
-        shift_roce_payload_axis_tkeep[63:32]   = 32'd0;  //should pad to zero
-      end
-      shift_roce_payload_axis_tvalid = 1'b1;
-      shift_roce_payload_axis_tlast = 1'b1;
-      //shift_roce_payload_axis_tlast = save_roce_payload_axis_tlast_reg;
-      shift_roce_payload_axis_tuser = save_roce_payload_axis_tuser_reg;
-      shift_roce_payload_s_tready = flush_save;
-    end else if (shift_roce_payload_late_header_reg) begin
-      if (roce_header_length_bits_int == 96) begin
-        shift_roce_payload_axis_tdata[511:96] = s_roce_payload_axis_tdata[415:0];
-        shift_roce_payload_axis_tkeep[63:12]  = s_roce_payload_axis_tkeep[51:0];
-      end else if (roce_header_length_bits_int == 128) begin
-        shift_roce_payload_axis_tdata[511:128] = s_roce_payload_axis_tdata[383:0];
-        shift_roce_payload_axis_tkeep[63:16]   = s_roce_payload_axis_tkeep[47:0];
-      end else if (roce_header_length_bits_int == 224) begin
-        shift_roce_payload_axis_tdata[511:224] = s_roce_payload_axis_tdata[287:0];
-        shift_roce_payload_axis_tkeep[63:28]   = s_roce_payload_axis_tkeep[35:0];
-      end else if (roce_header_length_bits_int == 256) begin
-        shift_roce_payload_axis_tdata[511:256] = s_roce_payload_axis_tdata[255:0];
-        shift_roce_payload_axis_tkeep[63:32]   = s_roce_payload_axis_tkeep[31:0];
-      end
-      shift_roce_payload_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
-      shift_roce_payload_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
-      if (roce_header_length_bits_int == 96) begin
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:52] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:52] == 0));
-      end else if (roce_header_length_bits_int == 128) begin
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:48] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:48] == 0));
-      end else if (roce_header_length_bits_int == 224) begin
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:36] == 0));
-      end else if (roce_header_length_bits_int == 256) begin
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:32] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:32] == 0));
-      end
+    shift_roce_payload_224_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[511:288];
+    shift_roce_payload_224_axis_tkeep[27:0]  = save_roce_payload_axis_tkeep_reg[63:36];
+
+    shift_roce_payload_256_axis_tdata[255:0] = save_roce_payload_axis_tdata_reg[511:256];
+    shift_roce_payload_256_axis_tkeep[31:0]  = save_roce_payload_axis_tkeep_reg[63:32];
+
+    if (shift_roce_payload_96_extra_cycle_reg) begin
+      shift_roce_payload_96_axis_tdata[511:96]   = 416'd0;
+      shift_roce_payload_96_axis_tkeep[63:12]    = 52'd0;
+      shift_roce_payload_96_axis_tlast  = 1'b1;
+      shift_roce_payload_96_axis_tuser  = save_roce_payload_axis_tuser_reg;
+      shift_roce_payload_96_axis_tvalid = 1'b1;
+      shift_roce_payload_96_s_tready = flush_save;
     end else begin
-      shift_roce_payload_bth_axis_tdata[511:96]   = s_roce_payload_axis_tdata[415:0];
-      shift_roce_payload_bth_axis_tkeep[63:12]    = s_roce_payload_axis_tkeep[51:0];
-      shift_roce_payload_reth_axis_tdata[511:224] = s_roce_payload_axis_tdata[287:0];
-      shift_roce_payload_reth_axis_tkeep[63:28]   = s_roce_payload_axis_tkeep[35:0];
-      if (roce_header_length_bits_int == 96) begin
-        shift_roce_payload_axis_tdata[511:96] = s_roce_payload_axis_tdata[415:0];
-        shift_roce_payload_axis_tkeep[63:12] = s_roce_payload_axis_tkeep[51:0];
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:52] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:52] == 0));
-      end else if (roce_header_length_bits_int == 128) begin
-        shift_roce_payload_axis_tdata[511:128] = s_roce_payload_axis_tdata[383:0];
-        shift_roce_payload_axis_tkeep[63:16] = s_roce_payload_axis_tkeep[47:0];
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:48] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:48] == 0));
-      end else if (roce_header_length_bits_int == 224) begin
-        shift_roce_payload_axis_tdata[511:224] = s_roce_payload_axis_tdata[287:0];
-        shift_roce_payload_axis_tkeep[63:28] = s_roce_payload_axis_tkeep[35:0];
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:36] == 0));
-      end else if (roce_header_length_bits_int == 256) begin
-        shift_roce_payload_axis_tdata[511:256] = s_roce_payload_axis_tdata[255:0];
-        shift_roce_payload_axis_tkeep[63:32] = s_roce_payload_axis_tkeep[31:0];
-        shift_roce_payload_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:32] == 0));
-        shift_roce_payload_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:32] == 0));
-      end
-      shift_roce_payload_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
-      shift_roce_payload_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+      shift_roce_payload_96_axis_tdata[511:96] = s_roce_payload_axis_tdata[415:0];
+      shift_roce_payload_96_axis_tkeep[63:12] = s_roce_payload_axis_tkeep[51:0];
+      shift_roce_payload_96_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:52] == 0));
+      shift_roce_payload_96_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:52] == 0));
+      shift_roce_payload_96_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+      shift_roce_payload_96_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
     end
+
+    if (shift_roce_payload_128_extra_cycle_reg) begin
+      shift_roce_payload_128_axis_tdata[511:128]   = 384'd0;
+      shift_roce_payload_128_axis_tkeep[63:16]    = 48'd0;
+      shift_roce_payload_128_axis_tlast  = 1'b1;
+      shift_roce_payload_128_axis_tuser  = save_roce_payload_axis_tuser_reg;
+      shift_roce_payload_128_axis_tvalid = 1'b1;
+      shift_roce_payload_128_s_tready = flush_save;
+    end else begin
+      shift_roce_payload_128_axis_tdata[511:128] = s_roce_payload_axis_tdata[383:0];
+      shift_roce_payload_128_axis_tkeep[63:16] = s_roce_payload_axis_tkeep[47:0];
+      shift_roce_payload_128_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:48] == 0));
+      shift_roce_payload_128_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:48] == 0));
+      shift_roce_payload_128_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+      shift_roce_payload_128_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+    end
+
+    if (shift_roce_payload_224_extra_cycle_reg) begin
+      shift_roce_payload_224_axis_tdata[511:224] = 288'd0;
+      shift_roce_payload_224_axis_tkeep[63:28]   = 36'd0;
+      shift_roce_payload_224_axis_tlast  = 1'b1;
+      shift_roce_payload_224_axis_tuser  = save_roce_payload_axis_tuser_reg;
+      shift_roce_payload_224_axis_tvalid = 1'b1;
+      shift_roce_payload_224_s_tready = flush_save;
+    end else begin
+      shift_roce_payload_224_axis_tdata[511:224] = s_roce_payload_axis_tdata[287:0];
+      shift_roce_payload_224_axis_tkeep[63:28] = s_roce_payload_axis_tkeep[35:0];
+      shift_roce_payload_224_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] == 0));
+      shift_roce_payload_224_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:36] == 0));
+      shift_roce_payload_224_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+      shift_roce_payload_224_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+    end
+
+    if (shift_roce_payload_256_extra_cycle_reg) begin
+      shift_roce_payload_256_axis_tdata[511:256] = 256'd0;
+      shift_roce_payload_256_axis_tkeep[63:32]   = 32'd0;
+      shift_roce_payload_256_axis_tlast  = 1'b1;
+      shift_roce_payload_256_axis_tuser  = save_roce_payload_axis_tuser_reg;
+      shift_roce_payload_256_axis_tvalid = 1'b1;
+      shift_roce_payload_256_s_tready = flush_save;
+    end else begin
+      shift_roce_payload_256_axis_tdata[511:256] = s_roce_payload_axis_tdata[255:0];
+      shift_roce_payload_256_axis_tkeep[63:32] = s_roce_payload_axis_tkeep[31:0];
+      shift_roce_payload_256_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:32] == 0));
+      shift_roce_payload_256_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[63:32] == 0));
+      shift_roce_payload_256_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+      shift_roce_payload_256_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+    end
+
   end
 
   always @* begin
     state_next                           = STATE_IDLE;
+
+    shift_roce_payload_late_header_next  = 1'b0;
+    roce_header_length_bits_next         = roce_header_length_bits_reg;
 
     s_roce_bth_ready_next                = 1'b0;
     s_roce_payload_axis_tready_next      = 1'b0;
@@ -586,611 +591,40 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         //transfer_in_save = 1'b1;
 
         if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid && ~s_roce_immdh_valid) begin
-          store_bth             = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          m_udp_hdr_valid_next  = 1'b1;
-          state_next            = STATE_WRITE_BTH;
-          /*
-          s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-          if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[64] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[71:65] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_axis_tdata[511:96];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:12], 12'hFFF};
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd96;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                m_udp_payload_axis_tlast_int = 1'b1;
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-        end
-        * */
+          store_bth                    = 1'b1;
+          s_roce_bth_ready_next        = 1'b0;
+          m_udp_hdr_valid_next         = 1'b1;
+          roce_header_length_bits_next = 9'd96;
+          state_next                   = STATE_WRITE_BTH;
 
         end else if (s_roce_bth_ready && s_roce_bth_valid && s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
-          store_bth             = 1'b1;
-          store_immdh           = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          m_udp_hdr_valid_next  = 1'b1;
-          state_next            = STATE_WRITE_BTH_IMMDH;
-          /*
-          s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-          if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[64] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[71:65] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_immdh_data[31:24];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_immdh_data[23:16];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_immdh_data[15:8];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_immdh_data[7:0];
-            m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_axis_tdata[511:128];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:16], 16'hFFFF};
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd128;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                m_udp_payload_axis_tlast_int = 1'b1;
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-        end
-        * */
-        end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready) begin
-          store_bth             = 1'b1;
-          store_reth            = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          m_udp_hdr_valid_next  = 1'b1;
-          state_next            = STATE_WRITE_BTH_RETH;
-          /*
-          s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-          if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[64] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[71:65] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_reth_v_addr[63:56];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_reth_v_addr[55:48];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_reth_v_addr[47:40];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_reth_v_addr[39:32];
-            m_udp_payload_axis_tdata_int[135:128] = s_roce_reth_v_addr[31:24];
-            m_udp_payload_axis_tdata_int[143:136] = s_roce_reth_v_addr[23:16];
-            m_udp_payload_axis_tdata_int[151:144] = s_roce_reth_v_addr[15:8];
-            m_udp_payload_axis_tdata_int[159:152] = s_roce_reth_v_addr[7:0];
-            m_udp_payload_axis_tdata_int[167:160] = s_roce_reth_r_key[31:24];
-            m_udp_payload_axis_tdata_int[175:168] = s_roce_reth_r_key[23:16];
-            m_udp_payload_axis_tdata_int[183:176] = s_roce_reth_r_key[15:8];
-            m_udp_payload_axis_tdata_int[191:184] = s_roce_reth_r_key[7:0];
-            m_udp_payload_axis_tdata_int[199:192] = s_roce_reth_length[31:24];
-            m_udp_payload_axis_tdata_int[207:200] = s_roce_reth_length[23:16];
-            m_udp_payload_axis_tdata_int[215:208] = s_roce_reth_length[15:8];
-            m_udp_payload_axis_tdata_int[223:216] = s_roce_reth_length[7:0];
-            m_udp_payload_axis_tdata_int[511:224] = shift_roce_payload_reth_axis_tdata[511:224];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_reth_axis_tkeep[63:28], 28'hFFFFFFF};
-
-
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd224;
-
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                m_udp_payload_axis_tlast_int = 1'b1;
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-        end
-        * */
+          store_bth                    = 1'b1;
+          store_immdh                  = 1'b1;
+          s_roce_bth_ready_next        = 1'b0;
+          m_udp_hdr_valid_next         = 1'b1;
+          roce_header_length_bits_next = 9'd128;
+          state_next                   = STATE_WRITE_BTH_IMMDH;
+        end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
+          store_bth                    = 1'b1;
+          store_reth                   = 1'b1;
+          s_roce_bth_ready_next        = 1'b0;
+          m_udp_hdr_valid_next         = 1'b1;
+          roce_header_length_bits_next = 9'd224;
+          state_next                   = STATE_WRITE_BTH_RETH;
         end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&   s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
-          store_bth             = 1'b1;
-          store_reth            = 1'b1;
-          store_immdh           = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          m_udp_hdr_valid_next  = 1'b1;
-          state_next            = STATE_WRITE_BTH_RETH_IMMDH;
-          /*
-          s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-          if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[64] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[71:65] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_reth_v_addr[63:56];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_reth_v_addr[55:48];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_reth_v_addr[47:40];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_reth_v_addr[39:32];
-            m_udp_payload_axis_tdata_int[135:128] = s_roce_reth_v_addr[31:24];
-            m_udp_payload_axis_tdata_int[143:136] = s_roce_reth_v_addr[23:16];
-            m_udp_payload_axis_tdata_int[151:144] = s_roce_reth_v_addr[15:8];
-            m_udp_payload_axis_tdata_int[159:152] = s_roce_reth_v_addr[7:0];
-            m_udp_payload_axis_tdata_int[167:160] = s_roce_reth_r_key[31:24];
-            m_udp_payload_axis_tdata_int[175:168] = s_roce_reth_r_key[23:16];
-            m_udp_payload_axis_tdata_int[183:176] = s_roce_reth_r_key[15:8];
-            m_udp_payload_axis_tdata_int[191:184] = s_roce_reth_r_key[7:0];
-            m_udp_payload_axis_tdata_int[199:192] = s_roce_reth_length[31:24];
-            m_udp_payload_axis_tdata_int[207:200] = s_roce_reth_length[23:16];
-            m_udp_payload_axis_tdata_int[215:208] = s_roce_reth_length[15:8];
-            m_udp_payload_axis_tdata_int[223:216] = s_roce_reth_length[7:0];
-            m_udp_payload_axis_tdata_int[231:224] = s_roce_immdh_data[31:24];
-            m_udp_payload_axis_tdata_int[239:232] = s_roce_immdh_data[23:16];
-            m_udp_payload_axis_tdata_int[247:240] = s_roce_immdh_data[15:8];
-            m_udp_payload_axis_tdata_int[255:248] = s_roce_immdh_data[7:0];
-            m_udp_payload_axis_tdata_int[511:256] = shift_roce_payload_reth_axis_tdata[511:256];
-            m_udp_payload_axis_tkeep_int = {
-              shift_roce_payload_reth_axis_tkeep[63:32], 32'hFFFFFFFF
-            };
-
-
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd256;
-
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                m_udp_payload_axis_tlast_int = 1'b1;
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-        end
-        */
-        end else if (shift_roce_payload_axis_tvalid && !s_roce_bth_valid) begin
-          s_roce_payload_axis_tready_next     = 1'b0;
-          shift_roce_payload_late_header_next = 1'b1;
-          state_next                          = STATE_WAIT_HEADER;
+          store_bth                    = 1'b1;
+          store_reth                   = 1'b1;
+          store_immdh                  = 1'b1;
+          s_roce_bth_ready_next        = 1'b0;
+          m_udp_hdr_valid_next         = 1'b1;
+          roce_header_length_bits_next = 9'd256;
+          state_next                   = STATE_WRITE_BTH_RETH_IMMDH;
         end else begin
           state_next = STATE_IDLE;
         end
       end
-      STATE_WAIT_HEADER: begin
-        // idle state - wait for data
-        s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-        s_roce_payload_axis_tready_next = 1'b0;
-
-        flush_save = 1'b0;
-
-        if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid) begin
-          store_bth                           = 1'b1;
-          s_roce_bth_ready_next               = 1'b0;
-          shift_roce_payload_late_header_next = 1'b0;
-          //m_udp_hdr_valid_next = 1'b1;
-          state_next                          = STATE_WRITE_BTH;
-          if (m_udp_payload_axis_tready_int_reg) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[70:64] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[71] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_bth_axis_tdata[511:96];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_bth_axis_tkeep[63:12], 12'hFFF};
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd96;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-          end
-        end else if (s_roce_bth_ready && s_roce_bth_valid && s_roce_immdh_ready && s_roce_immdh_valid &&  ~s_roce_reth_valid) begin
-          store_bth                           = 1'b1;
-          store_immdh                         = 1'b1;
-          s_roce_bth_ready_next               = 1'b0;
-          shift_roce_payload_late_header_next = 1'b0;
-          //m_udp_hdr_valid_next = 1'b1;
-          state_next                          = STATE_WRITE_BTH_IMMDH;
-          if (m_udp_payload_axis_tready_int_reg) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[70:64] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[71] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_immdh_data[31:24];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_immdh_data[23:16];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_immdh_data[15:8];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_immdh_data[7:0];
-            m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_bth_axis_tdata[511:128];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_bth_axis_tkeep[63:16], 12'hFFFF};
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd128;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-          end
-        end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready) begin
-          store_bth = 1'b1;
-          store_reth = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          shift_roce_payload_late_header_next = 1'b0;
-          //m_udp_hdr_valid_next = 1'b1;
-          state_next = STATE_WRITE_BTH_RETH;
-          if (m_udp_payload_axis_tready_int_reg) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[70:64] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[71] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_reth_v_addr[63:56];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_reth_v_addr[55:48];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_reth_v_addr[47:40];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_reth_v_addr[39:32];
-            m_udp_payload_axis_tdata_int[135:128] = s_roce_reth_v_addr[31:24];
-            m_udp_payload_axis_tdata_int[143:136] = s_roce_reth_v_addr[23:16];
-            m_udp_payload_axis_tdata_int[151:144] = s_roce_reth_v_addr[15:8];
-            m_udp_payload_axis_tdata_int[159:152] = s_roce_reth_v_addr[7:0];
-            m_udp_payload_axis_tdata_int[167:160] = s_roce_reth_r_key[31:24];
-            m_udp_payload_axis_tdata_int[175:168] = s_roce_reth_r_key[23:16];
-            m_udp_payload_axis_tdata_int[183:176] = s_roce_reth_r_key[15:8];
-            m_udp_payload_axis_tdata_int[191:184] = s_roce_reth_r_key[7:0];
-            m_udp_payload_axis_tdata_int[199:192] = s_roce_reth_length[31:24];
-            m_udp_payload_axis_tdata_int[207:200] = s_roce_reth_length[23:16];
-            m_udp_payload_axis_tdata_int[215:208] = s_roce_reth_length[15:8];
-            m_udp_payload_axis_tdata_int[223:216] = s_roce_reth_length[7:0];
-            m_udp_payload_axis_tdata_int[511:224] = shift_roce_payload_reth_axis_tdata[511:224];
-            m_udp_payload_axis_tkeep_int = {shift_roce_payload_reth_axis_tkeep[63:28], 28'hFFFFFFF};
-
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd224;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-          end
-        end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready && s_roce_immdh_valid &&  s_roce_immdh_ready) begin
-          store_bth = 1'b1;
-          store_reth = 1'b1;
-          store_immdh = 1'b1;
-          s_roce_bth_ready_next = 1'b0;
-          shift_roce_payload_late_header_next = 1'b0;
-          //m_udp_hdr_valid_next = 1'b1;
-          state_next = STATE_WRITE_BTH_RETH_IMMDH;
-          if (m_udp_payload_axis_tready_int_reg) begin
-            transfer_in_save = 1'b1;
-            m_udp_payload_axis_tvalid_int = 1'b1;
-            m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
-            m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
-            m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
-            m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
-            m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
-            m_udp_payload_axis_tdata_int[70:64] = 7'b0;  // Reserved
-            m_udp_payload_axis_tdata_int[71] = s_roce_bth_ack_req;
-            m_udp_payload_axis_tdata_int[79:72] = s_roce_bth_psn[23:16];
-            m_udp_payload_axis_tdata_int[87:80] = s_roce_bth_psn[15:8];
-            m_udp_payload_axis_tdata_int[95:88] = s_roce_bth_psn[7:0];
-            m_udp_payload_axis_tdata_int[103:96] = s_roce_reth_v_addr[63:56];
-            m_udp_payload_axis_tdata_int[111:104] = s_roce_reth_v_addr[55:48];
-            m_udp_payload_axis_tdata_int[119:112] = s_roce_reth_v_addr[47:40];
-            m_udp_payload_axis_tdata_int[127:120] = s_roce_reth_v_addr[39:32];
-            m_udp_payload_axis_tdata_int[135:128] = s_roce_reth_v_addr[31:24];
-            m_udp_payload_axis_tdata_int[143:136] = s_roce_reth_v_addr[23:16];
-            m_udp_payload_axis_tdata_int[151:144] = s_roce_reth_v_addr[15:8];
-            m_udp_payload_axis_tdata_int[159:152] = s_roce_reth_v_addr[7:0];
-            m_udp_payload_axis_tdata_int[167:160] = s_roce_reth_r_key[31:24];
-            m_udp_payload_axis_tdata_int[175:168] = s_roce_reth_r_key[23:16];
-            m_udp_payload_axis_tdata_int[183:176] = s_roce_reth_r_key[15:8];
-            m_udp_payload_axis_tdata_int[191:184] = s_roce_reth_r_key[7:0];
-            m_udp_payload_axis_tdata_int[199:192] = s_roce_reth_length[31:24];
-            m_udp_payload_axis_tdata_int[207:200] = s_roce_reth_length[23:16];
-            m_udp_payload_axis_tdata_int[215:208] = s_roce_reth_length[15:8];
-            m_udp_payload_axis_tdata_int[223:216] = s_roce_reth_length[7:0];
-            m_udp_payload_axis_tdata_int[231:224] = s_roce_immdh_data[31:24];
-            m_udp_payload_axis_tdata_int[239:232] = s_roce_immdh_data[23:16];
-            m_udp_payload_axis_tdata_int[247:240] = s_roce_immdh_data[15:8];
-            m_udp_payload_axis_tdata_int[255:248] = s_roce_immdh_data[7:0];
-            m_udp_payload_axis_tdata_int[511:224] = shift_roce_payload_reth_axis_tdata[511:256];
-            m_udp_payload_axis_tkeep_int = {
-              shift_roce_payload_reth_axis_tkeep[63:32], 32'hFFFFFFFF
-            };
-
-            s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
-            roce_header_length_bits_int = 9'd256;
-
-            word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
-                16'd8;  // udp hdr
-
-            //state_next = STATE_WRITE_PAYLOAD;
-            if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
-              // have entire payload
-              //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-              if (shift_roce_payload_axis_tlast) begin
-                s_roce_bth_ready_next = !m_udp_hdr_valid_next;
-                s_roce_payload_axis_tready_next = 1'b0;
-                state_next = STATE_IDLE;
-              end else begin
-                store_last_word = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tvalid_int = 1'b0;
-                state_next = STATE_WRITE_PAYLOAD_LAST;
-              end
-            end else begin
-              if (shift_roce_payload_axis_tlast) begin
-                // end of frame, but length does not match
-                error_payload_early_termination_next = 1'b1;
-                s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
-                m_udp_payload_axis_tuser_int = 1'b1;
-                state_next = STATE_WAIT_LAST;
-              end else begin
-                state_next = STATE_WRITE_PAYLOAD;
-              end
-            end
-          end
-        end else begin
-          state_next = STATE_WAIT_HEADER;
-        end
-      end
       STATE_WRITE_BTH: begin
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_96_s_tready;
         // write bth state
         //if (m_udp_payload_axis_tready_int_reg) begin
         if (s_roce_payload_axis_tready && s_roce_payload_axis_tvalid) begin
@@ -1200,10 +634,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           // word transfer out
           m_udp_payload_axis_tvalid_int = 1'b1;
           m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-          m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-          m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-          m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-          m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[11:8] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[13:12] = 2'b0;  // Pad count
+          m_udp_payload_axis_tdata_int[14] = 1'b0;  // Mig request
+          m_udp_payload_axis_tdata_int[15] = 1'b0;  // Solicited Event
           m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
           m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
           m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
@@ -1215,39 +649,39 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tdata_int[79:72] = roce_bth_psn_reg[23:16];
           m_udp_payload_axis_tdata_int[87:80] = roce_bth_psn_reg[15:8];
           m_udp_payload_axis_tdata_int[95:88] = roce_bth_psn_reg[7:0];
-          m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_axis_tdata[511:96];
-          m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:12], 12'hFFF};
+          m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_96_axis_tdata[511:96];
+          m_udp_payload_axis_tkeep_int = {shift_roce_payload_96_axis_tkeep[63:12], 12'hFFF};
 
-          roce_header_length_bits_int = 9'd96;
+          roce_header_length_bits_next = 9'd96;
 
           s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
           word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
               16'd8;  // udp hdr
 
-          if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
+          if (s_udp_length <= 16'd72) begin // full frame (64 bytes) + udp header length (8 bytes) 
             // have entire payload
             //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_96_axis_tlast) begin
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               m_udp_payload_axis_tlast_int = 1'b1;
               s_roce_payload_axis_tready_next = 1'b0;
               state_next = STATE_IDLE;
             end else begin
               store_last_word = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_96_s_tready;
               m_udp_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              state_next = STATE_WRITE_PAYLOAD_96_LAST;
             end
           end else begin
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_96_axis_tlast) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_96_s_tready;
               m_udp_payload_axis_tuser_int = 1'b1;
               state_next = STATE_WAIT_LAST;
             end else begin
-              state_next = STATE_WRITE_PAYLOAD;
+              state_next = STATE_WRITE_PAYLOAD_96;
             end
           end
         end else begin
@@ -1255,7 +689,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         end
       end
       STATE_WRITE_BTH_IMMDH: begin
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_128_s_tready;
         // write bth state
         //if (m_udp_payload_axis_tready_int_reg) begin
         if (s_roce_payload_axis_tready && s_roce_payload_axis_tvalid) begin
@@ -1265,10 +699,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           // word transfer out
           m_udp_payload_axis_tvalid_int = 1'b1;
           m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-          m_udp_payload_axis_tdata_int[8] = 1'b1;  // Solicited Event
-          m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-          m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-          m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[11:8] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[13:12] = 2'b0;  // Pad count
+          m_udp_payload_axis_tdata_int[14] = 1'b0;  // Mig request
+          m_udp_payload_axis_tdata_int[15] = 1'b1;  // Solicited Event
           m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
           m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
           m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
@@ -1285,39 +719,39 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tdata_int[111:104] = roce_immdh_data_reg[23:16];
           m_udp_payload_axis_tdata_int[119:112] = roce_immdh_data_reg[15:8];
           m_udp_payload_axis_tdata_int[127:120] = roce_immdh_data_reg[7:0];
-          m_udp_payload_axis_tdata_int[511:96] = shift_roce_payload_axis_tdata[511:128];
-          m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:16], 16'hFFFF};
+          m_udp_payload_axis_tdata_int[511:128] = shift_roce_payload_128_axis_tdata[511:128];
+          m_udp_payload_axis_tkeep_int = {shift_roce_payload_128_axis_tkeep[63:16], 16'hFFFF};
 
-          roce_header_length_bits_int = 9'd128;
+          roce_header_length_bits_next = 9'd128;
 
           s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
           word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
               16'd8;  // udp hdr
 
-          if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
+          if (s_udp_length <= 16'd72) begin // full frame (64 bytes) + udp header length (8 bytes) 
             // have entire payload
             //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_128_axis_tlast) begin
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               m_udp_payload_axis_tlast_int = 1'b1;
               s_roce_payload_axis_tready_next = 1'b0;
               state_next = STATE_IDLE;
             end else begin
               store_last_word = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_128_s_tready;
               m_udp_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              state_next = STATE_WRITE_PAYLOAD_128_LAST;
             end
           end else begin
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_128_axis_tlast) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_128_s_tready;
               m_udp_payload_axis_tuser_int = 1'b1;
               state_next = STATE_WAIT_LAST;
             end else begin
-              state_next = STATE_WRITE_PAYLOAD;
+              state_next = STATE_WRITE_PAYLOAD_128;
             end
           end
         end else begin
@@ -1325,7 +759,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         end
       end
       STATE_WRITE_BTH_RETH: begin
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_224_s_tready;
         //s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
         // write bth and reth state
         //if (m_udp_payload_axis_tready_int_reg ) begin
@@ -1334,10 +768,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           transfer_in_save = 1'b1;
           m_udp_payload_axis_tvalid_int = 1'b1;
           m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-          m_udp_payload_axis_tdata_int[8] = 1'b0;  // Solicited Event
-          m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-          m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-          m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[11:8] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[13:12] = 2'b0;  // Pad count
+          m_udp_payload_axis_tdata_int[14] = 1'b0;  // Mig request
+          m_udp_payload_axis_tdata_int[15] = 1'b0;  // Solicited Event
           m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
           m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
           m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
@@ -1365,39 +799,39 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tdata_int[207:200] = roce_reth_length_reg[23:16];
           m_udp_payload_axis_tdata_int[215:208] = roce_reth_length_reg[15:8];
           m_udp_payload_axis_tdata_int[223:216] = roce_reth_length_reg[7:0];
-          m_udp_payload_axis_tdata_int[511:224] = shift_roce_payload_axis_tdata[511:224];
-          m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:28], 28'hFFFFFFF};
+          m_udp_payload_axis_tdata_int[511:224] = shift_roce_payload_224_axis_tdata[511:224];
+          m_udp_payload_axis_tkeep_int = {shift_roce_payload_224_axis_tkeep[63:28], 28'hFFFFFFF};
 
-          roce_header_length_bits_int = 9'd224;
+          roce_header_length_bits_next = 9'd224;
 
           s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
           word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
               16'd8;  // udp hdr
 
-          if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
+          if (s_udp_length <= 16'd72) begin // full frame (64 bytes) + udp header length (8 bytes) 
             // have entire payload
             //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_224_axis_tlast) begin
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               s_roce_payload_axis_tready_next = 1'b0;
               m_udp_payload_axis_tlast_int = 1'b1;
               state_next = STATE_IDLE;
             end else begin
               store_last_word = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_224_s_tready;
               m_udp_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              state_next = STATE_WRITE_PAYLOAD_224_LAST;
             end
           end else begin
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_224_axis_tlast) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_224_s_tready;
               m_udp_payload_axis_tuser_int = 1'b1;
               state_next = STATE_WAIT_LAST;
             end else begin
-              state_next = STATE_WRITE_PAYLOAD;
+              state_next = STATE_WRITE_PAYLOAD_224;
             end
           end
         end else begin
@@ -1405,7 +839,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
         end
       end
       STATE_WRITE_BTH_RETH_IMMDH: begin
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_256_s_tready;
         //s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
         // write bth and reth state
         //if (m_udp_payload_axis_tready_int_reg ) begin
@@ -1414,10 +848,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           transfer_in_save = 1'b1;
           m_udp_payload_axis_tvalid_int = 1'b1;
           m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-          m_udp_payload_axis_tdata_int[8] = 1'b1;  // Solicited Event
-          m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-          m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-          m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[11:8] = 4'b0;  // Header version
+          m_udp_payload_axis_tdata_int[13:12] = 2'b0;  // Pad count
+          m_udp_payload_axis_tdata_int[14] = 1'b0;  // Mig request
+          m_udp_payload_axis_tdata_int[15] = 1'b1;  // Solicited Event
           m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
           m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
           m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
@@ -1449,80 +883,84 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tdata_int[239:232] = roce_immdh_data_reg[23:16];
           m_udp_payload_axis_tdata_int[247:240] = roce_immdh_data_reg[15:8];
           m_udp_payload_axis_tdata_int[255:248] = roce_immdh_data_reg[7:0];
-          m_udp_payload_axis_tdata_int[511:256] = shift_roce_payload_axis_tdata[511:256];
-          m_udp_payload_axis_tkeep_int = {shift_roce_payload_axis_tkeep[63:32], 32'hFFFFFFFF};
+          m_udp_payload_axis_tdata_int[511:256] = shift_roce_payload_256_axis_tdata[511:256];
+          m_udp_payload_axis_tkeep_int = {shift_roce_payload_256_axis_tkeep[63:32], 32'hFFFFFFFF};
 
-          roce_header_length_bits_int = 9'd256;
+          roce_header_length_bits_next = 9'd256;
 
           s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
           word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
               16'd8;  // udp hdr
 
-          if (s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) <= 16'd8) begin
+          if (s_udp_length <= 16'd72) begin // full frame (64 bytes) + udp header length (8 bytes) 
             // have entire payload
             //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_256_axis_tlast) begin
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               s_roce_payload_axis_tready_next = 1'b0;
               m_udp_payload_axis_tlast_int = 1'b1;
               state_next = STATE_IDLE;
             end else begin
               store_last_word = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_256_s_tready;
               m_udp_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              state_next = STATE_WRITE_PAYLOAD_256_LAST;
             end
           end else begin
-            if (shift_roce_payload_axis_tlast) begin
+            if (shift_roce_payload_256_axis_tlast) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
-              s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+              s_roce_payload_axis_tready_next = shift_roce_payload_256_s_tready;
               m_udp_payload_axis_tuser_int = 1'b1;
               state_next = STATE_WAIT_LAST;
             end else begin
-              state_next = STATE_WRITE_PAYLOAD;
+              state_next = STATE_WRITE_PAYLOAD_256;
             end
           end
         end else begin
           state_next = STATE_WRITE_BTH_RETH_IMMDH;
         end
       end
-      STATE_WRITE_PAYLOAD: begin
+      STATE_WRITE_PAYLOAD_96: begin
         // write payload
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_96_s_tready;
 
-        m_udp_payload_axis_tdata_int = shift_roce_payload_axis_tdata;
-        m_udp_payload_axis_tkeep_int = shift_roce_payload_axis_tkeep;
-        m_udp_payload_axis_tlast_int = shift_roce_payload_axis_tlast;
-        m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
+        m_udp_payload_axis_tdata_int = shift_roce_payload_96_axis_tdata;
+        m_udp_payload_axis_tkeep_int = shift_roce_payload_96_axis_tkeep;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_96_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_96_axis_tuser;
+
 
         store_last_word = 1'b1;
 
-        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_96_axis_tvalid) begin
           // word transfer through
           word_count_next = word_count_reg - 16'd64;
           transfer_in_save = 1'b1;
           m_udp_payload_axis_tvalid_int = 1'b1;
           if (word_count_reg - keep2count(m_udp_payload_axis_tkeep_int) == 16'd0) begin
+            //if (word_count_reg  <= 16'd64) begin
             // have entire payload
-            m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
-            if (shift_roce_payload_axis_tlast) begin
-              if (keep2count(shift_roce_payload_axis_tkeep) < word_count_reg[6:0]) begin
+            //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
+            if (m_udp_payload_axis_tlast_int) begin
+              /*
+              if (keep2count(m_udp_payload_axis_tkeep_int) < word_count_reg[6:0]) begin
                 // end of frame, but length does not match
                 error_payload_early_termination_next = 1'b1;
                 m_udp_payload_axis_tuser_int = 1'b1;
               end
+              */
               s_roce_payload_axis_tready_next = 1'b0;
               flush_save = 1'b1;
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               state_next = STATE_IDLE;
             end else begin
               m_udp_payload_axis_tvalid_int = 1'b0;
-              state_next = STATE_WRITE_PAYLOAD_LAST;
+              state_next = STATE_WRITE_PAYLOAD_96_LAST;
             end
           end else begin
-            if (shift_roce_payload_axis_tlast) begin
+            if (m_udp_payload_axis_tlast_int) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
               m_udp_payload_axis_tuser_int = 1'b1;
@@ -1531,43 +969,286 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
               s_roce_bth_ready_next = !m_udp_hdr_valid_next;
               state_next = STATE_IDLE;
             end else begin
-              state_next = STATE_WRITE_PAYLOAD;
+              state_next = STATE_WRITE_PAYLOAD_96;
             end
           end
         end else begin
-          state_next = STATE_WRITE_PAYLOAD;
+          state_next = STATE_WRITE_PAYLOAD_96;
         end
       end
-      STATE_WRITE_PAYLOAD_LAST: begin
+      STATE_WRITE_PAYLOAD_96_LAST: begin
         // read and discard until end of frame
-        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_96_s_tready;
 
         m_udp_payload_axis_tdata_int = last_word_data_reg;
         m_udp_payload_axis_tkeep_int = last_word_keep_reg;
-        m_udp_payload_axis_tlast_int = shift_roce_payload_axis_tlast;
-        m_udp_payload_axis_tuser_int = shift_roce_payload_axis_tuser;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_96_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_96_axis_tuser;
 
-        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_axis_tvalid) begin
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_96_axis_tvalid) begin
           transfer_in_save = 1'b1;
-          if (shift_roce_payload_axis_tlast) begin
+          if (m_udp_payload_axis_tlast_int) begin
             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
             s_roce_payload_axis_tready_next = 1'b0;
             m_udp_payload_axis_tvalid_int = 1'b1;
             state_next = STATE_IDLE;
           end else begin
-            state_next = STATE_WRITE_PAYLOAD_LAST;
+            state_next = STATE_WRITE_PAYLOAD_96_LAST;
           end
         end else begin
-          state_next = STATE_WRITE_PAYLOAD_LAST;
+          state_next = STATE_WRITE_PAYLOAD_96_LAST;
+        end
+      end
+      STATE_WRITE_PAYLOAD_128: begin
+        // write payload
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_128_s_tready;
+
+        m_udp_payload_axis_tdata_int = shift_roce_payload_128_axis_tdata;
+        m_udp_payload_axis_tkeep_int = shift_roce_payload_128_axis_tkeep;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_128_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_128_axis_tuser;
+
+
+        store_last_word = 1'b1;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_128_axis_tvalid) begin
+          // word transfer through
+          word_count_next = word_count_reg - 16'd64;
+          transfer_in_save = 1'b1;
+          m_udp_payload_axis_tvalid_int = 1'b1;
+          if (word_count_reg - keep2count(m_udp_payload_axis_tkeep_int) == 16'd0) begin
+            //if (word_count_reg  <= 16'd64) begin
+            // have entire payload
+            //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
+            if (m_udp_payload_axis_tlast_int) begin
+              /*
+              if (keep2count(m_udp_payload_axis_tkeep_int) < word_count_reg[6:0]) begin
+                // end of frame, but length does not match
+                error_payload_early_termination_next = 1'b1;
+                m_udp_payload_axis_tuser_int = 1'b1;
+              end
+              */
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              m_udp_payload_axis_tvalid_int = 1'b0;
+              state_next = STATE_WRITE_PAYLOAD_128_LAST;
+            end
+          end else begin
+            if (m_udp_payload_axis_tlast_int) begin
+              // end of frame, but length does not match
+              error_payload_early_termination_next = 1'b1;
+              m_udp_payload_axis_tuser_int = 1'b1;
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              state_next = STATE_WRITE_PAYLOAD_128;
+            end
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_128;
+        end
+      end
+      STATE_WRITE_PAYLOAD_128_LAST: begin
+        // read and discard until end of frame
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_128_s_tready;
+
+        m_udp_payload_axis_tdata_int = last_word_data_reg;
+        m_udp_payload_axis_tkeep_int = last_word_keep_reg;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_128_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_128_axis_tuser;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_128_axis_tvalid) begin
+          transfer_in_save = 1'b1;
+          if (m_udp_payload_axis_tlast_int) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            m_udp_payload_axis_tvalid_int = 1'b1;
+            state_next = STATE_IDLE;
+          end else begin
+            state_next = STATE_WRITE_PAYLOAD_128_LAST;
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_128_LAST;
+        end
+      end
+      STATE_WRITE_PAYLOAD_224: begin
+        // write payload
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_224_s_tready;
+
+        m_udp_payload_axis_tdata_int = shift_roce_payload_224_axis_tdata;
+        m_udp_payload_axis_tkeep_int = shift_roce_payload_224_axis_tkeep;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_224_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_224_axis_tuser;
+
+
+        store_last_word = 1'b1;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_224_axis_tvalid) begin
+          // word transfer through
+          word_count_next = word_count_reg - 16'd64;
+          transfer_in_save = 1'b1;
+          m_udp_payload_axis_tvalid_int = 1'b1;
+          if (word_count_reg - keep2count(m_udp_payload_axis_tkeep_int) == 16'd0) begin
+            //if (word_count_reg  <= 16'd64) begin
+            // have entire payload
+            //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
+            if (m_udp_payload_axis_tlast_int) begin
+              /*
+              if (keep2count(m_udp_payload_axis_tkeep_int) < word_count_reg[6:0]) begin
+                // end of frame, but length does not match
+                error_payload_early_termination_next = 1'b1;
+                m_udp_payload_axis_tuser_int = 1'b1;
+              end
+              */
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              m_udp_payload_axis_tvalid_int = 1'b0;
+              state_next = STATE_WRITE_PAYLOAD_224_LAST;
+            end
+          end else begin
+            if (m_udp_payload_axis_tlast_int) begin
+              // end of frame, but length does not match
+              error_payload_early_termination_next = 1'b1;
+              m_udp_payload_axis_tuser_int = 1'b1;
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              state_next = STATE_WRITE_PAYLOAD_224;
+            end
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_224;
+        end
+      end
+      STATE_WRITE_PAYLOAD_224_LAST: begin
+        // read and discard until end of frame
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_224_s_tready;
+
+        m_udp_payload_axis_tdata_int = last_word_data_reg;
+        m_udp_payload_axis_tkeep_int = last_word_keep_reg;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_224_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_224_axis_tuser;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_224_axis_tvalid) begin
+          transfer_in_save = 1'b1;
+          if (m_udp_payload_axis_tlast_int) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            m_udp_payload_axis_tvalid_int = 1'b1;
+            state_next = STATE_IDLE;
+          end else begin
+            state_next = STATE_WRITE_PAYLOAD_224_LAST;
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_224_LAST;
+        end
+      end
+      STATE_WRITE_PAYLOAD_256: begin
+        // write payload
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_256_s_tready;
+
+        m_udp_payload_axis_tdata_int = shift_roce_payload_256_axis_tdata;
+        m_udp_payload_axis_tkeep_int = shift_roce_payload_256_axis_tkeep;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_256_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_256_axis_tuser;
+
+
+        store_last_word = 1'b1;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_256_axis_tvalid) begin
+          // word transfer through
+          word_count_next = word_count_reg - 16'd64;
+          transfer_in_save = 1'b1;
+          m_udp_payload_axis_tvalid_int = 1'b1;
+          if (word_count_reg - keep2count(m_udp_payload_axis_tkeep_int) == 16'd0) begin
+            //if (word_count_reg  <= 16'd64) begin
+            // have entire payload
+            //m_udp_payload_axis_tkeep_int = count2keep(word_count_reg);
+            if (m_udp_payload_axis_tlast_int) begin
+              /*
+              if (keep2count(m_udp_payload_axis_tkeep_int) < word_count_reg[6:0]) begin
+                // end of frame, but length does not match
+                error_payload_early_termination_next = 1'b1;
+                m_udp_payload_axis_tuser_int = 1'b1;
+              end
+              */
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              m_udp_payload_axis_tvalid_int = 1'b0;
+              state_next = STATE_WRITE_PAYLOAD_256_LAST;
+            end
+          end else begin
+            if (m_udp_payload_axis_tlast_int) begin
+              // end of frame, but length does not match
+              error_payload_early_termination_next = 1'b1;
+              m_udp_payload_axis_tuser_int = 1'b1;
+              s_roce_payload_axis_tready_next = 1'b0;
+              flush_save = 1'b1;
+              s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+              state_next = STATE_IDLE;
+            end else begin
+              state_next = STATE_WRITE_PAYLOAD_256;
+            end
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_256;
+        end
+      end
+      STATE_WRITE_PAYLOAD_256_LAST: begin
+        // read and discard until end of frame
+        s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early && shift_roce_payload_256_s_tready;
+
+        m_udp_payload_axis_tdata_int = last_word_data_reg;
+        m_udp_payload_axis_tkeep_int = last_word_keep_reg;
+        m_udp_payload_axis_tlast_int = shift_roce_payload_256_axis_tlast;
+        m_udp_payload_axis_tuser_int = shift_roce_payload_256_axis_tuser;
+
+        if (m_udp_payload_axis_tready_int_reg && shift_roce_payload_256_axis_tvalid) begin
+          transfer_in_save = 1'b1;
+          if (m_udp_payload_axis_tlast_int) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            m_udp_payload_axis_tvalid_int = 1'b1;
+            state_next = STATE_IDLE;
+          end else begin
+            state_next = STATE_WRITE_PAYLOAD_256_LAST;
+          end
+        end else begin
+          state_next = STATE_WRITE_PAYLOAD_256_LAST;
         end
       end
       STATE_WAIT_LAST: begin
         // read and discard until end of frame
-        s_roce_payload_axis_tready_next = shift_roce_payload_s_tready;
+        s_roce_payload_axis_tready_next = shift_roce_payload_96_s_tready | shift_roce_payload_128_s_tready | shift_roce_payload_224_s_tready | shift_roce_payload_256_s_tready;
 
-        if (shift_roce_payload_axis_tvalid) begin
+        if (shift_roce_payload_96_axis_tvalid | shift_roce_payload_128_axis_tvalid | shift_roce_payload_224_axis_tvalid | shift_roce_payload_256_axis_tvalid) begin
           transfer_in_save = 1'b1;
-          if (shift_roce_payload_axis_tlast) begin
+          if (shift_roce_payload_256_axis_tlast && roce_header_length_bits_reg == 9'd96) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            state_next = STATE_IDLE;
+          end else if (shift_roce_payload_128_axis_tlast && roce_header_length_bits_reg == 9'd128) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            state_next = STATE_IDLE;
+          end else if (shift_roce_payload_224_axis_tlast && roce_header_length_bits_reg == 9'd224) begin
+            s_roce_bth_ready_next = !m_udp_hdr_valid_next;
+            s_roce_payload_axis_tready_next = 1'b0;
+            state_next = STATE_IDLE;
+          end else if (shift_roce_payload_256_axis_tlast && roce_header_length_bits_reg == 9'd256) begin
             s_roce_bth_ready_next = !m_udp_hdr_valid_next;
             s_roce_payload_axis_tready_next = 1'b0;
             state_next = STATE_IDLE;
@@ -1583,43 +1264,47 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
   always @(posedge clk) begin
     if (rst) begin
-      state_reg <= STATE_IDLE;
-      s_roce_bth_ready_reg <= 1'b0;
-      s_roce_payload_axis_tready_reg <= 1'b0;
-      m_udp_hdr_valid_reg <= 1'b0;
-      save_roce_payload_axis_tlast_reg <= 1'b0;
-      shift_roce_payload_extra_cycle_reg <= 1'b0;
-      busy_reg <= 1'b0;
-      error_payload_early_termination_reg <= 1'b0;
+      state_reg                              <= STATE_IDLE;
+      s_roce_bth_ready_reg                   <= 1'b0;
+      s_roce_payload_axis_tready_reg         <= 1'b0;
+      m_udp_hdr_valid_reg                    <= 1'b0;
+      roce_header_length_bits_reg            <= 9'd0;
+      save_roce_payload_axis_tlast_reg       <= 1'b0;
+      shift_roce_payload_96_extra_cycle_reg  <= 1'b0;
+      shift_roce_payload_128_extra_cycle_reg <= 1'b0;
+      shift_roce_payload_224_extra_cycle_reg <= 1'b0;
+      shift_roce_payload_256_extra_cycle_reg <= 1'b0;
+      busy_reg                               <= 1'b0;
+      error_payload_early_termination_reg    <= 1'b0;
     end else begin
-      state_reg <= state_next;
+      state_reg                           <= state_next;
 
-      s_roce_bth_ready_reg <= s_roce_bth_ready_next;
+      s_roce_bth_ready_reg                <= s_roce_bth_ready_next;
 
-      s_roce_payload_axis_tready_reg <= s_roce_payload_axis_tready_next;
+      s_roce_payload_axis_tready_reg      <= s_roce_payload_axis_tready_next;
 
-      m_udp_hdr_valid_reg <= m_udp_hdr_valid_next;
+      m_udp_hdr_valid_reg                 <= m_udp_hdr_valid_next;
 
-      busy_reg <= state_next != STATE_IDLE;
+      roce_header_length_bits_reg         <= roce_header_length_bits_next;
+
+      busy_reg                            <= state_next != STATE_IDLE;
 
       error_payload_early_termination_reg <= error_payload_early_termination_next;
 
-      shift_roce_payload_late_header_reg <= shift_roce_payload_late_header_next;
+      shift_roce_payload_late_header_reg  <= shift_roce_payload_late_header_next;
 
       if (flush_save) begin
-        save_roce_payload_axis_tlast_reg   <= 1'b0;
-        shift_roce_payload_extra_cycle_reg <= 1'b0;
+        save_roce_payload_axis_tlast_reg       <= 1'b0;
+        shift_roce_payload_96_extra_cycle_reg  <= 1'b0;
+        shift_roce_payload_128_extra_cycle_reg <= 1'b0;
+        shift_roce_payload_224_extra_cycle_reg <= 1'b0;
+        shift_roce_payload_256_extra_cycle_reg <= 1'b0;
       end else if (transfer_in_save) begin
         save_roce_payload_axis_tlast_reg <= s_roce_payload_axis_tlast;
-        if (roce_header_length_bits_int == 96) begin
-          shift_roce_payload_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:51] != 0);
-        end else if (roce_header_length_bits_int == 128) begin
-          shift_roce_payload_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:48] != 0);
-        end else if (roce_header_length_bits_int == 224) begin
-          shift_roce_payload_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] != 0);
-        end else if (roce_header_length_bits_int == 256) begin
-          shift_roce_payload_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:32] != 0);
-        end
+        shift_roce_payload_96_extra_cycle_reg  <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:51] != 0);
+        shift_roce_payload_128_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:48] != 0);
+        shift_roce_payload_224_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:36] != 0);
+        shift_roce_payload_256_extra_cycle_reg <= s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[63:32] != 0);
       end
     end
 

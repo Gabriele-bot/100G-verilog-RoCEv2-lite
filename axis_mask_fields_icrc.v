@@ -3,34 +3,35 @@
 
 
 module axis_mask_fields_icrc #(
-    parameter DATA_WIDTH = 64
+    parameter DATA_WIDTH = 64,
+    parameter USER_WIDTH = 1
 ) (
     input wire clk,
     input wire rst,
 
     /*
-     * AXI input
-     */
+   * AXI input
+   */
     input  wire [  DATA_WIDTH - 1:0] s_axis_tdata,
     input  wire [DATA_WIDTH/8 - 1:0] s_axis_tkeep,
     input  wire                      s_axis_tvalid,
     output wire                      s_axis_tready,
     input  wire                      s_axis_tlast,
-    input  wire                      s_axis_tuser,
+    input  wire [  USER_WIDTH - 1:0] s_axis_tuser,
 
     /*
-     * AXI output masked
-     */
+   * AXI output masked
+   */
     output wire [  DATA_WIDTH - 1:0] m_axis_masked_tdata,
     output wire [DATA_WIDTH/8 - 1:0] m_axis_masked_tkeep,
     output wire                      m_axis_masked_tvalid,
     input  wire                      m_axis_masked_tready,
     output wire                      m_axis_masked_tlast,
-    output wire                      m_axis_masked_tuser,
+    output wire [  USER_WIDTH - 1:0] m_axis_masked_tuser,
 
     /*
-     * AXI output not masked (data only. Tkeep, tvalid, tready, tlast and tuser are the same as the masked stream)
-     */
+   * AXI output not masked (data only. Tkeep, tvalid, tready, tlast and tuser are the same as the masked stream)
+   */
     output wire [DATA_WIDTH - 1:0] m_axis_not_masked_tdata
 );
 
@@ -53,7 +54,7 @@ module axis_mask_fields_icrc #(
   reg                          m_axis_tvalid_int;
   reg                          m_axis_tready_int_reg = 1'b0;
   reg                          m_axis_tlast_int;
-  reg                          m_axis_tuser_int;
+  reg     [  USER_WIDTH - 1:0] m_axis_tuser_int;
   wire                         m_axis_tready_int_early;
 
   reg     [  DATA_WIDTH - 1:0] m_axis_not_masked_tdata_int;
@@ -110,7 +111,7 @@ module axis_mask_fields_icrc #(
   reg [DATA_WIDTH / 8 -1:0] m_axis_tkeep_reg = 8'd0;
   reg m_axis_tvalid_reg = 1'b0, m_axis_tvalid_next;
   reg                       m_axis_tlast_reg = 1'b0;
-  reg                       m_axis_tuser_reg = 1'b0;
+  reg [  USER_WIDTH - 1:0]  m_axis_tuser_reg = {USER_WIDTH{1'b0}};
 
   reg [   DATA_WIDTH - 1:0] m_axis_not_masked_tdata_reg = 64'd0;
 
@@ -118,7 +119,7 @@ module axis_mask_fields_icrc #(
   reg [DATA_WIDTH / 8 -1:0] temp_m_axis_tkeep_reg = 8'd0;
   reg temp_m_axis_tvalid_reg = 1'b0, temp_m_axis_tvalid_next;
   reg temp_m_axis_tlast_reg = 1'b0;
-  reg temp_m_axis_tuser_reg = 1'b0;
+  reg [   USER_WIDTH - 1:0] temp_m_axis_tuser_reg = {USER_WIDTH{1'b0}};
 
   reg [   DATA_WIDTH - 1:0] temp_m_axis_not_masked_tdata_reg = 64'd0;
 

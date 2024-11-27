@@ -2,11 +2,13 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 
-module RoCE_minimal_stack_512 (
-    input wire clk,
-    input wire rst,
+module RoCE_minimal_stack_512 #(
+  parameter DEBUG = 0
+) (
+  input wire clk,
+  input wire rst,
 
-    /*
+  /*
      * Configuration parameter
      
     input wire [31:0] dma_transfer_length,
@@ -19,81 +21,81 @@ module RoCE_minimal_stack_512 (
     input wire start_transfer,
     */
 
-    /*
-     * UDP frame input
-     */
-    input  wire         s_udp_hdr_valid,
-    output wire         s_udp_hdr_ready,
-    input  wire [ 47:0] s_eth_dest_mac,
-    input  wire [ 47:0] s_eth_src_mac,
-    input  wire [ 15:0] s_eth_type,
-    input  wire [  3:0] s_ip_version,
-    input  wire [  3:0] s_ip_ihl,
-    input  wire [  5:0] s_ip_dscp,
-    input  wire [  1:0] s_ip_ecn,
-    input  wire [ 15:0] s_ip_length,
-    input  wire [ 15:0] s_ip_identification,
-    input  wire [  2:0] s_ip_flags,
-    input  wire [ 12:0] s_ip_fragment_offset,
-    input  wire [  7:0] s_ip_ttl,
-    input  wire [  7:0] s_ip_protocol,
-    input  wire [ 15:0] s_ip_header_checksum,
-    input  wire [ 31:0] s_ip_source_ip,
-    input  wire [ 31:0] s_ip_dest_ip,
-    input  wire [ 15:0] s_udp_source_port,
-    input  wire [ 15:0] s_udp_dest_port,
-    input  wire [ 15:0] s_udp_length,
-    input  wire [ 15:0] s_udp_checksum,
-    input  wire [ 31:0] s_roce_computed_icrc,
-    input  wire [511:0] s_udp_payload_axis_tdata,
-    input  wire [ 63:0] s_udp_payload_axis_tkeep,
-    input  wire         s_udp_payload_axis_tvalid,
-    output wire         s_udp_payload_axis_tready,
-    input  wire         s_udp_payload_axis_tlast,
-    input  wire         s_udp_payload_axis_tuser,
+  /*
+   * UDP frame input
+   */
+  input  wire         s_udp_hdr_valid,
+  output wire         s_udp_hdr_ready,
+  input  wire [ 47:0] s_eth_dest_mac,
+  input  wire [ 47:0] s_eth_src_mac,
+  input  wire [ 15:0] s_eth_type,
+  input  wire [  3:0] s_ip_version,
+  input  wire [  3:0] s_ip_ihl,
+  input  wire [  5:0] s_ip_dscp,
+  input  wire [  1:0] s_ip_ecn,
+  input  wire [ 15:0] s_ip_length,
+  input  wire [ 15:0] s_ip_identification,
+  input  wire [  2:0] s_ip_flags,
+  input  wire [ 12:0] s_ip_fragment_offset,
+  input  wire [  7:0] s_ip_ttl,
+  input  wire [  7:0] s_ip_protocol,
+  input  wire [ 15:0] s_ip_header_checksum,
+  input  wire [ 31:0] s_ip_source_ip,
+  input  wire [ 31:0] s_ip_dest_ip,
+  input  wire [ 15:0] s_udp_source_port,
+  input  wire [ 15:0] s_udp_dest_port,
+  input  wire [ 15:0] s_udp_length,
+  input  wire [ 15:0] s_udp_checksum,
+  input  wire [ 31:0] s_roce_computed_icrc,
+  input  wire [511:0] s_udp_payload_axis_tdata,
+  input  wire [ 63:0] s_udp_payload_axis_tkeep,
+  input  wire         s_udp_payload_axis_tvalid,
+  output wire         s_udp_payload_axis_tready,
+  input  wire         s_udp_payload_axis_tlast,
+  input  wire         s_udp_payload_axis_tuser,
 
-    /*
-     * UDP frame output
-     */
-    output wire         m_udp_hdr_valid,
-    input  wire         m_udp_hdr_ready,
-    output wire [ 47:0] m_eth_dest_mac,
-    output wire [ 47:0] m_eth_src_mac,
-    output wire [ 15:0] m_eth_type,
-    output wire [  3:0] m_ip_version,
-    output wire [  3:0] m_ip_ihl,
-    output wire [  5:0] m_ip_dscp,
-    output wire [  1:0] m_ip_ecn,
-    output wire [ 15:0] m_ip_length,
-    output wire [ 15:0] m_ip_identification,
-    output wire [  2:0] m_ip_flags,
-    output wire [ 12:0] m_ip_fragment_offset,
-    output wire [  7:0] m_ip_ttl,
-    output wire [  7:0] m_ip_protocol,
-    output wire [ 15:0] m_ip_header_checksum,
-    output wire [ 31:0] m_ip_source_ip,
-    output wire [ 31:0] m_ip_dest_ip,
-    output wire [ 15:0] m_udp_source_port,
-    output wire [ 15:0] m_udp_dest_port,
-    output wire [ 15:0] m_udp_length,
-    output wire [ 15:0] m_udp_checksum,
-    output wire [511:0] m_udp_payload_axis_tdata,
-    output wire [ 63:0] m_udp_payload_axis_tkeep,
-    output wire         m_udp_payload_axis_tvalid,
-    input  wire         m_udp_payload_axis_tready,
-    output wire         m_udp_payload_axis_tlast,
-    output wire         m_udp_payload_axis_tuser,
-    /*
-     * Status signals
-     */
-    output wire         busy,
-    output wire         error_payload_early_termination,
-    /*
-     * Configuration
-     */
-    input  wire [ 12:0] pmtu,
-    input  wire [ 15:0] RoCE_udp_port,
-    input  wire [ 31:0] loc_ip_addr
+  /*
+   * UDP frame output
+   */
+  output wire         m_udp_hdr_valid,
+  input  wire         m_udp_hdr_ready,
+  output wire [ 47:0] m_eth_dest_mac,
+  output wire [ 47:0] m_eth_src_mac,
+  output wire [ 15:0] m_eth_type,
+  output wire [  3:0] m_ip_version,
+  output wire [  3:0] m_ip_ihl,
+  output wire [  5:0] m_ip_dscp,
+  output wire [  1:0] m_ip_ecn,
+  output wire [ 15:0] m_ip_length,
+  output wire [ 15:0] m_ip_identification,
+  output wire [  2:0] m_ip_flags,
+  output wire [ 12:0] m_ip_fragment_offset,
+  output wire [  7:0] m_ip_ttl,
+  output wire [  7:0] m_ip_protocol,
+  output wire [ 15:0] m_ip_header_checksum,
+  output wire [ 31:0] m_ip_source_ip,
+  output wire [ 31:0] m_ip_dest_ip,
+  output wire [ 15:0] m_udp_source_port,
+  output wire [ 15:0] m_udp_dest_port,
+  output wire [ 15:0] m_udp_length,
+  output wire [ 15:0] m_udp_checksum,
+  output wire [511:0] m_udp_payload_axis_tdata,
+  output wire [ 63:0] m_udp_payload_axis_tkeep,
+  output wire         m_udp_payload_axis_tvalid,
+  input  wire         m_udp_payload_axis_tready,
+  output wire         m_udp_payload_axis_tlast,
+  output wire         m_udp_payload_axis_tuser,
+  /*
+   * Status signals
+   */
+  output wire         busy,
+  output wire         error_payload_early_termination,
+  /*
+   * Configuration
+   */
+  input  wire [ 12:0] pmtu,
+  input  wire [ 15:0] RoCE_udp_port,
+  input  wire [ 31:0] loc_ip_addr
 
 );
 
@@ -102,8 +104,8 @@ module RoCE_minimal_stack_512 (
   reg start_2;
 
   // UDP frame connections to CM                
-  wire rx_udp_cm_hdr_valid;
-  wire rx_udp_cm_hdr_ready;
+  wire        rx_udp_cm_hdr_valid;
+  wire        rx_udp_cm_hdr_ready;
   wire [47:0] rx_udp_cm_eth_dest_mac;
   wire [47:0] rx_udp_cm_eth_src_mac;
   wire [15:0] rx_udp_cm_eth_type;
@@ -266,7 +268,7 @@ module RoCE_minimal_stack_512 (
 
   reg [23:0] last_acked_psn_reg;
 
-  wire [31:0] n_transfers;
+  wire [31:0] n_transfers = 32'd20;
 
   reg [31:0] sent_messages = 32'd0;
 
@@ -290,7 +292,13 @@ module RoCE_minimal_stack_512 (
   wire [31:0] qp_curr_rem_ip_addr;
   wire start_transfer_wire;
 
+  reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
+  wire s_dma_meta_valid;
+  wire s_dma_meta_ready;
+
   wire metadata_valid;
+
+  assign s_dma_meta_valid = s_dma_meta_valid_reg;
 
   function [15:0] keep2count;
     input [63:0] k;
@@ -444,6 +452,7 @@ module RoCE_minimal_stack_512 (
     if (rst) begin
       word_counter   <= {64{1'b1}} - 64;
       dma_length_reg <= 32'd0;
+      remaining_words <= 64'd0;
     end else begin
       start_1 <= start_transfer_wire;
       start_2 <= start_1;
@@ -451,13 +460,15 @@ module RoCE_minimal_stack_512 (
         if ((word_counter <= qp_init_dma_transfer_length)) begin
           word_counter <= word_counter + 64;
         end
+        remaining_words <= dma_length_reg - word_counter - 64'd64;
       end else if (~start_1 && start_transfer_wire) begin
         dma_length_reg <= qp_init_dma_transfer_length;
-        word_counter   <= {64{1'b1}} - 64;
+        word_counter <= {64{1'b1}} - 64;
+        remaining_words <= qp_init_dma_transfer_length;
       end else if (~start_2 && start_1) begin
         word_counter <= 0;
+        remaining_words <= dma_length_reg;
       end
-      remaining_words <= dma_length_reg - word_counter;
     end
   end
 
@@ -465,9 +476,9 @@ module RoCE_minimal_stack_512 (
   assign s_payload_axis_tdata[63:32] = ~word_counter[31:0];
   assign s_payload_axis_tdata[511:64] = {14{32'hDEADBEEF}};
   assign s_payload_axis_tkeep = s_payload_axis_tlast ? ((count2keep(
-      remaining_words
+    remaining_words
   ) == 7'd0) ? {64{1'b1}} : count2keep(
-      remaining_words
+    remaining_words
   )) : {64{1'b1}};
   assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
   assign s_payload_axis_tlast = (word_counter + 64 >= dma_length_reg) ? 1'b1 : 1'b0;
@@ -480,7 +491,7 @@ module RoCE_minimal_stack_512 (
     end else begin
       if (s_udp_payload_axis_tvalid) begin
         if ((!s_select_udp_reg && !s_select_roce_reg) ||
-                (s_udp_payload_axis_tvalid && s_udp_payload_axis_tready && s_udp_payload_axis_tlast)) begin
+        (s_udp_payload_axis_tvalid && s_udp_payload_axis_tready && s_udp_payload_axis_tlast)) begin
           s_select_udp_reg  <= s_select_udp;
           s_select_roce_reg <= s_select_roce;
         end
@@ -551,366 +562,388 @@ module RoCE_minimal_stack_512 (
   (s_select_roce_reg && rx_udp_RoCE_payload_axis_tready);
 
   axis_fifo #(
-      .DEPTH(1024),
-      .DATA_WIDTH(512),
-      .KEEP_ENABLE(1),
-      .KEEP_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .FRAME_FIFO(0)
+    .DEPTH(1024),
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .FRAME_FIFO(0)
   ) input_axis_fifo (
-      .clk(clk),
-      .rst(rst),
+    .clk(clk),
+    .rst(rst),
 
-      // AXI input
-      .s_axis_tdata(s_payload_axis_tdata),
-      .s_axis_tkeep(s_payload_axis_tkeep),
-      .s_axis_tvalid(s_payload_axis_tvalid),
-      .s_axis_tready(s_payload_axis_tready),
-      .s_axis_tlast(s_payload_axis_tlast),
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      .s_axis_tuser(s_payload_axis_tuser),
+    // AXI input
+    .s_axis_tdata(s_payload_axis_tdata),
+    .s_axis_tkeep(s_payload_axis_tkeep),
+    .s_axis_tvalid(s_payload_axis_tvalid),
+    .s_axis_tready(s_payload_axis_tready),
+    .s_axis_tlast(s_payload_axis_tlast),
+    .s_axis_tid(0),
+    .s_axis_tdest(0),
+    .s_axis_tuser(s_payload_axis_tuser),
 
-      // AXI output
-      .m_axis_tdata(s_payload_fifo_axis_tdata),
-      .m_axis_tkeep(s_payload_fifo_axis_tkeep),
-      .m_axis_tvalid(s_payload_fifo_axis_tvalid),
-      .m_axis_tready(s_payload_fifo_axis_tready),
-      .m_axis_tlast(s_payload_fifo_axis_tlast),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      .m_axis_tuser(s_payload_fifo_axis_tuser),
+    // AXI output
+    .m_axis_tdata(s_payload_fifo_axis_tdata),
+    .m_axis_tkeep(s_payload_fifo_axis_tkeep),
+    .m_axis_tvalid(s_payload_fifo_axis_tvalid),
+    .m_axis_tready(s_payload_fifo_axis_tready),
+    .m_axis_tlast(s_payload_fifo_axis_tlast),
+    .m_axis_tid(),
+    .m_axis_tdest(),
+    .m_axis_tuser(s_payload_fifo_axis_tuser),
 
-      // Status
-      .status_overflow  (),
-      .status_bad_frame (),
-      .status_good_frame()
+    // Status
+    .status_overflow  (),
+    .status_bad_frame (),
+    .status_good_frame()
   );
 
-  Roce_tx_header_producer #(
-      .DATA_WIDTH(512)
+  RoCE_tx_header_producer #(
+    .DATA_WIDTH(512)
   ) Roce_tx_header_producer_instance (
-      .clk                       (clk),
-      .rst                       (rst),
-      .s_dma_length              (qp_curr_dma_transfer_length),
-      .s_rem_qpn                 (qp_curr_rem_qpn),
-      .s_rem_psn                 (qp_curr_rem_psn),
-      .s_r_key                   (qp_curr_r_key),
-      .s_rem_ip_addr             (qp_curr_rem_ip_addr),
-      .s_rem_addr                (qp_curr_rem_addr),
-      .s_is_immediate            (1'b0),
-      .s_axis_tdata              (s_payload_fifo_axis_tdata),
-      .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
-      .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
-      .s_axis_tready             (s_payload_fifo_axis_tready),
-      .s_axis_tlast              (s_payload_fifo_axis_tlast),
-      .s_axis_tuser              (s_payload_fifo_axis_tuser),
-      .m_roce_bth_valid          (roce_bth_valid),
-      .m_roce_bth_ready          (roce_bth_ready),
-      .m_roce_bth_op_code        (roce_bth_op_code),
-      .m_roce_bth_p_key          (roce_bth_p_key),
-      .m_roce_bth_psn            (roce_bth_psn),
-      .m_roce_bth_dest_qp        (roce_bth_dest_qp),
-      .m_roce_bth_ack_req        (roce_bth_ack_req),
-      .m_roce_reth_valid         (roce_reth_valid),
-      .m_roce_reth_ready         (roce_reth_ready),
-      .m_roce_reth_v_addr        (roce_reth_v_addr),
-      .m_roce_reth_r_key         (roce_reth_r_key),
-      .m_roce_reth_length        (roce_reth_length),
-      .m_roce_immdh_valid        (roce_immdh_valid),
-      .m_roce_immdh_ready        (roce_immdh_ready),
-      .m_roce_immdh_data         (roce_immdh_data),
-      .m_eth_dest_mac            (eth_dest_mac),
-      .m_eth_src_mac             (eth_src_mac),
-      .m_eth_type                (eth_type),
-      .m_ip_version              (ip_version),
-      .m_ip_ihl                  (ip_ihl),
-      .m_ip_dscp                 (ip_dscp),
-      .m_ip_ecn                  (ip_ecn),
-      .m_ip_identification       (ip_identification),
-      .m_ip_flags                (ip_flags),
-      .m_ip_fragment_offset      (ip_fragment_offset),
-      .m_ip_ttl                  (ip_ttl),
-      .m_ip_protocol             (ip_protocol),
-      .m_ip_header_checksum      (ip_header_checksum),
-      .m_ip_source_ip            (ip_source_ip),
-      .m_ip_dest_ip              (ip_dest_ip),
-      .m_udp_source_port         (udp_source_port),
-      .m_udp_dest_port           (udp_dest_port),
-      .m_udp_length              (udp_length),
-      .m_udp_checksum            (udp_checksum),
-      .m_roce_payload_axis_tdata (m_roce_payload_axis_tdata),
-      .m_roce_payload_axis_tkeep (m_roce_payload_axis_tkeep),
-      .m_roce_payload_axis_tvalid(m_roce_payload_axis_tvalid),
-      .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
-      .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
-      .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
-      .pmtu                      (pmtu),
-      .RoCE_udp_port             (RoCE_udp_port),
-      .loc_ip_addr               (loc_ip_addr)
+    .clk                       (clk),
+    .rst                       (rst),
+    .s_dma_meta_valid          (s_dma_meta_valid),
+    .s_dma_meta_ready          (s_dma_meta_ready),
+    .s_dma_length              (qp_curr_dma_transfer_length),
+    .s_rem_qpn                 (qp_curr_rem_qpn),
+    .s_rem_psn                 (qp_curr_rem_psn),
+    .s_r_key                   (qp_curr_r_key),
+    .s_rem_ip_addr             (qp_curr_rem_ip_addr),
+    .s_rem_addr                (qp_curr_rem_addr),
+    .s_is_immediate            (1'b0),
+    .s_axis_tdata              (s_payload_fifo_axis_tdata),
+    .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
+    .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
+    .s_axis_tready             (s_payload_fifo_axis_tready),
+    .s_axis_tlast              (s_payload_fifo_axis_tlast),
+    .s_axis_tuser              (s_payload_fifo_axis_tuser),
+    .m_roce_bth_valid          (roce_bth_valid),
+    .m_roce_bth_ready          (roce_bth_ready),
+    .m_roce_bth_op_code        (roce_bth_op_code),
+    .m_roce_bth_p_key          (roce_bth_p_key),
+    .m_roce_bth_psn            (roce_bth_psn),
+    .m_roce_bth_dest_qp        (roce_bth_dest_qp),
+    .m_roce_bth_ack_req        (roce_bth_ack_req),
+    .m_roce_reth_valid         (roce_reth_valid),
+    .m_roce_reth_ready         (roce_reth_ready),
+    .m_roce_reth_v_addr        (roce_reth_v_addr),
+    .m_roce_reth_r_key         (roce_reth_r_key),
+    .m_roce_reth_length        (roce_reth_length),
+    .m_roce_immdh_valid        (roce_immdh_valid),
+    .m_roce_immdh_ready        (roce_immdh_ready),
+    .m_roce_immdh_data         (roce_immdh_data),
+    .m_eth_dest_mac            (eth_dest_mac),
+    .m_eth_src_mac             (eth_src_mac),
+    .m_eth_type                (eth_type),
+    .m_ip_version              (ip_version),
+    .m_ip_ihl                  (ip_ihl),
+    .m_ip_dscp                 (ip_dscp),
+    .m_ip_ecn                  (ip_ecn),
+    .m_ip_identification       (ip_identification),
+    .m_ip_flags                (ip_flags),
+    .m_ip_fragment_offset      (ip_fragment_offset),
+    .m_ip_ttl                  (ip_ttl),
+    .m_ip_protocol             (ip_protocol),
+    .m_ip_header_checksum      (ip_header_checksum),
+    .m_ip_source_ip            (ip_source_ip),
+    .m_ip_dest_ip              (ip_dest_ip),
+    .m_udp_source_port         (udp_source_port),
+    .m_udp_dest_port           (udp_dest_port),
+    .m_udp_length              (udp_length),
+    .m_udp_checksum            (udp_checksum),
+    .m_roce_payload_axis_tdata (m_roce_payload_axis_tdata),
+    .m_roce_payload_axis_tkeep (m_roce_payload_axis_tkeep),
+    .m_roce_payload_axis_tvalid(m_roce_payload_axis_tvalid),
+    .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
+    .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
+    .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
+    .pmtu                      (pmtu),
+    .RoCE_udp_port             (RoCE_udp_port),
+    .loc_ip_addr               (loc_ip_addr)
   );
 
   RoCE_udp_tx_512 RoCE_udp_tx_512_instance (
-      .clk                            (clk),
-      .rst                            (rst),
-      .s_roce_bth_valid               (roce_bth_valid),
-      .s_roce_bth_ready               (roce_bth_ready),
-      .s_roce_bth_op_code             (roce_bth_op_code),
-      .s_roce_bth_p_key               (roce_bth_p_key),
-      .s_roce_bth_psn                 (roce_bth_psn),
-      .s_roce_bth_dest_qp             (roce_bth_dest_qp),
-      .s_roce_bth_ack_req             (roce_bth_ack_req),
-      .s_roce_reth_valid              (roce_reth_valid),
-      .s_roce_reth_ready              (roce_reth_ready),
-      .s_roce_reth_v_addr             (roce_reth_v_addr),
-      .s_roce_reth_r_key              (roce_reth_r_key),
-      .s_roce_reth_length             (roce_reth_length),
-      .s_roce_immdh_valid             (roce_immdh_valid),
-      .s_roce_immdh_ready             (roce_immdh_ready),
-      .s_roce_immdh_data              (roce_immdh_data),
-      .s_eth_dest_mac                 (eth_dest_mac),
-      .s_eth_src_mac                  (eth_src_mac),
-      .s_eth_type                     (eth_type),
-      .s_ip_version                   (ip_version),
-      .s_ip_ihl                       (ip_ihl),
-      .s_ip_dscp                      (ip_dscp),
-      .s_ip_ecn                       (ip_ecn),
-      .s_ip_identification            (ip_identification),
-      .s_ip_flags                     (ip_flags),
-      .s_ip_fragment_offset           (ip_fragment_offset),
-      .s_ip_ttl                       (ip_ttl),
-      .s_ip_protocol                  (ip_protocol),
-      .s_ip_header_checksum           (ip_header_checksum),
-      .s_ip_source_ip                 (ip_source_ip),
-      .s_ip_dest_ip                   (ip_dest_ip),
-      .s_udp_source_port              (udp_source_port),
-      .s_udp_dest_port                (udp_dest_port),
-      .s_udp_length                   (udp_length),
-      .s_udp_checksum                 (udp_checksum),
-      .s_roce_payload_axis_tdata      (m_roce_payload_axis_tdata),
-      .s_roce_payload_axis_tkeep      (m_roce_payload_axis_tkeep),
-      .s_roce_payload_axis_tvalid     (m_roce_payload_axis_tvalid),
-      .s_roce_payload_axis_tready     (m_roce_payload_axis_tready),
-      .s_roce_payload_axis_tlast      (m_roce_payload_axis_tlast),
-      .s_roce_payload_axis_tuser      (m_roce_payload_axis_tuser),
-      .m_udp_hdr_valid                (m_udp_hdr_valid),
-      .m_udp_hdr_ready                (m_udp_hdr_ready),
-      .m_eth_dest_mac                 (m_eth_dest_mac),
-      .m_eth_src_mac                  (m_eth_src_mac),
-      .m_eth_type                     (m_eth_type),
-      .m_ip_version                   (m_ip_version),
-      .m_ip_ihl                       (m_ip_ihl),
-      .m_ip_dscp                      (m_ip_dscp),
-      .m_ip_ecn                       (m_ip_ecn),
-      .m_ip_length                    (m_ip_length),
-      .m_ip_identification            (m_ip_identification),
-      .m_ip_flags                     (m_ip_flags),
-      .m_ip_fragment_offset           (m_ip_fragment_offset),
-      .m_ip_ttl                       (m_ip_ttl),
-      .m_ip_protocol                  (m_ip_protocol),
-      .m_ip_header_checksum           (m_ip_header_checksum),
-      .m_ip_source_ip                 (m_ip_source_ip),
-      .m_ip_dest_ip                   (m_ip_dest_ip),
-      .m_udp_source_port              (m_udp_source_port),
-      .m_udp_dest_port                (m_udp_dest_port),
-      .m_udp_length                   (m_udp_length),
-      .m_udp_checksum                 (m_udp_checksum),
-      .m_udp_payload_axis_tdata       (m_udp_payload_axis_tdata),
-      .m_udp_payload_axis_tkeep       (m_udp_payload_axis_tkeep),
-      .m_udp_payload_axis_tvalid      (m_udp_payload_axis_tvalid),
-      .m_udp_payload_axis_tready      (m_udp_payload_axis_tready),
-      .m_udp_payload_axis_tlast       (m_udp_payload_axis_tlast),
-      .m_udp_payload_axis_tuser       (m_udp_payload_axis_tuser),
-      .busy                           (busy),
-      .error_payload_early_termination(error_payload_early_termination)
+    .clk                            (clk),
+    .rst                            (rst),
+    .s_roce_bth_valid               (roce_bth_valid),
+    .s_roce_bth_ready               (roce_bth_ready),
+    .s_roce_bth_op_code             (roce_bth_op_code),
+    .s_roce_bth_p_key               (roce_bth_p_key),
+    .s_roce_bth_psn                 (roce_bth_psn),
+    .s_roce_bth_dest_qp             (roce_bth_dest_qp),
+    .s_roce_bth_ack_req             (roce_bth_ack_req),
+    .s_roce_reth_valid              (roce_reth_valid),
+    .s_roce_reth_ready              (roce_reth_ready),
+    .s_roce_reth_v_addr             (roce_reth_v_addr),
+    .s_roce_reth_r_key              (roce_reth_r_key),
+    .s_roce_reth_length             (roce_reth_length),
+    .s_roce_immdh_valid             (roce_immdh_valid),
+    .s_roce_immdh_ready             (roce_immdh_ready),
+    .s_roce_immdh_data              (roce_immdh_data),
+    .s_eth_dest_mac                 (eth_dest_mac),
+    .s_eth_src_mac                  (eth_src_mac),
+    .s_eth_type                     (eth_type),
+    .s_ip_version                   (ip_version),
+    .s_ip_ihl                       (ip_ihl),
+    .s_ip_dscp                      (ip_dscp),
+    .s_ip_ecn                       (ip_ecn),
+    .s_ip_identification            (ip_identification),
+    .s_ip_flags                     (ip_flags),
+    .s_ip_fragment_offset           (ip_fragment_offset),
+    .s_ip_ttl                       (ip_ttl),
+    .s_ip_protocol                  (ip_protocol),
+    .s_ip_header_checksum           (ip_header_checksum),
+    .s_ip_source_ip                 (ip_source_ip),
+    .s_ip_dest_ip                   (ip_dest_ip),
+    .s_udp_source_port              (udp_source_port),
+    .s_udp_dest_port                (udp_dest_port),
+    .s_udp_length                   (udp_length),
+    .s_udp_checksum                 (udp_checksum),
+    .s_roce_payload_axis_tdata      (m_roce_payload_axis_tdata),
+    .s_roce_payload_axis_tkeep      (m_roce_payload_axis_tkeep),
+    .s_roce_payload_axis_tvalid     (m_roce_payload_axis_tvalid),
+    .s_roce_payload_axis_tready     (m_roce_payload_axis_tready),
+    .s_roce_payload_axis_tlast      (m_roce_payload_axis_tlast),
+    .s_roce_payload_axis_tuser      (m_roce_payload_axis_tuser),
+    .m_udp_hdr_valid                (m_udp_hdr_valid),
+    .m_udp_hdr_ready                (m_udp_hdr_ready),
+    .m_eth_dest_mac                 (m_eth_dest_mac),
+    .m_eth_src_mac                  (m_eth_src_mac),
+    .m_eth_type                     (m_eth_type),
+    .m_ip_version                   (m_ip_version),
+    .m_ip_ihl                       (m_ip_ihl),
+    .m_ip_dscp                      (m_ip_dscp),
+    .m_ip_ecn                       (m_ip_ecn),
+    .m_ip_length                    (m_ip_length),
+    .m_ip_identification            (m_ip_identification),
+    .m_ip_flags                     (m_ip_flags),
+    .m_ip_fragment_offset           (m_ip_fragment_offset),
+    .m_ip_ttl                       (m_ip_ttl),
+    .m_ip_protocol                  (m_ip_protocol),
+    .m_ip_header_checksum           (m_ip_header_checksum),
+    .m_ip_source_ip                 (m_ip_source_ip),
+    .m_ip_dest_ip                   (m_ip_dest_ip),
+    .m_udp_source_port              (m_udp_source_port),
+    .m_udp_dest_port                (m_udp_dest_port),
+    .m_udp_length                   (m_udp_length),
+    .m_udp_checksum                 (m_udp_checksum),
+    .m_udp_payload_axis_tdata       (m_udp_payload_axis_tdata),
+    .m_udp_payload_axis_tkeep       (m_udp_payload_axis_tkeep),
+    .m_udp_payload_axis_tvalid      (m_udp_payload_axis_tvalid),
+    .m_udp_payload_axis_tready      (m_udp_payload_axis_tready),
+    .m_udp_payload_axis_tlast       (m_udp_payload_axis_tlast),
+    .m_udp_payload_axis_tuser       (m_udp_payload_axis_tuser),
+    .busy                           (busy),
+    .error_payload_early_termination(error_payload_early_termination)
   );
 
   RoCE_udp_rx_512 #(
-      .ENABLE_ICRC_CHECK(1'b0)
+  .ENABLE_ICRC_CHECK(1'b0)
   ) RoCE_udp_rx_512_instance (
-      .clk(clk),
-      .rst(rst),
-      .s_udp_hdr_valid(rx_udp_RoCE_hdr_valid),
-      .s_udp_hdr_ready(rx_udp_RoCE_hdr_ready),
-      .s_eth_dest_mac(rx_udp_RoCE_eth_dest_mac),
-      .s_eth_src_mac(rx_udp_RoCE_eth_src_mac),
-      .s_eth_type(rx_udp_RoCE_eth_type),
-      .s_ip_version(rx_udp_RoCE_ip_version),
-      .s_ip_ihl(rx_udp_RoCE_ip_ihl),
-      .s_ip_dscp(rx_udp_RoCE_ip_dscp),
-      .s_ip_ecn(rx_udp_RoCE_ip_ecn),
-      .s_ip_length(rx_udp_RoCE_ip_length),
-      .s_ip_identification(rx_udp_RoCE_ip_identification),
-      .s_ip_flags(rx_udp_RoCE_ip_flags),
-      .s_ip_fragment_offset(rx_udp_RoCE_ip_fragment_offset),
-      .s_ip_ttl(rx_udp_RoCE_ip_ttl),
-      .s_ip_protocol(rx_udp_RoCE_ip_protocol),
-      .s_ip_header_checksum(rx_udp_RoCE_ip_header_checksum),
-      .s_ip_source_ip(rx_udp_RoCE_ip_source_ip),
-      .s_ip_dest_ip(rx_udp_RoCE_ip_dest_ip),
-      .s_udp_source_port(rx_udp_RoCE_source_port),
-      .s_udp_dest_port(rx_udp_RoCE_dest_port),
-      .s_udp_length(rx_udp_RoCE_length),
-      .s_udp_checksum(rx_udp_RoCE_checksum),
-      .s_roce_computed_icrc(32'hDEADBEEF),
-      .s_udp_payload_axis_tdata(rx_udp_RoCE_payload_axis_tdata),
-      .s_udp_payload_axis_tkeep(rx_udp_RoCE_payload_axis_tkeep),
-      .s_udp_payload_axis_tvalid(rx_udp_RoCE_payload_axis_tvalid),
-      .s_udp_payload_axis_tready(rx_udp_RoCE_payload_axis_tready),
-      .s_udp_payload_axis_tlast(rx_udp_RoCE_payload_axis_tlast),
-      .s_udp_payload_axis_tuser(rx_udp_RoCE_payload_axis_tuser),
-      .m_roce_bth_valid(m_roce_bth_valid),
-      .m_roce_bth_ready(1'b1),
-      .m_roce_bth_op_code(m_roce_bth_op_code),
-      .m_roce_bth_p_key(m_roce_bth_p_key),
-      .m_roce_bth_psn(m_roce_bth_psn),
-      .m_roce_bth_dest_qp(m_roce_bth_dest_qp),
-      .m_roce_bth_ack_req(m_roce_bth_ack_req),
-      .m_roce_aeth_valid(m_roce_aeth_valid),
-      .m_roce_aeth_ready(1'b1),
-      .m_roce_aeth_syndrome(m_roce_aeth_syndrome),
-      .m_roce_aeth_msn(m_roce_aeth_msn),
-      .m_eth_dest_mac(),
-      .m_eth_src_mac(),
-      .m_eth_type(),
-      .m_ip_version(),
-      .m_ip_ihl(),
-      .m_ip_dscp(),
-      .m_ip_ecn(),
-      .m_ip_identification(),
-      .m_ip_flags(),
-      .m_ip_fragment_offset(),
-      .m_ip_ttl(),
-      .m_ip_protocol(),
-      .m_ip_header_checksum(),
-      .m_ip_source_ip(),
-      .m_ip_dest_ip(),
-      .m_udp_source_port(),
-      .m_udp_dest_port(),
-      .m_udp_length(),
-      .m_udp_checksum(),
-      .busy(),
-      .error_header_early_termination()
+    .clk(clk),
+    .rst(rst),
+    .s_udp_hdr_valid(rx_udp_RoCE_hdr_valid),
+    .s_udp_hdr_ready(rx_udp_RoCE_hdr_ready),
+    .s_eth_dest_mac(rx_udp_RoCE_eth_dest_mac),
+    .s_eth_src_mac(rx_udp_RoCE_eth_src_mac),
+    .s_eth_type(rx_udp_RoCE_eth_type),
+    .s_ip_version(rx_udp_RoCE_ip_version),
+    .s_ip_ihl(rx_udp_RoCE_ip_ihl),
+    .s_ip_dscp(rx_udp_RoCE_ip_dscp),
+    .s_ip_ecn(rx_udp_RoCE_ip_ecn),
+    .s_ip_length(rx_udp_RoCE_ip_length),
+    .s_ip_identification(rx_udp_RoCE_ip_identification),
+    .s_ip_flags(rx_udp_RoCE_ip_flags),
+    .s_ip_fragment_offset(rx_udp_RoCE_ip_fragment_offset),
+    .s_ip_ttl(rx_udp_RoCE_ip_ttl),
+    .s_ip_protocol(rx_udp_RoCE_ip_protocol),
+    .s_ip_header_checksum(rx_udp_RoCE_ip_header_checksum),
+    .s_ip_source_ip(rx_udp_RoCE_ip_source_ip),
+    .s_ip_dest_ip(rx_udp_RoCE_ip_dest_ip),
+    .s_udp_source_port(rx_udp_RoCE_source_port),
+    .s_udp_dest_port(rx_udp_RoCE_dest_port),
+    .s_udp_length(rx_udp_RoCE_length),
+    .s_udp_checksum(rx_udp_RoCE_checksum),
+    .s_roce_computed_icrc(32'hDEADBEEF),
+    .s_udp_payload_axis_tdata(rx_udp_RoCE_payload_axis_tdata),
+    .s_udp_payload_axis_tkeep(rx_udp_RoCE_payload_axis_tkeep),
+    .s_udp_payload_axis_tvalid(rx_udp_RoCE_payload_axis_tvalid),
+    .s_udp_payload_axis_tready(rx_udp_RoCE_payload_axis_tready),
+    .s_udp_payload_axis_tlast(rx_udp_RoCE_payload_axis_tlast),
+    .s_udp_payload_axis_tuser(rx_udp_RoCE_payload_axis_tuser),
+    .m_roce_bth_valid(m_roce_bth_valid),
+    .m_roce_bth_ready(1'b1),
+    .m_roce_bth_op_code(m_roce_bth_op_code),
+    .m_roce_bth_p_key(m_roce_bth_p_key),
+    .m_roce_bth_psn(m_roce_bth_psn),
+    .m_roce_bth_dest_qp(m_roce_bth_dest_qp),
+    .m_roce_bth_ack_req(m_roce_bth_ack_req),
+    .m_roce_aeth_valid(m_roce_aeth_valid),
+    .m_roce_aeth_ready(1'b1),
+    .m_roce_aeth_syndrome(m_roce_aeth_syndrome),
+    .m_roce_aeth_msn(m_roce_aeth_msn),
+    .m_eth_dest_mac(),
+    .m_eth_src_mac(),
+    .m_eth_type(),
+    .m_ip_version(),
+    .m_ip_ihl(),
+    .m_ip_dscp(),
+    .m_ip_ecn(),
+    .m_ip_identification(),
+    .m_ip_flags(),
+    .m_ip_fragment_offset(),
+    .m_ip_ttl(),
+    .m_ip_protocol(),
+    .m_ip_header_checksum(),
+    .m_ip_source_ip(),
+    .m_ip_dest_ip(),
+    .m_udp_source_port(),
+    .m_udp_dest_port(),
+    .m_udp_length(),
+    .m_udp_checksum(),
+    .busy(),
+    .error_header_early_termination()
   );
 
   udp_RoCE_connection_manager_512 #(
-      .LISTEN_UDP_PORT(16'h4321)
+  .LISTEN_UDP_PORT(16'h4321)
   ) udp_RoCE_connection_manager_512_instance (
-      .clk(clk),
-      .rst(rst),
-      .s_udp_hdr_valid(rx_udp_cm_hdr_valid),
-      .s_udp_hdr_ready(rx_udp_cm_hdr_ready),
-      .s_eth_dest_mac(rx_udp_cm_eth_dest_mac),
-      .s_eth_src_mac(rx_udp_cm_eth_src_mac),
-      .s_eth_type(rx_udp_cm_eth_type),
-      .s_ip_version(rx_udp_cm_ip_version),
-      .s_ip_ihl(rx_udp_cm_ip_ihl),
-      .s_ip_dscp(rx_udp_cm_ip_dscp),
-      .s_ip_ecn(rx_udp_cm_ip_ecn),
-      .s_ip_length(rx_udp_cm_ip_length),
-      .s_ip_identification(rx_udp_cm_ip_identification),
-      .s_ip_flags(rx_udp_cm_ip_flags),
-      .s_ip_fragment_offset(rx_udp_cm_ip_fragment_offset),
-      .s_ip_ttl(rx_udp_cm_ip_ttl),
-      .s_ip_protocol(rx_udp_cm_ip_protocol),
-      .s_ip_header_checksum(rx_udp_cm_ip_header_checksum),
-      .s_ip_source_ip(rx_udp_cm_ip_source_ip),
-      .s_ip_dest_ip(rx_udp_cm_ip_dest_ip),
-      .s_udp_source_port(rx_udp_cm_source_port),
-      .s_udp_dest_port(rx_udp_cm_dest_port),
-      .s_udp_length(rx_udp_cm_length),
-      .s_udp_checksum(rx_udp_cm_checksum),
-      .s_udp_payload_axis_tdata(rx_udp_cm_payload_axis_tdata),
-      .s_udp_payload_axis_tkeep(rx_udp_cm_payload_axis_tkeep),
-      .s_udp_payload_axis_tvalid(rx_udp_cm_payload_axis_tvalid),
-      .s_udp_payload_axis_tready(rx_udp_cm_payload_axis_tready),
-      .s_udp_payload_axis_tlast(rx_udp_cm_payload_axis_tlast),
-      .s_udp_payload_axis_tuser(rx_udp_cm_payload_axis_tuser),
-      .dma_transfer(qp_init_dma_transfer_length),
-      .r_key(qp_init_r_key),
-      .rem_qpn(qp_init_rem_qpn),
-      .loc_qpn(qp_init_loc_qpn),
-      .rem_psn(qp_init_rem_psn),
-      .loc_psn(),
-      .rem_addr(qp_init_rem_addr),
-      .start_transfer(start_transfer),
-      .metadata_valid(metadata_valid),
-      .busy()
+    .clk(clk),
+    .rst(rst),
+    .s_udp_hdr_valid(rx_udp_cm_hdr_valid),
+    .s_udp_hdr_ready(rx_udp_cm_hdr_ready),
+    .s_eth_dest_mac(rx_udp_cm_eth_dest_mac),
+    .s_eth_src_mac(rx_udp_cm_eth_src_mac),
+    .s_eth_type(rx_udp_cm_eth_type),
+    .s_ip_version(rx_udp_cm_ip_version),
+    .s_ip_ihl(rx_udp_cm_ip_ihl),
+    .s_ip_dscp(rx_udp_cm_ip_dscp),
+    .s_ip_ecn(rx_udp_cm_ip_ecn),
+    .s_ip_length(rx_udp_cm_ip_length),
+    .s_ip_identification(rx_udp_cm_ip_identification),
+    .s_ip_flags(rx_udp_cm_ip_flags),
+    .s_ip_fragment_offset(rx_udp_cm_ip_fragment_offset),
+    .s_ip_ttl(rx_udp_cm_ip_ttl),
+    .s_ip_protocol(rx_udp_cm_ip_protocol),
+    .s_ip_header_checksum(rx_udp_cm_ip_header_checksum),
+    .s_ip_source_ip(rx_udp_cm_ip_source_ip),
+    .s_ip_dest_ip(rx_udp_cm_ip_dest_ip),
+    .s_udp_source_port(rx_udp_cm_source_port),
+    .s_udp_dest_port(rx_udp_cm_dest_port),
+    .s_udp_length(rx_udp_cm_length),
+    .s_udp_checksum(rx_udp_cm_checksum),
+    .s_udp_payload_axis_tdata(rx_udp_cm_payload_axis_tdata),
+    .s_udp_payload_axis_tkeep(rx_udp_cm_payload_axis_tkeep),
+    .s_udp_payload_axis_tvalid(rx_udp_cm_payload_axis_tvalid),
+    .s_udp_payload_axis_tready(rx_udp_cm_payload_axis_tready),
+    .s_udp_payload_axis_tlast(rx_udp_cm_payload_axis_tlast),
+    .s_udp_payload_axis_tuser(rx_udp_cm_payload_axis_tuser),
+    .dma_transfer(qp_init_dma_transfer_length),
+    .r_key(qp_init_r_key),
+    .rem_qpn(qp_init_rem_qpn),
+    .loc_qpn(qp_init_loc_qpn),
+    .rem_psn(qp_init_rem_psn),
+    .loc_psn(),
+    .rem_addr(qp_init_rem_addr),
+    .start_transfer(start_transfer),
+    .metadata_valid(metadata_valid),
+    .busy()
   );
 
   wire [63:0] tot_time_wo_ack_avg;
   wire [63:0] tot_time_avg;
+  wire [63:0] transfer_time_tot;
+  wire [63:0] transfer_time_single;
   wire [63:0] latency_first_packet;
   wire [63:0] latency_last_packet;
 
   RoCE_latency_eval RoCE_latency_eval_instance (
-      .clk                    (clk),
-      .rst                    (rst),
-      .start_i                (start_transfer),
-      .s_roce_rx_bth_valid    (m_roce_bth_valid),
-      .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
-      .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
-      .s_roce_rx_bth_psn      (m_roce_bth_psn),
-      .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
-      .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
-      .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
-      .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
-      .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
-      .s_roce_tx_bth_valid    (roce_bth_valid & roce_bth_ready),
-      .s_roce_tx_bth_op_code  (roce_bth_op_code),
-      .s_roce_tx_bth_p_key    (roce_bth_p_key),
-      .s_roce_tx_bth_psn      (roce_bth_psn),
-      .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
-      .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
-      .s_roce_tx_reth_valid   (roce_reth_valid),
-      .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
-      .s_roce_tx_reth_r_key   (roce_reth_r_key),
-      .s_roce_tx_reth_length  (roce_reth_length),
-      .latency_first_packet   (latency_first_packet),
-      .latency_last_packet    (latency_last_packet)
+    .clk                    (clk),
+    .rst                    (rst),
+    .start_i                (start_transfer),
+    .s_roce_rx_bth_valid    (m_roce_bth_valid),
+    .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
+    .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
+    .s_roce_rx_bth_psn      (m_roce_bth_psn),
+    .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
+    .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
+    .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
+    .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
+    .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
+    .s_roce_tx_bth_valid    (roce_bth_valid & roce_bth_ready),
+    .s_roce_tx_bth_op_code  (roce_bth_op_code),
+    .s_roce_tx_bth_p_key    (roce_bth_p_key),
+    .s_roce_tx_bth_psn      (roce_bth_psn),
+    .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
+    .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
+    .s_roce_tx_reth_valid   (roce_reth_valid),
+    .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
+    .s_roce_tx_reth_r_key   (roce_reth_r_key),
+    .s_roce_tx_reth_length  (roce_reth_length),
+    .transfer_time_tot      (transfer_time_tot),
+    .transfer_time_single   (transfer_time_single),
+    .latency_first_packet   (latency_first_packet),
+    .latency_last_packet    (latency_last_packet)
+  );
+
+  wire [26:0] RoCE_tx_n_valid_up;
+  wire [26:0] RoCE_tx_n_ready_up;
+  wire [26:0] RoCE_tx_n_both_up;
+
+  axis_handshake_monitor #(
+  .window_width(27)
+  ) axis_handshake_monitor_instance (
+    .clk(clk),
+    .rst(rst),
+    .s_axis_tvalid(m_roce_payload_axis_tvalid),
+    .m_axis_tready(m_roce_payload_axis_tready),
+    .n_valid_up(RoCE_tx_n_valid_up),
+    .n_ready_up(RoCE_tx_n_ready_up),
+    .n_both_up(RoCE_tx_n_both_up)
   );
 
   RoCE_qp_state_module #(
-      .REM_ADDR_WIDTH(16)
+  .REM_ADDR_WIDTH(16)
   ) RoCE_qp_state_module_instance (
-      .clk                    (clk),
-      .rst                    (rst),
-      .rst_qp                 (start_transfer),
-      .qp_init_dma_transfer   (qp_init_dma_transfer_length),
-      .qp_init_r_key          (qp_init_r_key),
-      .qp_init_rem_qpn        (qp_init_rem_qpn),
-      .qp_init_loc_qpn        (qp_init_loc_qpn),
-      .qp_init_rem_psn        (qp_init_rem_psn),
-      .qp_init_loc_psn        (24'd0),
-      .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
-      .qp_init_rem_addr       (qp_init_rem_addr),
-      .s_roce_tx_bth_valid    (roce_bth_valid),
-      .s_roce_tx_bth_ready    (),
-      .s_roce_tx_bth_op_code  (roce_bth_op_code),
-      .s_roce_tx_bth_p_key    (roce_bth_p_key),
-      .s_roce_tx_bth_psn      (roce_bth_psn),
-      .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
-      .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
-      .s_roce_tx_reth_valid   (roce_reth_valid),
-      .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
-      .s_roce_tx_reth_r_key   (roce_reth_r_key),
-      .s_roce_tx_reth_length  (roce_reth_length),
-      .s_roce_rx_bth_valid    (m_roce_bth_valid),
-      .s_roce_rx_bth_ready    (),
-      .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
-      .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
-      .s_roce_rx_bth_psn      (m_roce_bth_psn),
-      .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
-      .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
-      .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
-      .s_roce_rx_aeth_ready   (m_roce_aeth_ready),
-      .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
-      .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
-      .last_acked_psn         (last_acked_psn),
-      .stop_transfer          (stop_transfer)
+    .clk                    (clk),
+    .rst                    (rst),
+    .rst_qp                 (start_transfer),
+    .qp_init_dma_transfer   (qp_init_dma_transfer_length),
+    .qp_init_r_key          (qp_init_r_key),
+    .qp_init_rem_qpn        (qp_init_rem_qpn),
+    .qp_init_loc_qpn        (qp_init_loc_qpn),
+    .qp_init_rem_psn        (qp_init_rem_psn),
+    .qp_init_loc_psn        (24'd0),
+    .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
+    .qp_init_rem_addr       (qp_init_rem_addr),
+    .s_roce_tx_bth_valid    (roce_bth_valid),
+    .s_roce_tx_bth_ready    (),
+    .s_roce_tx_bth_op_code  (roce_bth_op_code),
+    .s_roce_tx_bth_p_key    (roce_bth_p_key),
+    .s_roce_tx_bth_psn      (roce_bth_psn),
+    .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
+    .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
+    .s_roce_tx_reth_valid   (roce_reth_valid),
+    .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
+    .s_roce_tx_reth_r_key   (roce_reth_r_key),
+    .s_roce_tx_reth_length  (roce_reth_length),
+    .s_roce_rx_bth_valid    (m_roce_bth_valid),
+    .s_roce_rx_bth_ready    (),
+    .s_roce_rx_bth_op_code  (m_roce_bth_op_code),
+    .s_roce_rx_bth_p_key    (m_roce_bth_p_key),
+    .s_roce_rx_bth_psn      (m_roce_bth_psn),
+    .s_roce_rx_bth_dest_qp  (m_roce_bth_dest_qp),
+    .s_roce_rx_bth_ack_req  (m_roce_bth_ack_req),
+    .s_roce_rx_aeth_valid   (m_roce_aeth_valid),
+    .s_roce_rx_aeth_ready   (m_roce_aeth_ready),
+    .s_roce_rx_aeth_syndrome(m_roce_aeth_syndrome),
+    .s_roce_rx_aeth_msn     (m_roce_aeth_msn),
+    .last_acked_psn         (last_acked_psn),
+    .stop_transfer          (stop_transfer)
   );
 
   reg [3:0] pmtu_shift;
@@ -993,6 +1026,21 @@ module RoCE_minimal_stack_512 (
     end
   end
 
+  always @* begin
+    s_dma_meta_valid_next           = s_dma_meta_valid_reg && !s_dma_meta_ready;
+    if (start_1) begin
+      s_dma_meta_valid_next = 1'b1;
+    end
+  end
+
+  always @(posedge clk) begin
+    if (rst) begin
+      s_dma_meta_valid_reg <= 1'b0;
+    end else begin
+      s_dma_meta_valid_reg <= s_dma_meta_valid_next;
+    end
+  end
+
   assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
   assign qp_curr_r_key               = qp_update_r_key_reg;
   assign qp_curr_rem_qpn             = qp_update_rem_qpn_reg;
@@ -1002,6 +1050,56 @@ module RoCE_minimal_stack_512 (
   assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
 
   assign start_transfer_wire         = start_transfer_reg || new_transfer;
+
+  generate
+    if (DEBUG) begin
+      vio_throughput VIO_roce_throughput (
+        .clk(clk),
+        .probe_in0(RoCE_tx_n_valid_up),
+        .probe_in1(RoCE_tx_n_ready_up),
+        .probe_in2(RoCE_tx_n_both_up),
+        .probe_in3(latency_first_packet),
+        .probe_in4(latency_last_packet),
+        .probe_in5(transfer_time_tot),
+        .probe_in6(transfer_time_single),
+        .probe_in7(last_acked_psn_reg),
+        .probe_out0(n_transfers)
+      );
+      
+      ila_axis ila_roce_payload_tx(
+        .clk(clk),
+        .probe0(m_roce_payload_axis_tdata),
+        .probe1(m_roce_payload_axis_tkeep),
+        .probe2(m_roce_payload_axis_tvalid),
+        .probe3(m_roce_payload_axis_tready),
+        .probe4(m_roce_payload_axis_tlast),
+        .probe5(m_roce_payload_axis_tuser)
+    );
+
+    ila_axis ila_udp_payload_tx(
+        .clk(clk),
+        .probe0(m_udp_payload_axis_tdata),
+        .probe1(m_udp_payload_axis_tkeep),
+        .probe2(m_udp_payload_axis_tvalid),
+        .probe3(m_udp_payload_axis_tready),
+        .probe4(m_udp_payload_axis_tlast),
+        .probe5(m_udp_payload_axis_tuser)
+    );
+
+    axis_handshake_monitor #(
+      .window_width(27)
+    ) axis_handshake_monitor_instance (
+        .clk(clk),
+        .rst(rst),
+        .s_axis_tvalid(m_roce_payload_axis_tvalid),
+        .m_axis_tready(m_roce_payload_axis_tready),
+        .n_valid_up(RoCE_tx_n_valid_up),
+        .n_ready_up(RoCE_tx_n_ready_up),
+        .n_both_up(RoCE_tx_n_both_up)
+    );
+    end
+  endgenerate
+  
 
 endmodule
 

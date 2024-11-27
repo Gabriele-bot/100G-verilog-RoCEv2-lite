@@ -399,7 +399,7 @@ class RoCEStream(object):
                             else:
                                 print('Good ICRC!')
                             print('Measured length= ', self.measured_data_legth)
-                            if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or Eth_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                            if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
                                 if set_dma_length != self.sim_data_legth:
                                     print('RETH DMA Length does not match with sent one!')
                                 if set_dma_length != self.measured_data_legth:
@@ -429,10 +429,10 @@ Received_r_key = 0
 
 data_stream = []
 
-dma_length_set  = 200000
+dma_length_set  = 1024
 r_key_set        = 0x1234
-starting_psn_set = 10
-rem_qpn_set = 0x11
+starting_psn_set = 1000
+rem_qpn_set = 0x1312
 base_addr = 0x987654321
 
 

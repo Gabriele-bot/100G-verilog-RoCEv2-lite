@@ -232,33 +232,35 @@ module udp_RoCE_connection_manager_512 #(
           txmeta_valid_next = s_udp_payload_axis_tdata[200];
           txmeta_start_next = s_udp_payload_axis_tdata[201];
           txmeta_write_type_next = s_udp_payload_axis_tdata[202];
-          txmeta_rem_ip_addr_next = {
-            s_udp_payload_axis_tdata[215:208],
-            s_udp_payload_axis_tdata[223:216],
-            s_udp_payload_axis_tdata[231:224],
-            s_udp_payload_axis_tdata[239:232]
-          };
-          txmeta_rem_addr_offset_next = {
-            s_udp_payload_axis_tdata[247:240],
-            s_udp_payload_axis_tdata[255:248],
-            s_udp_payload_axis_tdata[263:256],
-            s_udp_payload_axis_tdata[271:264],
-            s_udp_payload_axis_tdata[279:272],
-            s_udp_payload_axis_tdata[287:280],
-            s_udp_payload_axis_tdata[295:288],
-            s_udp_payload_axis_tdata[303:296]
-          };
-          txmeta_dma_lentgh_next = {
-            s_udp_payload_axis_tdata[311:304],
-            s_udp_payload_axis_tdata[319:312],
-            s_udp_payload_axis_tdata[327:320],
-            s_udp_payload_axis_tdata[335:328]
-          };
+          if (txmeta_valid_next) begin
+            txmeta_rem_ip_addr_next = {
+              s_udp_payload_axis_tdata[215:208],
+              s_udp_payload_axis_tdata[223:216],
+              s_udp_payload_axis_tdata[231:224],
+              s_udp_payload_axis_tdata[239:232]
+            };
+            txmeta_rem_addr_offset_next = {
+              s_udp_payload_axis_tdata[247:240],
+              s_udp_payload_axis_tdata[255:248],
+              s_udp_payload_axis_tdata[263:256],
+              s_udp_payload_axis_tdata[271:264],
+              s_udp_payload_axis_tdata[279:272],
+              s_udp_payload_axis_tdata[287:280],
+              s_udp_payload_axis_tdata[295:288],
+              s_udp_payload_axis_tdata[303:296]
+            };
+            txmeta_dma_lentgh_next = {
+              s_udp_payload_axis_tdata[311:304],
+              s_udp_payload_axis_tdata[319:312],
+              s_udp_payload_axis_tdata[327:320],
+              s_udp_payload_axis_tdata[335:328]
+            };
 
-          txmeta_rem_udp_port_next = {
-            s_udp_payload_axis_tdata[343:336], s_udp_payload_axis_tdata[351:344]
-          };
-          metadata_valid_next = 1'b1;
+            txmeta_rem_udp_port_next = {
+              s_udp_payload_axis_tdata[343:336], s_udp_payload_axis_tdata[351:344]
+            };
+            metadata_valid_next = 1'b1;
+          end
 
           if (s_udp_payload_axis_tlast) begin
             m_udp_hdr_valid_next = 1'b0;
@@ -313,6 +315,8 @@ module udp_RoCE_connection_manager_512 #(
         txmeta_rem_addr_offset_reg <= txmeta_rem_addr_offset_next;
         txmeta_dma_lentgh_reg      <= txmeta_dma_lentgh_next;
         txmeta_rem_udp_port_reg    <= txmeta_rem_udp_port_next;
+      end else begin
+        txmeta_start_reg           <= 1'b0;
       end
 
       busy_reg <= state_next != STATE_IDLE;

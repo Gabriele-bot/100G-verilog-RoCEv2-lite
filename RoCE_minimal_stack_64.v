@@ -479,7 +479,7 @@ module RoCE_minimal_stack_64 (
   );
 
 
-  Roce_tx_header_producer #(
+  RoCE_tx_header_producer #(
       .DATA_WIDTH(64)
   ) Roce_tx_header_producer_instance (
       .clk                       (clk),

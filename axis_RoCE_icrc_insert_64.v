@@ -146,26 +146,26 @@ module axis_RoCE_icrc_insert_64 #(
   reg         m_axis_tuser_int;
   wire        m_axis_tready_int_early;
 
-  assign s_eth_hdr_ready     = s_eth_hdr_ready_reg;
+  assign s_eth_hdr_ready           = s_eth_hdr_ready_reg;
 
-  assign axis_masked_tready  = s_axis_tready_reg;
-
-
-  assign m_eth_hdr_valid     = m_eth_hdr_valid_reg;
-  assign m_eth_dest_mac      = m_eth_dest_mac_reg;
-  assign m_eth_src_mac       = m_eth_src_mac_reg;
-  assign m_eth_type          = m_eth_type_reg;
+  assign axis_masked_tready        = s_axis_tready_reg;
 
 
-  assign busy                = busy_reg;
+  assign m_eth_hdr_valid           = m_eth_hdr_valid_reg;
+  assign m_eth_dest_mac            = m_eth_dest_mac_reg;
+  assign m_eth_src_mac             = m_eth_src_mac_reg;
+  assign m_eth_type                = m_eth_type_reg;
 
 
-  assign axis_to_mask_tdata  = s_eth_payload_axis_tdata;
-  assign axis_to_mask_tkeep  = s_eth_payload_axis_tkeep;
-  assign axis_to_mask_tvalid = s_eth_payload_axis_tvalid;
-  assign axis_to_mask_tlast  = s_eth_payload_axis_tlast;
-  assign axis_to_mask_tuser  = s_eth_payload_axis_tuser;
-  assign s_eth_payload_axis_tready       = axis_to_mask_tready;
+  assign busy                      = busy_reg;
+
+
+  assign axis_to_mask_tdata        = s_eth_payload_axis_tdata;
+  assign axis_to_mask_tkeep        = s_eth_payload_axis_tkeep;
+  assign axis_to_mask_tvalid       = s_eth_payload_axis_tvalid;
+  assign axis_to_mask_tlast        = s_eth_payload_axis_tlast;
+  assign axis_to_mask_tuser        = s_eth_payload_axis_tuser;
+  assign s_eth_payload_axis_tready = axis_to_mask_tready;
 
 
   axis_mask_fields_icrc #(
@@ -420,8 +420,8 @@ module axis_RoCE_icrc_insert_64 #(
 
   always @* begin
     state_next              = STATE_IDLE;
-    
-    s_eth_hdr_ready_next = 1'b0;
+
+    s_eth_hdr_ready_next    = 1'b0;
 
     reset_crc               = 1'b0;
     update_crc              = 1'b0;
