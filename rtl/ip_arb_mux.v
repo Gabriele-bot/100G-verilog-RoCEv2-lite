@@ -218,6 +218,7 @@ module ip_arb_mux #(
 
   always @* begin
     frame_next = frame_reg;
+    single_frame_pkt_next = single_frame_pkt_reg;
 
     s_ip_hdr_ready_next = {S_COUNT{1'b0}};
 
