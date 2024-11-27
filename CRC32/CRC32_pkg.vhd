@@ -3,7 +3,7 @@ use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
 package CRC32_pkg is
-    
+
     -- +============================================+
     -- |             !LITTLE ENDIAN!                |
     -- +============================================+
@@ -41,9 +41,14 @@ package CRC32_pkg is
     function gen_matrix_array(matrix : in matrix_32x32_t; n : integer)
     return gen_matrix_array_t;
 
-    
-    constant MATRIX_CRC32_LE_IDX0 : matrix_32x32_t := get_check_matrix(CRC32_POLY);
-    constant CRC32_MATRIX_EXP_ARRAY : gen_matrix_array_t(15 downto 0) := gen_matrix_array(MATRIX_CRC32_LE_IDX0, 16);
+    function keep2blocknumber_64(keep_value : in std_logic_vector(63 downto 0))
+    return integer;
+
+    function keep2blocknumber_8(keep_value : in std_logic_vector(7 downto 0))
+    return integer;
+
+    --constant MATRIX_CRC32_LE_IDX0   : matrix_32x32_t                  := get_check_matrix(CRC32_POLY);
+    --constant CRC32_MATRIX_EXP_ARRAY : gen_matrix_array_t(15 downto 0) := gen_matrix_array(MATRIX_CRC32_LE_IDX0, 16);
 
     subtype crc32_word_t is std_logic_vector(31 downto 0);
 
@@ -164,5 +169,45 @@ package body CRC32_pkg is
         end loop;
         return matrix_array_result;
     end function gen_matrix_array;
+
+    function keep2blocknumber_64(keep_value : in std_logic_vector(63 downto 0))
+    return integer is
+        variable index : integer := 0;
+    begin
+        case keep_value is
+            
+            when X"--------------0F" => index := 1;
+            when X"-------------0F-" => index := 2;
+            when X"------------0F--" => index := 3;
+            when X"-----------0F---" => index := 4;
+            when X"----------0F----" => index := 5;
+            when X"---------0F-----" => index := 6;
+            when X"--------0F------" => index := 7;
+            when X"-------0F-------" => index := 8;
+            when X"------0F--------" => index := 9;
+            when X"-----0F---------" => index := 10;
+            when X"----0F----------" => index := 11;
+            when X"---0F-----------" => index := 12;
+            when X"--0F------------" => index := 13;
+            when X"-0F-------------" => index := 14;
+            when X"0F--------------" => index := 15;
+            when X"F---------------" => index := 16;
+            when others              => index := 1;
+        end case;
+        return index;
+    end function keep2blocknumber_64;
+
+    function keep2blocknumber_8(keep_value : in std_logic_vector(7 downto 0))
+    return integer is
+        variable index : integer := 0;
+    begin
+        case keep_value is
+            when X"-0" => index := 0;
+            when X"0F" => index := 1;
+            when X"F-" => index := 2;
+            when others      => index := 0;
+        end case;
+        return index;
+    end function keep2blocknumber_8;
 
 end package body CRC32_pkg;

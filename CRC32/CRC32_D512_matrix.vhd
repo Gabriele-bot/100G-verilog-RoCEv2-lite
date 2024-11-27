@@ -25,9 +25,9 @@ end entity CRC32_D512_matrix;
 
 architecture RTL of CRC32_D512_matrix is
 
-    constant CRC32_POLY_MATRIX  : matrix_32x64_t                := get_poly_matrix(CRC_POLY);
-    constant CRC32_GEN_MATRIX   : matrix_32x64_t                := get_generator_matrix(CRC_POLY);
-    constant CRC32_CHECK_MATRIX : matrix_32x32_t                := get_check_matrix(CRC_POLY);
+    constant CRC32_POLY_MATRIX  : matrix_32x64_t := get_poly_matrix(CRC_POLY);
+    constant CRC32_GEN_MATRIX   : matrix_32x64_t := get_generator_matrix(CRC_POLY);
+    constant CRC32_CHECK_MATRIX : matrix_32x32_t := get_check_matrix(CRC_POLY);
 
     constant MATRIX_ARRAY : gen_matrix_array_t := gen_matrix_array(CRC32_CHECK_MATRIX, 16);
 
@@ -44,9 +44,11 @@ architecture RTL of CRC32_D512_matrix is
 
     type partial_crc_t is array (15 downto 0) of crc32_word_t;
     signal partial_crc_data : partial_crc_t;
+    
+    signal crc_seed_test : crc32_word_t;
 
 begin
-    
+
     assert CRC_POLY(0) = '1'
     report "Polynomyal must end with 1"
     severity FAILURE;
@@ -62,7 +64,7 @@ begin
         end if;
     end process;
 
-    keep_shreg(0) <= keep;
+    keep_shreg(0) <= keep when valid_in else X"0000000000000000";
     process(clk)
     begin
         if rising_edge(clk) then
@@ -75,6 +77,8 @@ begin
         begin
             if rising_edge(clk) then
                 case keep_shreg(0) is
+                    when X"0000000000000000" => --Should not happen
+                        partial_crc_data(15 downto 0) <= (others => (others => '0'));
                     when X"000000000000000F" => --Should not happen
                         partial_crc_data(0)           <= matrix_vector_mul(MATRIX_ARRAY(0), data(31 downto 0));
                         partial_crc_data(15 downto 1) <= (others => (others => '0'));
@@ -185,6 +189,12 @@ begin
                 out_crc <= CRC_INIT;
             else
                 case keep_shreg(2) is
+                    when X"0000000000000000" => --Should not happen
+                        if rst_crc then
+                            out_crc <= CRC_INIT;
+                        else
+                            out_crc <= out_crc;
+                        end if;
                     when X"000000000000000F" => --Should not happen
                         if rst_crc then
                             out_crc <= out_partial_crc xor matrix_vector_mul(MATRIX_ARRAY(0), CRC_INIT);
@@ -277,8 +287,10 @@ begin
                         end if;
                     when X"FFFFFFFFFFFFFFFF" =>
                         if rst_crc then
+                            crc_seed_test <=  matrix_vector_mul(MATRIX_ARRAY(15), CRC_INIT);
                             out_crc <= out_partial_crc xor matrix_vector_mul(MATRIX_ARRAY(15), CRC_INIT);
                         elsif valid_shreg(2) then
+                            crc_seed_test <=  matrix_vector_mul(MATRIX_ARRAY(15), out_crc);
                             out_crc <= out_partial_crc xor matrix_vector_mul(MATRIX_ARRAY(15), out_crc);
                         end if;
                     when others =>
