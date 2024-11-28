@@ -269,6 +269,7 @@ always @* begin
     if (s_ip_hdr_ready && s_ip_hdr_valid) begin
         store_ip_hdr = 1'b1;
         ptr_next = 0;
+
         send_ip_header_next = 1'b1;
         send_ip_payload_next = (OFFSET != 0) && (CYCLE_COUNT == 1);
         s_ip_payload_axis_tready_next = send_ip_payload_next && m_eth_payload_axis_tready_int_early;
@@ -299,6 +300,7 @@ always @* begin
     if (s_ip_hdr_valid_del) begin
         hdr_sum_temp_next = hdr_sum_reg[15:0] + hdr_sum_reg[19:16];
         hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
+
         m_eth_hdr_valid_next = 1'b1;
     end
 
@@ -374,7 +376,7 @@ always @* begin
         end
     end
 
-    s_ip_hdr_ready_next = !(send_ip_header_next || send_ip_payload_next);
+    s_ip_hdr_ready_next = !m_eth_hdr_valid_next && !(send_ip_header_next || send_ip_payload_next);
 end
 
 always @(posedge clk) begin

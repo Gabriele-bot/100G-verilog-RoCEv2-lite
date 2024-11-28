@@ -313,18 +313,22 @@ always @* begin
     m_ip_payload_axis_tlast_int = 1'b0;
     m_ip_payload_axis_tuser_int = 1'b0;
 
+
     if (s_udp_hdr_ready && s_udp_hdr_valid) begin
         store_udp_hdr = 1'b1;
         ptr_next = 0;
+
+        m_ip_hdr_valid_next = 1'b1;
+
         send_udp_header_next = 1'b1;
         send_udp_payload_next = (OFFSET != 0) && (CYCLE_COUNT == 1);
         s_udp_payload_axis_tready_next = send_udp_payload_next && m_ip_payload_axis_tready_int_early;
     end
-
-    if (s_udp_hdr_valid_del) begin
-        m_ip_hdr_valid_next = 1'b1;
-    end
-
+    
+    //if (s_udp_hdr_valid_del) begin
+    //    m_ip_hdr_valid_next = 1'b1;
+    //end
+    
     if (send_udp_payload_reg) begin
         s_udp_payload_axis_tready_next = m_ip_payload_axis_tready_int_early && shift_udp_payload_axis_input_tready;
 
@@ -390,7 +394,7 @@ always @* begin
         end
     end
 
-    s_udp_hdr_ready_next = !(send_udp_header_next || send_udp_payload_next);
+    s_udp_hdr_ready_next = !m_ip_hdr_valid_next && !(send_udp_header_next || send_udp_payload_next);
 end
 
 always @(posedge clk) begin

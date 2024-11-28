@@ -376,7 +376,7 @@ always @* begin
         end
     end
 
-    s_icmp_hdr_ready_next = !(send_icmp_header_next || send_icmp_payload_next);
+    s_icmp_hdr_ready_next = !m_ip_hdr_valid_next && !(send_icmp_header_next || send_icmp_payload_next);
 end
 
 always @(posedge clk) begin
