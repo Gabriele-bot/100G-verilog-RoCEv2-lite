@@ -949,6 +949,7 @@ module RoCE_minimal_stack_512 #(
   reg [3:0] pmtu_shift;
   reg [11:0] length_pmtu_mask;
   reg new_transfer;
+  reg [7:0] bth_op_code_reg = 8'h00;
 
   always @(posedge clk) begin
     case (pmtu)
@@ -976,6 +977,10 @@ module RoCE_minimal_stack_512 #(
   end
 
   always @(posedge clk) begin
+    if (roce_bth_valid && roce_bth_ready) begin
+    	bth_op_code_reg <= roce_bth_op_code;
+    end
+  	
     if (start_transfer) begin
       qp_update_dma_transfer_length_reg <= qp_init_dma_transfer_length;
       qp_update_r_key_reg               <= qp_init_r_key;
@@ -1001,22 +1006,21 @@ module RoCE_minimal_stack_512 #(
         qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
         qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
       end
-      if (s_payload_axis_tvalid && s_payload_axis_tready && s_payload_axis_tlast) begin
-        sent_messages <= sent_messages + 32'd1;
-        if (stop_transfer) begin
-          new_transfer  <= 1'b0;
-          sent_messages <= {32{1'b1}};
-        end else if (sent_messages < n_transfers - 32'd1) begin
-          new_transfer <= 1'b1;
-        end
-      end else begin
-        new_transfer <= 1'b0;
-      end
     end
+    
+
     if (stop_transfer) begin
       new_transfer  <= 1'b0;
-      sent_messages <= {32{1'b1}};
+      sent_messages <= {32{1'b1}}; 
+    end else if (m_roce_payload_axis_tvalid && m_roce_payload_axis_tready && m_roce_payload_axis_tlast & bth_op_code_reg[7:2] == 6'b000010) begin // LAST, LAST-IMMD, ONLY, ONLY-IMMD
+      sent_messages <= sent_messages + 32'd1;
+      if (sent_messages < n_transfers - 32'd1) begin
+        new_transfer <= 1'b1;
+      end
+    end else begin
+      new_transfer <= 1'b0;
     end
+
     start_transfer_reg <= start_transfer;
   end
 
@@ -1028,7 +1032,7 @@ module RoCE_minimal_stack_512 #(
 
   always @* begin
     s_dma_meta_valid_next           = s_dma_meta_valid_reg && !s_dma_meta_ready;
-    if (start_1) begin
+    if (start_2) begin
       s_dma_meta_valid_next = 1'b1;
     end
   end
@@ -1086,19 +1090,8 @@ module RoCE_minimal_stack_512 #(
         .probe5(m_udp_payload_axis_tuser)
     );
 
-    axis_handshake_monitor #(
-      .window_width(27)
-    ) axis_handshake_monitor_instance (
-        .clk(clk),
-        .rst(rst),
-        .s_axis_tvalid(m_roce_payload_axis_tvalid),
-        .m_axis_tready(m_roce_payload_axis_tready),
-        .n_valid_up(RoCE_tx_n_valid_up),
-        .n_ready_up(RoCE_tx_n_ready_up),
-        .n_both_up(RoCE_tx_n_both_up)
-    );
     end else begin
-      assign n_transfers = 2;
+      assign n_transfers = 1;
     end
   endgenerate
   
