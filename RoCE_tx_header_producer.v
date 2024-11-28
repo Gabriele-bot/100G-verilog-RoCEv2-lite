@@ -428,7 +428,7 @@ module RoCE_tx_header_producer #(
                 if (s_dma_meta_ready && s_dma_meta_valid) begin
                     store_parameters = 1'b1;
                     s_dma_meta_ready_next = 1'b0;
-                    s_axis_tready_next = 1'b0;
+                    s_axis_tready_next = m_axis_tready_int_early;
                     state_next       = STATE_STORE_PAR;
                 end
             end

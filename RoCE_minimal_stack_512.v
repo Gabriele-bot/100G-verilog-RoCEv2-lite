@@ -268,7 +268,7 @@ module RoCE_minimal_stack_512 #(
 
   reg [23:0] last_acked_psn_reg;
 
-  wire [31:0] n_transfers = 32'd20;
+  wire [31:0] n_transfers;
 
   reg [31:0] sent_messages = 32'd0;
 
@@ -1097,6 +1097,8 @@ module RoCE_minimal_stack_512 #(
         .n_ready_up(RoCE_tx_n_ready_up),
         .n_both_up(RoCE_tx_n_both_up)
     );
+    end else begin
+      assign n_transfers = 2;
     end
   endgenerate
   
