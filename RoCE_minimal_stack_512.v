@@ -249,9 +249,11 @@ module RoCE_minimal_stack_512 #(
   wire [23:0] qp_init_rem_qpn;
   wire [23:0] qp_init_loc_qpn;
   wire [23:0] qp_init_rem_psn;
+  wire [23:0] qp_init_loc_psn;
   wire [31:0] qp_init_r_key;
   wire [63:0] qp_init_rem_addr;
-  wire [31:0] qp_init_rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
+  wire [31:0] qp_init_rem_ip_addr;
+  wire        qp_write_type;
 
   wire [31:0] qp_update_dma_transfer_length;
   wire [23:0] qp_update_rem_qpn;
@@ -280,6 +282,7 @@ module RoCE_minimal_stack_512 #(
   reg [63:0] qp_update_rem_addr_base_reg;
   reg [31:0] qp_update_rem_addr_offset_reg;
   reg [31:0] qp_update_rem_ip_addr_reg;
+  reg        qp_update_write_type_reg;
   reg start_transfer_reg;
   reg update_qp_state_reg;
 
@@ -290,6 +293,7 @@ module RoCE_minimal_stack_512 #(
   wire [31:0] qp_curr_r_key;
   wire [63:0] qp_curr_rem_addr;
   wire [31:0] qp_curr_rem_ip_addr;
+  wire        qp_curr_write_type;
   wire start_transfer_wire;
 
   reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
@@ -614,7 +618,7 @@ module RoCE_minimal_stack_512 #(
     .s_r_key                   (qp_curr_r_key),
     .s_rem_ip_addr             (qp_curr_rem_ip_addr),
     .s_rem_addr                (qp_curr_rem_addr),
-    .s_is_immediate            (1'b0),
+    .s_is_immediate            (qp_curr_write_type),
     .s_axis_tdata              (s_payload_fifo_axis_tdata),
     .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
     .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -847,8 +851,10 @@ module RoCE_minimal_stack_512 #(
     .rem_qpn(qp_init_rem_qpn),
     .loc_qpn(qp_init_loc_qpn),
     .rem_psn(qp_init_rem_psn),
-    .loc_psn(),
+    .loc_psn(qp_init_loc_psn),
     .rem_addr(qp_init_rem_addr),
+    .rem_ip_addr(qp_init_rem_ip_addr),
+    .write_type(qp_write_type),
     .start_transfer(start_transfer),
     .metadata_valid(metadata_valid),
     .busy()
@@ -917,7 +923,7 @@ module RoCE_minimal_stack_512 #(
     .qp_init_rem_qpn        (qp_init_rem_qpn),
     .qp_init_loc_qpn        (qp_init_loc_qpn),
     .qp_init_rem_psn        (qp_init_rem_psn),
-    .qp_init_loc_psn        (24'd0),
+    .qp_init_loc_psn        (qp_init_loc_psn),
     .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
     .qp_init_rem_addr       (qp_init_rem_addr),
     .s_roce_tx_bth_valid    (roce_bth_valid),
@@ -988,6 +994,7 @@ module RoCE_minimal_stack_512 #(
       qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
       qp_update_rem_psn_reg             <= qp_init_rem_psn;
       qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
+      qp_update_write_type_reg          <= qp_write_type;
       qp_update_rem_addr_base_reg       <= qp_init_rem_addr;
       qp_update_rem_addr_offset_reg     <= 32'd0;
       sent_messages                     <= 32'd0;
@@ -1004,6 +1011,7 @@ module RoCE_minimal_stack_512 #(
         end
 
         qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
+        qp_update_write_type_reg  <= qp_update_write_type_reg;
         qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
       end
     end
@@ -1051,6 +1059,7 @@ module RoCE_minimal_stack_512 #(
   assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
   assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
   assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
+  assign qp_curr_write_type          = qp_update_write_type_reg;
   assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
 
   assign start_transfer_wire         = start_transfer_reg || new_transfer;

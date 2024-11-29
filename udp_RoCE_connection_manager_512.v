@@ -79,6 +79,7 @@ module udp_RoCE_connection_manager_512 #(
     output wire [23:0] loc_psn,
     output wire [31:0] rem_ip_addr,
     output wire [63:0] rem_addr,
+    output wire        write_type,
     output wire        start_transfer,
 
     output wire metadata_valid,
@@ -326,10 +327,18 @@ module udp_RoCE_connection_manager_512 #(
   end
 
   assign dma_transfer   = txmeta_dma_lentgh_reg;
+  assign rem_ip_addr    = txmeta_rem_ip_addr_reg;
   assign r_key          = qp_info_r_key_reg;
+
   assign rem_qpn        = qp_info_rem_qpn_reg;
   assign rem_psn        = qp_info_rem_psn_reg;
   assign rem_addr       = qp_info_rem_base_addr_reg + txmeta_rem_addr_offset_reg;
+
+  assign loc_qpn        = qp_info_loc_qpn_reg;
+  assign loc_psn        = qp_info_loc_psn_reg;
+  
+  assign write_type     = txmeta_write_type_reg;
+  
   assign start_transfer = txmeta_start_reg & metadata_valid_reg;
 
   assign metadata_valid = metadata_valid_reg;

@@ -245,14 +245,15 @@ module RoCE_minimal_stack_64  #(
   reg s_select_udp_reg = 1'b0;
   reg s_select_roce_reg = 1'b0;
 
-
   wire [31:0] qp_init_dma_transfer_length;
   wire [23:0] qp_init_rem_qpn;
   wire [23:0] qp_init_loc_qpn;
   wire [23:0] qp_init_rem_psn;
+  wire [23:0] qp_init_loc_psn;
   wire [31:0] qp_init_r_key;
   wire [63:0] qp_init_rem_addr;
-  wire [31:0] qp_init_rem_ip_addr = {8'd22, 8'd1, 8'd212, 8'd11};
+  wire [31:0] qp_init_rem_ip_addr;
+  wire        qp_write_type;
 
   wire [31:0] qp_update_dma_transfer_length;
   wire [23:0] qp_update_rem_qpn;
@@ -281,6 +282,7 @@ module RoCE_minimal_stack_64  #(
   reg [63:0] qp_update_rem_addr_base_reg;
   reg [31:0] qp_update_rem_addr_offset_reg;
   reg [31:0] qp_update_rem_ip_addr_reg;
+  reg        qp_update_write_type_reg;
   reg start_transfer_reg;
   reg update_qp_state_reg;
 
@@ -291,8 +293,8 @@ module RoCE_minimal_stack_64  #(
   wire [31:0] qp_curr_r_key;
   wire [63:0] qp_curr_rem_addr;
   wire [31:0] qp_curr_rem_ip_addr;
+  wire        qp_curr_write_type;
   wire start_transfer_wire;
-
   wire metadata_valid;
 
   reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
@@ -500,7 +502,7 @@ module RoCE_minimal_stack_64  #(
     .s_r_key                   (qp_curr_r_key),
     .s_rem_ip_addr             (qp_curr_rem_ip_addr),
     .s_rem_addr                (qp_curr_rem_addr),
-    .s_is_immediate            (1'b0),
+    .s_is_immediate            (qp_curr_write_type),
     .s_axis_tdata              (s_payload_fifo_axis_tdata),
     .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
     .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -734,8 +736,10 @@ module RoCE_minimal_stack_64  #(
       .rem_qpn(qp_init_rem_qpn),
       .loc_qpn(qp_init_loc_qpn),
       .rem_psn(qp_init_rem_psn),
-      .loc_psn(),
+      .loc_psn(qp_init_loc_psn),
       .rem_addr(qp_init_rem_addr),
+      .rem_ip_addr(qp_init_rem_ip_addr),
+      .write_type(qp_write_type),
       .start_transfer(start_transfer),
       .metadata_valid(metadata_valid),
       .busy()
@@ -804,7 +808,7 @@ module RoCE_minimal_stack_64  #(
       .qp_init_rem_qpn        (qp_init_rem_qpn),
       .qp_init_loc_qpn        (qp_init_loc_qpn),
       .qp_init_rem_psn        (qp_init_rem_psn),
-      .qp_init_loc_psn        (24'd0),
+      .qp_init_loc_psn        (qp_init_loc_psn),
       .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
       .qp_init_rem_addr       (qp_init_rem_addr),
       .s_roce_tx_bth_valid    (roce_bth_valid),
@@ -836,6 +840,7 @@ module RoCE_minimal_stack_64  #(
   reg [3:0] pmtu_shift;
   reg [11:0] length_pmtu_mask;
   reg new_transfer;
+  reg [7:0] bth_op_code_reg = 8'h00;
 
   always @(posedge clk) begin
     case (pmtu)
@@ -863,6 +868,10 @@ module RoCE_minimal_stack_64  #(
   end
 
   always @(posedge clk) begin
+    if (roce_bth_valid && roce_bth_ready) begin
+    	bth_op_code_reg <= roce_bth_op_code;
+    end
+  	
     if (start_transfer) begin
       qp_update_dma_transfer_length_reg <= qp_init_dma_transfer_length;
       qp_update_r_key_reg               <= qp_init_r_key;
@@ -870,6 +879,7 @@ module RoCE_minimal_stack_64  #(
       qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
       qp_update_rem_psn_reg             <= qp_init_rem_psn;
       qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
+      qp_update_write_type_reg          <= qp_write_type;
       qp_update_rem_addr_base_reg       <= qp_init_rem_addr;
       qp_update_rem_addr_offset_reg     <= 32'd0;
       sent_messages                     <= 32'd0;
@@ -886,24 +896,24 @@ module RoCE_minimal_stack_64  #(
         end
 
         qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
+        qp_update_write_type_reg  <= qp_update_write_type_reg;
         qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
       end
-      if (s_payload_axis_tvalid && s_payload_axis_tready && s_payload_axis_tlast) begin
-        sent_messages <= sent_messages + 32'd1;
-        if (stop_transfer) begin
-          new_transfer  <= 1'b0;
-          sent_messages <= {32{1'b1}};
-        end else if (sent_messages < n_transfers - 32'd1) begin
-          new_transfer <= 1'b1;
-        end
-      end else begin
-        new_transfer <= 1'b0;
-      end
     end
+    
+
     if (stop_transfer) begin
       new_transfer  <= 1'b0;
-      sent_messages <= {32{1'b1}};
+      sent_messages <= {32{1'b1}}; 
+    end else if (m_roce_payload_axis_tvalid && m_roce_payload_axis_tready && m_roce_payload_axis_tlast & bth_op_code_reg[7:2] == 6'b000010) begin // LAST, LAST-IMMD, ONLY, ONLY-IMMD
+      sent_messages <= sent_messages + 32'd1;
+      if (sent_messages < n_transfers - 32'd1) begin
+        new_transfer <= 1'b1;
+      end
+    end else begin
+      new_transfer <= 1'b0;
     end
+
     start_transfer_reg <= start_transfer;
   end
 
@@ -915,7 +925,7 @@ module RoCE_minimal_stack_64  #(
 
   always @* begin
     s_dma_meta_valid_next           = s_dma_meta_valid_reg && !s_dma_meta_ready;
-    if (start_1) begin
+    if (start_2) begin
       s_dma_meta_valid_next = 1'b1;
     end
   end
@@ -934,6 +944,7 @@ module RoCE_minimal_stack_64  #(
   assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
   assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
   assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
+  assign qp_curr_write_type          = qp_update_write_type_reg;
   assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
 
   assign start_transfer_wire         = start_transfer_reg || new_transfer;
@@ -973,19 +984,8 @@ module RoCE_minimal_stack_64  #(
         .probe5(m_udp_payload_axis_tuser)
     );
 
-    axis_handshake_monitor #(
-      .window_width(27)
-    ) axis_handshake_monitor_instance (
-        .clk(clk),
-        .rst(rst),
-        .s_axis_tvalid(m_roce_payload_axis_tvalid),
-        .m_axis_tready(m_roce_payload_axis_tready),
-        .n_valid_up(RoCE_tx_n_valid_up),
-        .n_ready_up(RoCE_tx_n_ready_up),
-        .n_both_up(RoCE_tx_n_both_up)
-    );
     end else begin
-      assign n_transfers = 2;
+      assign n_transfers = 1;
     end
   endgenerate
 endmodule

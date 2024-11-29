@@ -433,22 +433,8 @@ module RoCE_tx_header_producer #(
                 end
             end
             STATE_STORE_PAR: begin
+                
                 udp_dest_port_next = udp_dest_port_reg;
-
-                //if (m_axis_tready_int_reg) begin
-                //    s_axis_tready_next = m_axis_tready_int_early;
-                //end
-                //s_axis_tready_next = m_axis_tready_int_early;
-                //s_axis_tready_next = 1'b1;
-
-                //m_axis_tdata_int   = s_axis_tdata;
-                //m_axis_tkeep_int   = s_axis_tkeep;
-                //m_axis_tlast_int   = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
-                //m_axis_tuser_int   = s_axis_tuser;
-                //m_axis_tlast_int  = s_axis_tlast;
-                //if (m_axis_tready_int_reg) begin
-                //    m_axis_tvalid_int = s_axis_tvalid;
-                //end
 
                 s_axis_tready_next = m_axis_tready_int_early;
 
@@ -459,83 +445,76 @@ module RoCE_tx_header_producer #(
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tready && s_axis_tvalid) begin
-
-                    //m_axis_tdata_int   = s_axis_tdata;
-                    //m_axis_tkeep_int   = s_axis_tkeep;
-                    //m_axis_tlast_int   = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
-                    //m_axis_tuser_int   = s_axis_tuser;
-                    //m_axis_tvalid_int = s_axis_tvalid;
-
-                    //if (m_axis_tready_int_reg) begin
-                    //    m_axis_tvalid_int = s_axis_tvalid;
-                    //end
-
                     remaining_length_next = tx_metadata[31:0] - DATA_WIDTH / 8;
                     packet_inst_length_next = DATA_WIDTH / 8;
                     total_packet_inst_length_next = DATA_WIDTH / 8;
-                    if (tx_metadata[31:0] <= pmtu) begin
-                        state_next            = STATE_ONLY;
-                        s_dma_meta_ready_next = 1'b0;
-                        roce_bth_valid_next   = 1'b1;
-                        roce_reth_valid_next  = 1'b1;
-                        roce_immdh_valid_next = is_immediate_reg;
-                        // TODO add option for immediate 
-
-                        ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = qp_conn[79:48];
-
-                        udp_source_port_next  = LOC_UDP_PORT;
-                        udp_dest_port_next    = RoCE_udp_port;
-                        if (is_immediate_reg) begin
-                            udp_length_next = tx_metadata[31:0] + 12 + 16 + 4 + 8;
-                            // dma length (less than PMTU) + BTH + RETH + + IMMDH UDP HEADER 
-                        end else begin
-                            udp_length_next = tx_metadata[31:0] + 12 + 16 + 8;
-                            // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
-                        end
-
-
-                        roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_ONLY_IMD : RC_RDMA_WRITE_ONLY;
-                        roce_bth_p_key_next   = 16'hFFFF;
-                        roce_bth_psn_next     = qp_info[74:51];
-                        roce_bth_dest_qp_next = qp_conn[47:24];
-                        roce_bth_ack_req_next = 1'b1;
-                        roce_reth_v_addr_next = tx_metadata[95:32];
-                        roce_reth_r_key_next  = qp_info[106:75];
-                        roce_reth_length_next = tx_metadata[31:0];
-                        roce_immdh_data_next  = 32'hDEADBEEF; //TODO change this
-
-                        psn_next              = qp_info[74:51];
-                    end else begin
-                        state_next            = STATE_FIRST;
-                        s_dma_meta_ready_next = 1'b0;
-                        roce_bth_valid_next   = 1'b1;
-                        roce_reth_valid_next  = 1'b1;
-                        roce_immdh_valid_next = 1'b0;
-
-                        ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = qp_conn[79:48];
-
-                        udp_source_port_next  = LOC_UDP_PORT;
-                        udp_dest_port_next    = RoCE_udp_port;
-                        udp_length_next       = pmtu + 12 + 16 + 8;
-                        // PMTU + BTH + RETH + UDP HEADER
-
-                        roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
-                        roce_bth_p_key_next   = 16'hFFFF;
-                        roce_bth_psn_next     = qp_info[74:51];
-                        roce_bth_dest_qp_next = qp_conn[47:24];
-                        roce_bth_ack_req_next = 1'b1;
-                        roce_reth_v_addr_next = tx_metadata[95:32];
-                        roce_reth_r_key_next  = qp_info[106:75];
-                        roce_reth_length_next = tx_metadata[31:0];
-                        roce_immdh_data_next  = 32'hDEADBEEF;
-
-                        psn_next              = qp_info[74:51];
-                    end
                 end else begin
-                    state_next       = STATE_STORE_PAR;
+                    remaining_length_next = tx_metadata[31:0];
+                    packet_inst_length_next = 14'b0;
+                    total_packet_inst_length_next = 32'd0;
                 end
+
+                if (tx_metadata[31:0] <= pmtu) begin
+                    state_next            = STATE_ONLY;
+                    s_dma_meta_ready_next = 1'b0;
+                    roce_bth_valid_next   = 1'b1;
+                    roce_reth_valid_next  = 1'b1;
+                    roce_immdh_valid_next = is_immediate_reg;
+                    // TODO add option for immediate 
+
+                    ip_source_ip_next     = loc_ip_addr;
+                    ip_dest_ip_next       = qp_conn[79:48];
+
+                    udp_source_port_next  = LOC_UDP_PORT;
+                    udp_dest_port_next    = RoCE_udp_port;
+                    if (is_immediate_reg) begin
+                        udp_length_next = tx_metadata[31:0] + 12 + 16 + 4 + 8;
+                        // dma length (less than PMTU) + BTH + RETH + + IMMDH UDP HEADER 
+                    end else begin
+                        udp_length_next = tx_metadata[31:0] + 12 + 16 + 8;
+                        // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
+                    end
+
+
+                    roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_ONLY_IMD : RC_RDMA_WRITE_ONLY;
+                    roce_bth_p_key_next   = 16'hFFFF;
+                    roce_bth_psn_next     = qp_info[74:51];
+                    roce_bth_dest_qp_next = qp_conn[47:24];
+                    roce_bth_ack_req_next = 1'b1;
+                    roce_reth_v_addr_next = tx_metadata[95:32];
+                    roce_reth_r_key_next  = qp_info[106:75];
+                    roce_reth_length_next = tx_metadata[31:0];
+                    roce_immdh_data_next  = 32'hDEADBEEF; //TODO change this
+
+                    psn_next              = qp_info[74:51];
+                end else begin
+                    state_next            = STATE_FIRST;
+                    s_dma_meta_ready_next = 1'b0;
+                    roce_bth_valid_next   = 1'b1;
+                    roce_reth_valid_next  = 1'b1;
+                    roce_immdh_valid_next = 1'b0;
+
+                    ip_source_ip_next     = loc_ip_addr;
+                    ip_dest_ip_next       = qp_conn[79:48];
+
+                    udp_source_port_next  = LOC_UDP_PORT;
+                    udp_dest_port_next    = RoCE_udp_port;
+                    udp_length_next       = pmtu + 12 + 16 + 8;
+                    // PMTU + BTH + RETH + UDP HEADER
+
+                    roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
+                    roce_bth_p_key_next   = 16'hFFFF;
+                    roce_bth_psn_next     = qp_info[74:51];
+                    roce_bth_dest_qp_next = qp_conn[47:24];
+                    roce_bth_ack_req_next = 1'b1;
+                    roce_reth_v_addr_next = tx_metadata[95:32];
+                    roce_reth_r_key_next  = qp_info[106:75];
+                    roce_reth_length_next = tx_metadata[31:0];
+                    roce_immdh_data_next  = 32'hDEADBEEF;
+
+                    psn_next              = qp_info[74:51];
+                end
+
             end
             STATE_FIRST: begin
 
