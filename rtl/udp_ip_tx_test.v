@@ -422,7 +422,11 @@ always @(posedge clk) begin
         m_ip_ihl_reg <= s_ip_ihl;
         m_ip_dscp_reg <= s_ip_dscp;
         m_ip_ecn_reg <= s_ip_ecn;
-        m_ip_length_reg <= s_udp_length + 20;
+        if (s_udp_source_port == RoCE_udp_port) begin
+       	    m_ip_length_reg <= s_udp_length + 24;
+        end else begin
+            m_ip_length_reg <= s_udp_length + 20;
+        end;
         m_ip_identification_reg <= s_ip_identification;
         m_ip_flags_reg <= s_ip_flags;
         m_ip_fragment_offset_reg <= s_ip_fragment_offset;

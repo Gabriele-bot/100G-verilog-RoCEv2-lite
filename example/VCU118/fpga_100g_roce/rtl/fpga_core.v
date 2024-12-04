@@ -266,7 +266,6 @@ module fpga_core #(
   wire                                                       rx_fifo_udp_payload_axis_tuser;
 
   // Configuration
-wire [47:0] local_mac   = 48'h02_00_00_00_00_00;
 //wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10 };
 //wire [31:0] gateway_ip  = {8'd22 , 8'd1  , 8'd212, 8'd1  };
 wire [31:0] local_ip;
@@ -612,7 +611,7 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
       .udp_rx_error_payload_early_termination(),
       .udp_tx_error_payload_early_termination(),
       // Configuration
-      .local_mac(local_mac),
+      .local_mac(LOCAL_MAC_ADDRESS),
       .local_ip(local_ip),
       .gateway_ip(gateway_ip),
       .subnet_mask(subnet_mask),
