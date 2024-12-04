@@ -120,12 +120,7 @@ module cmac_gty_wrapper #(
     output wire                       tx_axis_tready,
     input  wire                       tx_axis_tlast,
     input  wire                       tx_axis_tuser,
-
-    input  wire [79:0] tx_ptp_time,
-    output wire [79:0] tx_ptp_ts,
-    output wire [15:0] tx_ptp_ts_tag,
-    output wire        tx_ptp_ts_valid,
-
+    
     input wire       tx_enable,
     input wire       tx_lfc_en,
     input wire       tx_lfc_req,
@@ -140,8 +135,6 @@ module cmac_gty_wrapper #(
     output wire                       rx_axis_tvalid,
     output wire                       rx_axis_tlast,
     output wire                       rx_axis_tuser,
-
-    input wire [79:0] rx_ptp_time,
 
     input  wire       rx_enable,
     output wire       rx_status,
@@ -1355,7 +1348,7 @@ module cmac_gty_wrapper #(
   wire                       cmac_rx_axis_tvalid;
   wire                       cmac_rx_axis_tlast;
   wire                       cmac_rx_axis_tuser;
-  wire                       cmac_rx_ptp_ts;
+  wire [               79:0] cmac_rx_ptp_ts;
 
   cmac_pad #(
       .DATA_WIDTH(AXIS_DATA_WIDTH),
@@ -1363,7 +1356,7 @@ module cmac_gty_wrapper #(
       .USER_WIDTH(1)
   ) cmac_pad_inst (
       .clk(tx_clk),
-      .rst(tx_rst),s
+      .rst(tx_rst),
 
       .s_axis_tdata (tx_axis_tdata),
       .s_axis_tkeep (tx_axis_tkeep),
@@ -1469,7 +1462,7 @@ module cmac_gty_wrapper #(
       .rx_otn_vlmarker(),
 
       .rx_preambleout(),
-
+      /*
       .rx_lane_aligner_fill_0 (cmac_rx_lane_aligner_fill[7*0+:7]),
       .rx_lane_aligner_fill_1 (cmac_rx_lane_aligner_fill[7*1+:7]),
       .rx_lane_aligner_fill_2 (cmac_rx_lane_aligner_fill[7*2+:7]),
@@ -1490,8 +1483,8 @@ module cmac_gty_wrapper #(
       .rx_lane_aligner_fill_17(cmac_rx_lane_aligner_fill[7*17+:7]),
       .rx_lane_aligner_fill_18(cmac_rx_lane_aligner_fill[7*18+:7]),
       .rx_lane_aligner_fill_19(cmac_rx_lane_aligner_fill[7*19+:7]),
-
-      /*
+      
+      
       .rx_ptp_tstamp_out(cmac_rx_ptp_ts),
       .rx_ptp_pcslane_out(),
       .ctl_rx_systemtimerin(rx_ptp_time),
@@ -1677,7 +1670,7 @@ module cmac_gty_wrapper #(
       .stat_rx_pcsl_number_17(cmac_stat_rx_pcsl_number[5*17+:5]),
       .stat_rx_pcsl_number_18(cmac_stat_rx_pcsl_number[5*18+:5]),
       .stat_rx_pcsl_number_19(cmac_stat_rx_pcsl_number[5*19+:5]),
-
+      
       /*
       .ctl_tx_systemtimerin(tx_ptp_time),
       .stat_tx_ptp_fifo_read_error(cmac_stat_tx_ptp_fifo_read_error),

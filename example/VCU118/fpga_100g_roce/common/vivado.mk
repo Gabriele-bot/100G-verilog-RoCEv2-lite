@@ -52,6 +52,8 @@ else
   XDC_FILES_REL = $(PROJECT).xdc
 endif
 
+IMPL_XDC_FILES_REL = $(foreach p,$(IMPL_XDC_FILES),$(if $(filter /% ./%,$p),$p,../$p))
+
 ###################################################################
 # Main Targets
 #
@@ -88,11 +90,16 @@ create_project.tcl: Makefile $(XCI_FILES_REL) $(IP_TCL_FILES_REL)
 	for x in $(DEFS); do echo '`define' $$x >> defines.v; done
 	echo "create_project -force -part $(FPGA_PART) $(PROJECT)" > $@
 	echo "add_files -fileset sources_1 defines.v $(SYN_FILES_REL)" >> $@
+	echo "set_property file_type {VHDL 2008} [get_files -filter {FILE_TYPE == VHDL}]" >> $@
 	echo "set_property top $(FPGA_TOP) [current_fileset]" >> $@
 	echo "add_files -fileset constrs_1 $(XDC_FILES_REL)" >> $@
+	echo "add_files -fileset constrs_1 $(IMPL_XDC_FILES_REL)" >> $@
 	for x in $(XCI_FILES_REL); do echo "import_ip $$x" >> $@; done
 	for x in $(IP_TCL_FILES_REL); do echo "source $$x" >> $@; done
 	for x in $(CONFIG_TCL_FILES_REL); do echo "source $$x" >> $@; done
+	for x in $(IMPL_XDC_FILES_REL); do echo "set_property used_in_synthesis false [get_files $$x]" >> $@; done
+
+	
 
 update_config.tcl: $(CONFIG_TCL_FILES_REL) $(SYN_FILES_REL) $(INC_FILES_REL) $(XDC_FILES_REL)
 	echo "open_project -quiet $(PROJECT).xpr" > $@

@@ -104,10 +104,13 @@ module fpga (
   wire clk_net_int;
   wire rst_net_int;
 
-  wire mmcm_rst = reset;
+  wire mmcm_rst;
   wire mmcm_locked;
   wire mmcm_clkfb;
-
+  
+  wire mmcm_rst_ext; 
+  wire cmac_rst_ext;  
+ 
   IBUFGDS #(
       .DIFF_TERM("FALSE"),
       .IBUF_LOW_PWR("FALSE")
@@ -116,7 +119,17 @@ module fpga (
       .I (clk_125mhz_p),
       .IB(clk_125mhz_n)
   );
-
+  
+  vio_ext_rst VIO_ext_rst_inst (
+     .clk(clk_125mhz_ibufg),
+     .probe_out0(mmcm_rst_ext),
+     .probe_out1(cmac_rst_ext)
+     
+  );
+  
+  assign mmcm_rst = reset | mmcm_rst_ext; 
+  
+  
   // MMCM instance
   // 125 MHz in, 125 MHz out
   // PFD range: 10 MHz to 500 MHz
@@ -183,7 +196,7 @@ module fpga (
       .N(4)
   ) sync_reset_125mhz_inst (
       .clk(clk_125mhz_int),
-      .rst(~mmcm_locked),
+      .rst(~mmcm_locked | cmac_rst_ext),
       .out(rst_125mhz_int)
   );
 
@@ -220,6 +233,11 @@ module fpga (
   assign i2c_sda   = i2c_sda_t ? 1'bz : i2c_sda_o;
 
   // QSFP1 CMAC
+  
+  assign qsfp1_modsell = 1'b0;
+  assign qsfp1_resetl  = 1'b1;
+  assign qsfp1_lpmode  = 1'b0;
+
   wire                                         qsfp1_tx_clk_int;
   wire                                         qsfp1_tx_rst_int;
 
@@ -312,6 +330,7 @@ module fpga (
       .rst(rst_125mhz_int),
       .out(qsfp1_rst)
   );
+  
 
   cmac_gty_wrapper #(
       .DRP_CLK_FREQ_HZ(125000000),
@@ -390,6 +409,12 @@ module fpga (
   );
 
   // QSFP2 CMAC
+  
+  assign qsfp2_modsell = 1'b0;
+  assign qsfp2_resetl  = 1'b1;
+  assign qsfp2_lpmode  = 1'b0;
+
+  
   wire                                         qsfp2_tx_clk_int;
   wire                                         qsfp2_tx_rst_int;
 
@@ -507,7 +532,28 @@ module fpga (
       .rx_pfc_req(qsfp2_rx_pfc_req),
       .rx_pfc_ack(qsfp2_rx_pfc_ack)
   );
+ 
+ /*
+ ila_axis ila_eth_rx(
+    .clk(qsfp1_rx_clk_int),
+    .probe0(qsfp1_rx_axis_tdata_int),
+    .probe1(qsfp1_rx_axis_tkeep_int),
+    .probe2(qsfp1_rx_axis_tvalid_int),
+    .probe3(qsfp1_rx_axis_tvalid_int),
+    .probe4(qsfp1_rx_axis_tlast_int),
+    .probe5(qsfp1_rx_axis_tuser_int)
+);
 
+ila_axis ila_eth_tx(
+    .clk(qsfp1_tx_clk_int),
+    .probe0(qsfp1_tx_axis_tdata_int),
+    .probe1(qsfp1_tx_axis_tkeep_int),
+    .probe2(qsfp1_tx_axis_tvalid_int),
+    .probe3(qsfp1_tx_axis_tready_int),
+    .probe4(qsfp1_tx_axis_tlast_int),
+    .probe5(qsfp1_tx_axis_tuser_int)
+);
+*/
 
   wire [7:0] led_int;
   /*
@@ -611,7 +657,7 @@ module fpga (
 
   fpga_core core_inst (
       /*
-     * Clock: 390.625 MHz
+     * Clock: 322.625 MHz
      * Synchronous reset
      */
       .clk                 (clk_net_int),
@@ -707,3 +753,4 @@ module fpga (
 endmodule
 
 `resetall
+

@@ -14,16 +14,21 @@ SYN_FILES += rtl/sync_signal.v
 SYN_FILES += lib/eth/rtl/lfsr.v
 SYN_FILES += lib/eth/rtl/eth_axis_rx.v
 SYN_FILES += lib/eth/rtl/eth_axis_tx.v
+SYN_FILES += lib/eth/rtl/eth_hdr_fifo.v
 SYN_FILES += lib/eth/rtl/udp_complete_512.v
-#SYN_FILES += lib/eth/rtl/udp_checksum_gen_512.v
+SYN_FILES += lib/eth/rtl/udp_checksum_gen_test.v
 SYN_FILES += lib/eth/rtl/udp_512.v
-SYN_FILES += lib/eth/rtl/udp_ip_rx_512.v
-SYN_FILES += lib/eth/rtl/udp_ip_tx_512.v
+SYN_FILES += lib/eth/rtl/udp_ip_rx_test.v
+SYN_FILES += lib/eth/rtl/udp_ip_tx_test.v
 SYN_FILES += lib/eth/rtl/ip_complete_512.v
 SYN_FILES += lib/eth/rtl/ip_512.v
-SYN_FILES += lib/eth/rtl/ip_eth_rx_512.v
-SYN_FILES += lib/eth/rtl/ip_eth_tx_512.v
+SYN_FILES += lib/eth/rtl/ip_eth_rx_test.v
+SYN_FILES += lib/eth/rtl/ip_eth_tx_test.v
 SYN_FILES += lib/eth/rtl/ip_arb_mux.v
+SYN_FILES += lib/eth/rtl/icmp_ip_tx.v
+SYN_FILES += lib/eth/rtl/icmp_ip_rx.v
+SYN_FILES += lib/eth/rtl/icmp_gen_checksum.v
+SYN_FILES += lib/eth/rtl/icmp_echo_reply.v
 SYN_FILES += lib/eth/rtl/arp.v
 SYN_FILES += lib/eth/rtl/arp_cache.v
 SYN_FILES += lib/eth/rtl/arp_eth_rx.v
@@ -36,38 +41,52 @@ SYN_FILES += lib/eth/lib/axis/rtl/axis_adapter.v
 SYN_FILES += lib/eth/lib/axis/rtl/axis_fifo.v
 SYN_FILES += lib/eth/lib/axis/rtl/axis_switch.v
 SYN_FILES += lib/eth/lib/axis/rtl/axis_register.v
+SYN_FILES += lib/eth/lib/axis/rtl/axis_pipeline_register.v
+SYN_FILES += lib/eth/lib/axis/rtl/axis_frame_length_adjust.v
 SYN_FILES += lib/eth/lib/axis/rtl/axis_async_fifo.v
-SYN_FILES += lib/eth/lib/axis/rtl/axis_async_fifo_adapter.v
 SYN_FILES += lib/eth/lib/axis/rtl/sync_reset.v
 SYN_FILES += ip/cmac_gty_wrapper.v
 SYN_FILES += ip/cmac_gty_ch_wrapper.v
 SYN_FILES += ip/cmac_pad.v
 
 
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/axis_mask_fields_icrc.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/axis_RoCE_icrc_insert_512.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/RoCE_udp_tx_512.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/RoCE_udp_rx_512.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/Roce_tx_header_producer.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/RoCE_minimal_stack_512.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/udp_RoCE_connection_manager_512.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/RoCE_latency_eval.v
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/axis_handshake_monitor.vhd
-SYN_FILES +=  ../../../../100G-verilog-RoCEv2-lite/RoCE_qp_state_module.v
+# RoCE Files
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/axis_mask_fields_icrc.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/axis_RoCE_icrc_insert_512.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_udp_tx_512.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_udp_rx_512.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_tx_header_producer.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_minimal_stack_512.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/udp_RoCE_connection_manager_512.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_latency_eval.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/RoCE_qp_state_module.v
+SYN_FILES +=  lib/100G-verilog-RoCEv2-lite/axis_handshake_monitor.vhd 
+
+#CRC FILES
+SYN_FILES += lib/FAST_CRC32/CRC32/CRC32_pkg.vhd
+SYN_FILES += lib/FAST_CRC32/CRC32/CRC32_D512_matrix.vhd
+
 
 # XDC files
 XDC_FILES = fpga.xdc
 XDC_FILES += lib/eth/syn/vivado/eth_mac_fifo.tcl
 XDC_FILES += lib/eth/lib/axis/syn/vivado/axis_async_fifo.tcl
 XDC_FILES += lib/eth/lib/axis/syn/vivado/sync_reset.tcl
-XDC_FILES += ip/constraints/cmac_gty_wrapper.tcl
-XDC_FILES += ip/constraints/cmac_gty_ch_wrapper.tcl
-XDC_FILES += ip/constraints/cmac_palacement.xdc
+
+# impl only constraint files
+IMPL_XDC_FILES  = ip/constraints/cmac_gty_wrapper.tcl
+IMPL_XDC_FILES += ip/constraints/cmac_gty_ch_wrapper.tcl
+IMPL_XDC_FILES += ip/constraints/cmac_placement.xdc
 
 # IP
 #IP_TCL_FILES = ip/gig_ethernet_pcs_pma_0.tcl
 IP_TCL_FILES = ip/cmac_usplus.tcl
 IP_TCL_FILES += ip/cmac_gty.tcl
+IP_TCL_FILES += ip/vio_ext_rst.tcl
+IP_TCL_FILES += ip/vio_roce_cfg.tcl
+IP_TCL_FILES += ip/vio_throughput.tcl
+IP_TCL_FILES += ip/ila_axis.tcl
+
 
 # Configuration
 #CONFIG_TCL_FILES = ./config.tcl
