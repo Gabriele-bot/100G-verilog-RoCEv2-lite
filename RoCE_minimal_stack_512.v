@@ -814,7 +814,7 @@ module RoCE_minimal_stack_512 #(
   );
 
   udp_RoCE_connection_manager_512 #(
-  .LISTEN_UDP_PORT(16'h4321)
+    .LISTEN_UDP_PORT(16'h4321)
   ) udp_RoCE_connection_manager_512_instance (
     .clk(clk),
     .rst(rst),

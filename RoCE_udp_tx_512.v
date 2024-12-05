@@ -92,7 +92,11 @@ module RoCE_udp_tx_512 (
      * Status signals
      */
     output wire         busy,
-    output wire         error_payload_early_termination
+    output wire         error_payload_early_termination,
+    /*
+     * Config
+     */
+     input  wire [              15:0] RoCE_udp_port
 );
 
   /*
@@ -155,8 +159,6 @@ payload in an AXI stream, combines the headers with the payload, passes through
 the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
 */
-
-  localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
   // TODO improove the FSM..
   localparam [4:0]
@@ -1319,7 +1321,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       m_ip_ihl_reg <= s_ip_ihl;
       m_ip_dscp_reg <= s_ip_dscp;
       m_ip_ecn_reg <= s_ip_ecn;
-      m_ip_length_reg <= s_udp_length + 20;
+      m_ip_length_reg <= s_udp_length + 24;
       m_ip_identification_reg <= s_ip_identification;
       m_ip_flags_reg <= s_ip_flags;
       m_ip_fragment_offset_reg <= s_ip_fragment_offset;
@@ -1329,8 +1331,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       m_ip_source_ip_reg <= s_ip_source_ip;
       m_ip_dest_ip_reg <= s_ip_dest_ip;
       m_udp_source_port_reg <= s_udp_source_port;
-      m_udp_dest_port_reg <= ROCE_UDP_PORT;
-      m_udp_length_reg <= s_udp_length;
+      m_udp_dest_port_reg <= RoCE_udp_port;
+      m_udp_length_reg <= s_udp_length  + 4;
       m_udp_checksum_reg <= 16'h0000;
 
       roce_bth_op_code_reg = s_roce_bth_op_code;
