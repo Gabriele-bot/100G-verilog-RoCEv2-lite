@@ -426,7 +426,7 @@ always @(posedge clk) begin
        	    m_ip_length_reg <= s_udp_length + 24;
         end else begin
             m_ip_length_reg <= s_udp_length + 20;
-        end;
+        end
         m_ip_identification_reg <= s_ip_identification;
         m_ip_flags_reg <= s_ip_flags;
         m_ip_fragment_offset_reg <= s_ip_fragment_offset;
