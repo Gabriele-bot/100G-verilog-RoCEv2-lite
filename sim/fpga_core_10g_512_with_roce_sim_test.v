@@ -10,9 +10,12 @@ module top (
      * Clock: 390.625 MHz
      * Synchronous reset
      */
-    input wire clk,
+    input wire clk_x1,
+    input wire clk_x8,
     input wire rst,
 
+    input wire clk_mem,
+    input wire rst_mem,
     /*
      * GPIO
      */
@@ -51,6 +54,13 @@ module top (
   wire                                                       tx_axis_tready;
   wire                                                       tx_axis_tlast;
   wire                                                       tx_axis_tuser;
+
+  wire [ 63:0]                                               tx_to_pad_axis_tdata;
+  wire [  7:0]                                               tx_to_pad_axis_tkeep;
+  wire                                                       tx_to_pad_axis_tvalid;
+  wire                                                       tx_to_pad_axis_tready;
+  wire                                                       tx_to_pad_axis_tlast;
+  wire                                                       tx_to_pad_axis_tuser;
 
   wire [511:0]                                               rx_512_axis_tdata;
   wire [ 63:0]                                               rx_512_axis_tkeep;
@@ -175,6 +185,7 @@ module top (
   wire [  5:0]                                               tx_udp_ip_dscp;
   wire [  1:0]                                               tx_udp_ip_ecn;
   wire [  7:0]                                               tx_udp_ip_ttl;
+  wire [ 15:0]                                               tx_udp_ip_identification;
   wire [ 31:0]                                               tx_udp_ip_source_ip;
   wire [ 31:0]                                               tx_udp_ip_dest_ip;
   wire [ 15:0]                                               tx_udp_source_port;
@@ -204,7 +215,7 @@ module top (
 
   // Configuration
 
-  wire [ 12:0] pmtu = 13'd2048;
+  wire [ 12:0] pmtu = 13'd4096;
   wire [ 15:0] RoCE_udp_port = 16'h12b7;
 
   wire [ 47:0] local_mac = 48'h02_00_00_00_00_00;
@@ -238,7 +249,7 @@ module top (
   reg match_cond_reg = 0;
   reg no_match_reg = 0;
 
-  always @(posedge clk) begin
+  always @(posedge clk_x8) begin
     if (rst) begin
       match_cond_reg <= 0;
       no_match_reg   <= 0;
@@ -289,7 +300,7 @@ module top (
   reg valid_last = 0;
   reg [7:0] led_reg = 0;
 
-  always @(posedge clk) begin
+  always @(posedge clk_x8) begin
     if (rst) begin
       led_reg <= 0;
     end else begin
@@ -308,16 +319,16 @@ module top (
       .ENABLE_PADDING(1),
       .ENABLE_DIC(1),
       .MIN_FRAME_LENGTH(64),
-      .TX_FIFO_DEPTH(4096),
+      .TX_FIFO_DEPTH(4200),
       .TX_FRAME_FIFO(1),
-      .RX_FIFO_DEPTH(4096),
+      .RX_FIFO_DEPTH(4200),
       .RX_FRAME_FIFO(1)
   ) eth_mac_10g_fifo_inst (
       .rx_clk(xgmii_rx_clk),
       .rx_rst(xgmii_rx_rst),
       .tx_clk(xgmii_tx_clk),
       .tx_rst(xgmii_tx_rst),
-      .logic_clk(clk),
+      .logic_clk(clk_x8),
       .logic_rst(rst),
 
       .tx_axis_tdata (tx_axis_tdata),
@@ -353,64 +364,97 @@ module top (
       .cfg_rx_enable(1'b1)
   );
 
-
-  axis_adapter #(
-      .S_DATA_WIDTH(64),
-      .M_DATA_WIDTH(512),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) rx_axis_64_to_512_adapter_inst (
-      .clk(clk),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata(rx_axis_tdata),
-      .s_axis_tkeep(rx_axis_tkeep),
-      .s_axis_tvalid(rx_axis_tvalid),
-      .s_axis_tready(rx_axis_tready),
-      .s_axis_tlast(rx_axis_tlast),
-      .s_axis_tuser(rx_axis_tuser),
-      // AXI output
-      .m_axis_tdata(rx_512_axis_tdata),
-      .m_axis_tkeep(rx_512_axis_tkeep),
-      .m_axis_tvalid(rx_512_axis_tvalid),
-      .m_axis_tready(rx_512_axis_tready),
-      .m_axis_tlast(rx_512_axis_tlast),
-      .m_axis_tuser(rx_512_axis_tuser)
-  );
-
-  axis_adapter #(
+  
+  axis_async_fifo_adapter #(
+      .DEPTH(40960),
       .S_DATA_WIDTH(512),
+      .S_KEEP_ENABLE(1),
+      .S_KEEP_WIDTH(64),
       .M_DATA_WIDTH(64),
+      .M_KEEP_ENABLE(1),
+      .M_KEEP_WIDTH(8),
       .ID_ENABLE(0),
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) tx_axis_512_to_64_adapter_inst (
-      .clk(clk),
-      .rst(rst),
+      .USER_WIDTH(1),
+      .FRAME_FIFO(1)
+  ) eth_tx_axis_fifo (
+      .s_clk(clk_x1),
+      .s_rst(rst),
+
       // AXI input
       .s_axis_tdata(tx_512_axis_tdata),
       .s_axis_tkeep(tx_512_axis_tkeep),
       .s_axis_tvalid(tx_512_axis_tvalid),
       .s_axis_tready(tx_512_axis_tready),
       .s_axis_tlast(tx_512_axis_tlast),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
       .s_axis_tuser(tx_512_axis_tuser),
+      
+      .m_clk(clk_x8),
+      .m_rst(rst),
+
       // AXI output
       .m_axis_tdata(tx_axis_tdata),
       .m_axis_tkeep(tx_axis_tkeep),
       .m_axis_tvalid(tx_axis_tvalid),
       .m_axis_tready(tx_axis_tready),
       .m_axis_tlast(tx_axis_tlast),
+      .m_axis_tid(),
+      .m_axis_tdest(),
       .m_axis_tuser(tx_axis_tuser)
   );
+  
+  axis_async_fifo_adapter #(
+      .DEPTH(40960),
+      .S_DATA_WIDTH(64),
+      .S_KEEP_ENABLE(1),
+      .S_KEEP_WIDTH(8),
+      .M_DATA_WIDTH(512),
+      .M_KEEP_ENABLE(1),
+      .M_KEEP_WIDTH(64),
+      .ID_ENABLE(0),
+      .DEST_ENABLE(0),
+      .USER_ENABLE(1),
+      .USER_WIDTH(1),
+      .FRAME_FIFO(1)
+  ) eth_rx_axis_fifo (
+      .s_clk(clk_x8),
+      .s_rst(rst),
+
+      // AXI input
+      .s_axis_tdata( rx_axis_tdata),
+      .s_axis_tkeep( rx_axis_tkeep),
+      .s_axis_tvalid(rx_axis_tvalid),
+      .s_axis_tready(rx_axis_tready),
+      .s_axis_tlast( rx_axis_tlast),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
+      .s_axis_tuser( rx_axis_tuser),
+      
+      .m_clk(clk_x1),
+      .m_rst(rst),
+
+      // AXI output
+      .m_axis_tdata (rx_512_axis_tdata),
+      .m_axis_tkeep (rx_512_axis_tkeep),
+      .m_axis_tvalid(rx_512_axis_tvalid),
+      .m_axis_tready(rx_512_axis_tready),
+      .m_axis_tlast (rx_512_axis_tlast),
+      .m_axis_tid(),
+      .m_axis_tdest(),
+      .m_axis_tuser (rx_512_axis_tuser)
+  );
+
+
+
 
 
   eth_axis_rx #(
       .DATA_WIDTH(512)
   ) eth_axis_rx_inst (
-      .clk(clk),
+      .clk(clk_x1),
       .rst(rst),
       // AXI input
       .s_axis_tdata(rx_512_axis_tdata),
@@ -439,7 +483,7 @@ module top (
   eth_axis_tx #(
       .DATA_WIDTH(512)
   ) eth_axis_tx_inst (
-      .clk                      (clk),
+      .clk                      (clk_x1),
       .rst                      (rst),
       // Ethernet frame input
       .s_eth_hdr_valid          (tx_eth_hdr_valid),
@@ -454,60 +498,21 @@ module top (
       .s_eth_payload_axis_tlast (tx_eth_payload_axis_tlast),
       .s_eth_payload_axis_tuser (tx_eth_payload_axis_tuser),
       // AXI output
-      .m_axis_tdata             (tx_512_fifo_axis_tdata),
-      .m_axis_tkeep             (tx_512_fifo_axis_tkeep),
-      .m_axis_tvalid            (tx_512_fifo_axis_tvalid),
-      .m_axis_tready            (tx_512_fifo_axis_tready),
-      .m_axis_tlast             (tx_512_fifo_axis_tlast),
-      .m_axis_tuser             (tx_512_fifo_axis_tuser),
+      .m_axis_tdata             (tx_512_axis_tdata),
+      .m_axis_tkeep             (tx_512_axis_tkeep),
+      .m_axis_tvalid            (tx_512_axis_tvalid),
+      .m_axis_tready            (tx_512_axis_tready),
+      .m_axis_tlast             (tx_512_axis_tlast),
+      .m_axis_tuser             (tx_512_axis_tuser),
       // Status signals
       .busy                     ()
   );
 
-  axis_fifo #(
-      .DEPTH(40960),
-      .DATA_WIDTH(512),
-      .KEEP_ENABLE(1),
-      .KEEP_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .FRAME_FIFO(0)
-  ) eth_tx_axis_fifo (
-      .clk(clk),
-      .rst(rst),
-
-      // AXI input
-      .s_axis_tdata(tx_512_fifo_axis_tdata),
-      .s_axis_tkeep(tx_512_fifo_axis_tkeep),
-      .s_axis_tvalid(tx_512_fifo_axis_tvalid),
-      .s_axis_tready(tx_512_fifo_axis_tready),
-      .s_axis_tlast(tx_512_fifo_axis_tlast),
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      .s_axis_tuser(tx_512_fifo_axis_tuser),
-
-      // AXI output
-      .m_axis_tdata(tx_512_axis_tdata),
-      .m_axis_tkeep(tx_512_axis_tkeep),
-      .m_axis_tvalid(tx_512_axis_tvalid),
-      .m_axis_tready(tx_512_axis_tready),
-      .m_axis_tlast(tx_512_axis_tlast),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      .m_axis_tuser(tx_512_axis_tuser),
-
-      // Status
-      .status_overflow  (),
-      .status_bad_frame (),
-      .status_good_frame()
-  );
-
+  
   udp_complete_512 #(
       .UDP_CHECKSUM_GEN_ENABLE(0)
   ) udp_complete_inst (
-      .clk(clk),
+      .clk(clk_x1),
       .rst(rst),
       // Ethernet frame input
       .s_eth_hdr_valid(rx_eth_hdr_valid),
@@ -648,7 +653,7 @@ module top (
 
   // ROCE TX inst
   RoCE_minimal_stack_512 RoCE_minimal_stack_512_instance (
-      .clk(clk),
+      .clk(clk_x1),
       .rst(rst),
       .s_udp_hdr_valid(rx_udp_hdr_valid),
       .s_udp_hdr_ready(rx_udp_hdr_ready),
@@ -688,7 +693,7 @@ module top (
       .m_ip_dscp(tx_udp_ip_dscp),
       .m_ip_ecn(tx_udp_ip_ecn),
       .m_ip_length(),
-      .m_ip_identification(),
+      .m_ip_identification(tx_udp_ip_identification),
       .m_ip_flags(),
       .m_ip_fragment_offset(),
       .m_ip_ttl(tx_udp_ip_ttl),
