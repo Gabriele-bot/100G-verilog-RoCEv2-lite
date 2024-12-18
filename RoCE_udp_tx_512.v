@@ -1321,7 +1321,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       m_ip_ihl_reg <= s_ip_ihl;
       m_ip_dscp_reg <= s_ip_dscp;
       m_ip_ecn_reg <= s_ip_ecn;
-      m_ip_length_reg <= s_udp_length + 24;
+      m_ip_length_reg <= s_udp_length + 20;
       m_ip_identification_reg <= s_ip_identification;
       m_ip_flags_reg <= s_ip_flags;
       m_ip_fragment_offset_reg <= s_ip_fragment_offset;
@@ -1332,7 +1332,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       m_ip_dest_ip_reg <= s_ip_dest_ip;
       m_udp_source_port_reg <= s_udp_source_port;
       m_udp_dest_port_reg <= RoCE_udp_port;
-      m_udp_length_reg <= s_udp_length  + 4;
+      m_udp_length_reg <= s_udp_length;
       m_udp_checksum_reg <= 16'h0000;
 
       roce_bth_op_code_reg = s_roce_bth_op_code;

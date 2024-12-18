@@ -429,17 +429,17 @@ Received_r_key = 0
 
 data_stream = []
 
-dma_length_set  = 16384+4
+dma_length_set  = 32768 + 12
 r_key_set        = 0x5514
-starting_psn_set = 0
+starting_psn_set = 1
 rem_qpn_set = 0x00b8
 base_addr = 0x7ff1c2377000
 
 
-send_qp_info(rem_ip_addr="22.1.212.21", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-send_qp_info(rem_ip_addr="22.1.212.21", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
 
-send_txmeta(rem_ip_addr="22.1.212.21", rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
+send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
 
 
 ETH_P_ALL = 3  # not defined in socket module, sadly...

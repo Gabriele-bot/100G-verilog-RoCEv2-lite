@@ -5,8 +5,10 @@ from ipaddress import ip_address
 import argparse
 
 parser = argparse.ArgumentParser(description='Send QP information via UDP')
-parser.add_argument('-i', '--ip_addr', metavar='N', type=str, default="22.1.212.10",
-                    help='RoCE TX IP address')
+parser.add_argument('-ic', '--client_ip_addr', metavar='N', type=str, default="22.1.212.11",
+                    help='Client IP address (PC)')
+parser.add_argument('-if', '--fpga_ip_addr', metavar='N', type=str, default="22.1.212.10",
+                    help='FPGA IP address')
 parser.add_argument('-l', '--length', metavar='N', type=int, default=128,
                     help='DMA transfer size in byte')
 parser.add_argument('-r', '--rkey', metavar='N', type=int, default=0x234,
@@ -24,11 +26,11 @@ parser.add_argument('-s', '--start', action='store_true',
 
 args = parser.parse_args()
 
+UDP_PORT = 0x4321
 
-def send_qp_info(rem_ip_addr="22.1.212.11", rem_qpn=0x11, rem_psn=0x0, r_key=0x0, rem_base_addr=0x0):
-    UDP_PORT = 0x4321
-
-    REM_IP_ADDRESS = rem_ip_addr
+def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=0x11, rem_psn=0x0, r_key=0x0, rem_base_addr=0x0):
+    
+    REM_IP_ADDRESS = client_ip_addr
     R_KEY = r_key
     QPN = rem_qpn
     PSN = rem_psn
@@ -49,20 +51,21 @@ def send_qp_info(rem_ip_addr="22.1.212.11", rem_qpn=0x11, rem_psn=0x0, r_key=0x0
     MESSAGE += struct.pack(">Q", 0x0)  #TXmeta_rem_addr
     MESSAGE += struct.pack(">L", 0x0)  #DMA length
     MESSAGE += struct.pack(">H", 0x0)  #UDP_PORT
+    
+    
 
-    print("UDP target IP:", "22.1.212.10")
+    print("UDP target IP:", fpga_ip_addr)
     print("UDP target port:", UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, ("22.1.212.10", UDP_PORT))
+    sock.sendto(MESSAGE, (fpga_ip_addr, UDP_PORT))
 
 
-def send_txmeta(rem_ip_addr="22.1.212.11", rem_addr_offset=0x0, rdma_length=0x0, start_flag=0):
-    UDP_PORT = 0x4321
+def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_addr_offset=0x0, rdma_length=0x0, start_flag=0):
 
-    REM_IP_ADDRESS = rem_ip_addr
-    REM_IP_ADDRESS_INT = int(ip_address(rem_ip_addr))
+    REM_IP_ADDRESS = client_ip_addr
+    REM_IP_ADDRESS_INT = int(ip_address(client_ip_addr))
     DMA_LENGTH = rdma_length
     REM_ADDR_OFFSET = rem_addr_offset
 
@@ -85,12 +88,12 @@ def send_txmeta(rem_ip_addr="22.1.212.11", rem_addr_offset=0x0, rdma_length=0x0,
     MESSAGE += struct.pack(">L", DMA_LENGTH)  # DMA length
     MESSAGE += struct.pack(">H", 0x3412)  # UDP_PORT
 
-    print("UDP target IP:", "22.1.212.10")
+    print("UDP target IP:", fpga_ip_addr)
     print("UDP target port:", UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.connect(("22.1.212.10", UDP_PORT))
+    sock.connect((fpga_ip_addr, UDP_PORT))
     #sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
     sock.send(MESSAGE)
 
@@ -98,7 +101,7 @@ def send_txmeta(rem_ip_addr="22.1.212.11", rem_addr_offset=0x0, rdma_length=0x0,
 if __name__ == "__main__":
 
     if args.start:
-        send_txmeta(rem_ip_addr=args.ip_addr, rem_addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start)
+        send_txmeta(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start)
     else:
-        send_qp_info(rem_ip_addr=args.ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
-        send_qp_info(rem_ip_addr=args.ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
+        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
+        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
