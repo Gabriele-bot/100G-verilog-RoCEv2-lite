@@ -176,22 +176,22 @@ package body CRC32_pkg is
     begin
         case keep_value is
             
-            when X"--------------0F" => index := 1;
-            when X"-------------0F-" => index := 2;
-            when X"------------0F--" => index := 3;
-            when X"-----------0F---" => index := 4;
-            when X"----------0F----" => index := 5;
-            when X"---------0F-----" => index := 6;
-            when X"--------0F------" => index := 7;
-            when X"-------0F-------" => index := 8;
-            when X"------0F--------" => index := 9;
-            when X"-----0F---------" => index := 10;
-            when X"----0F----------" => index := 11;
-            when X"---0F-----------" => index := 12;
-            when X"--0F------------" => index := 13;
-            when X"-0F-------------" => index := 14;
-            when X"0F--------------" => index := 15;
-            when X"F---------------" => index := 16;
+            when X"000000000000000F" => index := 1;
+            when X"00000000000000FF" => index := 2;
+            when X"0000000000000FFF" => index := 3;
+            when X"000000000000FFFF" => index := 4;
+            when X"00000000000FFFFF" => index := 5;
+            when X"0000000000FFFFFF" => index := 6;
+            when X"000000000FFFFFFF" => index := 7;
+            when X"00000000FFFFFFFF" => index := 8;
+            when X"0000000FFFFFFFFF" => index := 9;
+            when X"000000FFFFFFFFFF" => index := 10;
+            when X"00000FFFFFFFFFFF" => index := 11;
+            when X"0000FFFFFFFFFFFF" => index := 12;
+            when X"000FFFFFFFFFFFFF" => index := 13;
+            when X"00FFFFFFFFFFFFFF" => index := 14;
+            when X"0FFFFFFFFFFFFFFF" => index := 15;
+            when X"FFFFFFFFFFFFFFFF" => index := 16;
             when others              => index := 1;
         end case;
         return index;
@@ -202,9 +202,15 @@ package body CRC32_pkg is
         variable index : integer := 0;
     begin
         case keep_value is
-            when X"-0" => index := 0;
-            when X"0F" => index := 1;
-            when X"F-" => index := 2;
+            when "00000000" => index := 0;
+            when "00000001" => index := 1;
+            when "00000011" => index := 2;
+            when "00000111" => index := 3;
+            when "00001111" => index := 4;
+            when "00011111" => index := 5;
+            when "00111111" => index := 6;
+            when "01111111" => index := 7;
+            when "11111111" => index := 8;
             when others      => index := 0;
         end case;
         return index;
