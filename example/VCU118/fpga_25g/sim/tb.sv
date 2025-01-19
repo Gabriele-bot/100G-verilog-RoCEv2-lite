@@ -16,8 +16,8 @@ export "DPI-C" task xgmii_idle;
 logic clk20;
 logic clk160;
 logic extRst;
-logic mem_clk;
-logic mem_rst;
+logic clk25;
+logic rst25;
 logic c0_sys_clk_p;
 logic c0_sys_clk_n;
 logic c1_sys_clk_p;
@@ -31,7 +31,7 @@ logic [63:0] xgmiiRxd;
 initial begin
     clk160 <= 0;
     clk20  <= 0;
-    mem_clk   <= 0;
+    clk25  <= 0;
     c0_sys_clk_p <= 0;
     c0_sys_clk_n <= 0;
     c1_sys_clk_p <= 0;
@@ -41,8 +41,8 @@ initial begin
 // Clock generator
   always
   begin
-    #1.666 mem_clk <= 1;
-    #1.666 mem_clk <= 0;
+    #20.00 clk25 <= 1;
+    #20.00 clk25 <= 0;
   end
   
   always
@@ -85,6 +85,9 @@ top #() top0 (
         .clk_x1(clk20),
         .clk_x8(clk160),
 	.rst(extRst),
+	
+	.clk_mem(clk25),
+	.rst_mem(rst25),
 
         .btnu(1'b0),
         .btnl(1'b0),
@@ -109,6 +112,7 @@ initial begin
 	//$dumpfile("wave.vcd");
 	//$dumpvars(0, top0);
         extRst = 1'b1;
+        rst25 = 1'b1;
 
 	ret <= shared_mem_init();
 	if (ret < 0) begin
@@ -117,6 +121,7 @@ initial begin
 
 	#5000;
         extRst = 1'b0;
+        rst25 = 1'b0;
 	pkt_count = max_recvpkt;
 	while(1) begin
 		tap2xgmii(ret);
