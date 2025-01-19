@@ -213,6 +213,13 @@ module top (
   wire                                                       tx_fifo_udp_payload_axis_tlast;
   wire                                                       tx_fifo_udp_payload_axis_tuser;
 
+  wire [511:0]                                               rx_delay_axis_tdata;
+  wire [ 63:0]                                               rx_delay_axis_tkeep;
+  wire                                                       rx_delay_axis_tvalid;
+  wire                                                       rx_delay_axis_tready;
+  wire                                                       rx_delay_axis_tlast;
+  wire                                                       rx_delay_axis_tuser;
+
   // Configuration
 
   wire [ 12:0] pmtu = 13'd4096;
@@ -248,6 +255,8 @@ module top (
 
   reg match_cond_reg = 0;
   reg no_match_reg = 0;
+
+  integer i;
 
   always @(posedge clk_x8) begin
     if (rst) begin
@@ -366,7 +375,7 @@ module top (
 
   
   axis_async_fifo_adapter #(
-      .DEPTH(40960),
+      .DEPTH(5000),
       .S_DATA_WIDTH(512),
       .S_KEEP_ENABLE(1),
       .S_KEEP_WIDTH(64),
@@ -377,7 +386,7 @@ module top (
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
       .USER_WIDTH(1),
-      .FRAME_FIFO(1)
+      .FRAME_FIFO(0)
   ) eth_tx_axis_fifo (
       .s_clk(clk_x1),
       .s_rst(rst),
@@ -405,9 +414,11 @@ module top (
       .m_axis_tdest(),
       .m_axis_tuser(tx_axis_tuser)
   );
+
+
   
   axis_async_fifo_adapter #(
-      .DEPTH(40960),
+      .DEPTH(5000),
       .S_DATA_WIDTH(64),
       .S_KEEP_ENABLE(1),
       .S_KEEP_WIDTH(8),
@@ -418,7 +429,7 @@ module top (
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
       .USER_WIDTH(1),
-      .FRAME_FIFO(1)
+      .FRAME_FIFO(0)
   ) eth_rx_axis_fifo (
       .s_clk(clk_x8),
       .s_rst(rst),
@@ -447,6 +458,35 @@ module top (
       .m_axis_tuser (rx_512_axis_tuser)
   );
 
+  axis_fifo #(
+    .DEPTH(128),
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .FRAME_FIFO(0),
+    .RAM_PIPELINE(0)
+  ) rx_axis_delay_inst (
+      .clk(clk_x1),
+      .rst(rst),
+      // AXI input
+      .s_axis_tdata(rx_512_axis_tdata),
+      .s_axis_tkeep(rx_512_axis_tkeep),
+      .s_axis_tvalid(rx_512_axis_tvalid),
+      .s_axis_tready(rx_512_axis_tready),
+      .s_axis_tlast(rx_512_axis_tlast),
+      .s_axis_tuser(rx_512_axis_tuser),
+      // Ethernet frame output
+      .m_axis_tdata( rx_delay_axis_tdata),
+      .m_axis_tkeep( rx_delay_axis_tkeep),
+      .m_axis_tvalid(rx_delay_axis_tvalid),
+      .m_axis_tready(rx_delay_axis_tready),
+      .m_axis_tlast( rx_delay_axis_tlast),
+      .m_axis_tuser( rx_delay_axis_tuser)
+  );
 
 
 
@@ -457,12 +497,12 @@ module top (
       .clk(clk_x1),
       .rst(rst),
       // AXI input
-      .s_axis_tdata(rx_512_axis_tdata),
-      .s_axis_tkeep(rx_512_axis_tkeep),
-      .s_axis_tvalid(rx_512_axis_tvalid),
-      .s_axis_tready(rx_512_axis_tready),
-      .s_axis_tlast(rx_512_axis_tlast),
-      .s_axis_tuser(rx_512_axis_tuser),
+      .s_axis_tdata( rx_delay_axis_tdata),
+      .s_axis_tkeep( rx_delay_axis_tkeep),
+      .s_axis_tvalid(rx_delay_axis_tvalid),
+      .s_axis_tready(rx_delay_axis_tready),
+      .s_axis_tlast( rx_delay_axis_tlast),
+      .s_axis_tuser( rx_delay_axis_tuser),
       // Ethernet frame output
       .m_eth_hdr_valid(rx_eth_hdr_valid),
       .m_eth_hdr_ready(rx_eth_hdr_ready),
@@ -652,7 +692,13 @@ module top (
   assign rx_fifo_udp_payload_axis_tready = 1'b1;
 
   // ROCE TX inst
-  RoCE_minimal_stack_512 RoCE_minimal_stack_512_instance (
+  RoCE_minimal_stack_512 #(
+      .DEBUG(0),
+      .RETRANSMISSION(1),
+      .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
+      .ENABLE_SIM_PACKET_DROP_TX(1),
+      .ENABLE_SIM_PACKET_DROP_RX(1)
+  ) RoCE_minimal_stack_512_instance (
       .clk(clk_x1),
       .rst(rst),
       .s_udp_hdr_valid(rx_udp_hdr_valid),
@@ -715,7 +761,9 @@ module top (
       .error_payload_early_termination(),
       .pmtu(pmtu),
       .RoCE_udp_port(RoCE_udp_port),
-      .loc_ip_addr(local_ip)
+      .loc_ip_addr(local_ip),
+      .timeout_period(64'd4000),
+      .retry_count(4'd5)
   );
 
 endmodule

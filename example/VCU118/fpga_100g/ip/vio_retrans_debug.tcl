@@ -1,6 +1,7 @@
 create_ip -name vio -vendor xilinx.com -library ip -version 3.0 -module_name vio_retrans_debug
 set_property -dict [list \
   CONFIG.C_NUM_PROBE_IN {12} \
+  CONFIG.C_NUM_PROBE_OUT {0} \
   CONFIG.C_PROBE_IN0_WIDTH {4} \
   CONFIG.C_PROBE_IN1_WIDTH {1} \
   CONFIG.C_PROBE_IN2_WIDTH {64} \

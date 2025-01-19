@@ -5,8 +5,28 @@ import socket
 
 from send_connection_info import send_txmeta, send_qp_info
 
-
 from ipaddress import ip_address, IPv4Address
+
+import argparse
+
+parser = argparse.ArgumentParser(description='Send QP information via UDP')
+parser.add_argument('-it', '--tap_ip_addr', metavar='N', type=str, default="22.1.212.11",
+                    help='TAP IP address (PC)')
+parser.add_argument('-is', '--sim_ip_addr', metavar='N', type=str, default="22.1.212.10",
+                    help='SIM IP address')
+
+args = parser.parse_args()
+
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 
 
 def reverse_poly_bits(x):
@@ -315,7 +335,7 @@ class RoCEFrame(object):
             crc_temp = compute_crc(value, 0x04c11db7, crc_temp)
             #print("Hex data value ", hex(value))
             #if i % 16 == 15:
-                #print(i, hex(crc_temp))
+            #    print(i, hex(crc_temp))
 
         crc_temp = ~np.uint32(crc_temp)
 
@@ -388,16 +408,16 @@ class RoCEStream(object):
                             print('Recieved PSN = ', RoCE_frame_data.roce_bth_psn)
                             print('Expected PSN = ', self.exp_psn)
                             if set_qpn != RoCE_frame_data.roce_bth_dest_qp:
-                                print('Wrong QPN!')
+                                print(bcolors.FAIL + 'Wrong QPN!' + bcolors.ENDC)
                             if self.exp_psn != RoCE_frame_data.roce_bth_psn:
-                                print('Wrong PSN!')
+                                print(bcolors.FAIL + 'Wrong PSN!' + bcolors.ENDC)
                             print('SIM ICRC = ', hex(RoCE_frame_data.roce_icrc))
                             print('SW ICRC  = ', hex(SW_icrc))
                             print('SW ICRC_reversed  = ', hex(~np.uint32(SW_icrc)))
                             if SW_icrc != RoCE_frame_data.roce_icrc:
-                                print('Software ICRC does not match recieved one!')
+                                print(bcolors.FAIL +  'BAD ICRC!'+ bcolors.ENDC)
                             else:
-                                print('Good ICRC!')
+                                print(bcolors.OKGREEN + 'Good ICRC!' + bcolors.ENDC)
                             print('Measured length= ', self.measured_data_legth)
                             if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
                                 if set_dma_length != self.sim_data_legth:
@@ -427,42 +447,43 @@ Measured_data_legth = 0
 Sim_data_legth = 0
 Received_r_key = 0
 
-data_stream = []
+for i in range(17):
+	data_stream = []
 
-dma_length_set  = 32768 + 12
-r_key_set        = 0x5514
-starting_psn_set = 1
-rem_qpn_set = 0x00b8
-base_addr = 0x7ff1c2377000
-
-
-send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-
-send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
+	dma_length_set  = 41*4096 + i*4
+	r_key_set        = 0x5514
+	starting_psn_set = 1
+	rem_qpn_set = 0x00b8
+	base_addr = 0x7ff1c2377000
 
 
-ETH_P_ALL = 3  # not defined in socket module, sadly...
-s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
-s.bind(("tap0", 0))
-try:
-    while True:
-        data = s.recv(4200)
-        data_stream.append(data)
-        #print('------------------------START OF PACKET---------------------')
+	send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+	send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
 
-        #print('------------------------END OF PACKET-----------------------')
-except KeyboardInterrupt:
-    print('Exiting!')
+	send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
 
-#print(data_stream)
 
-RoCE_stream_recieved = RoCEStream(data_stream)
-icrc_errors, psn_errors, length_error = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
-if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
-    print('No errors observed!')
-else:
-    print('Errors observed!')
+	ETH_P_ALL = 3  # not defined in socket module, sadly...
+	s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
+	s.bind(("tap0", 0))
+	try:
+		while True:
+			data = s.recv(4200)
+			data_stream.append(data)
+			#print('------------------------START OF PACKET---------------------')
+			#print('------------------------END OF PACKET-----------------------')
+	except KeyboardInterrupt:
+	    print('Exiting!')
+
+	#print(data_stream)
+
+	RoCE_stream_recieved = RoCEStream(data_stream)
+	icrc_errors, psn_errors, length_error = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
+	if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
+	    print(bcolors.OKGREEN + 'No errors observed!' + bcolors.ENDC)
+	else:
+	    print(bcolors.FAIL + 'Errors observed!' + bcolors.ENDC)
+	    break
 
 
 #data = 0xFEEDBEEFDEADBEEF

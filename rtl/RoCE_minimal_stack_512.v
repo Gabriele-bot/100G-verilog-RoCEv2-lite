@@ -389,10 +389,11 @@ module RoCE_minimal_stack_512 #(
   wire stop_transfer;
   reg  stop_transfer_reg;
   wire stop_transfer_nack;
+
+  wire en_retrans;
+
   wire [23:0] last_acked_psn;
-
   reg [23:0] last_acked_psn_reg;
-
   wire [31:0] n_transfers;
 
   reg [31:0] sent_messages = 32'd0;
@@ -623,7 +624,7 @@ module RoCE_minimal_stack_512 #(
     end else begin
       start_1 <= start_transfer_wire;
       start_2 <= start_1;
-      if (stop_transfer) begin
+      if ((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)) begin
         stop_transfer_reg <= 1'b1;
         if (s_payload_axis_tvalid && s_payload_axis_tready) begin
           word_counter <= dma_length_reg;
@@ -987,7 +988,8 @@ module RoCE_minimal_stack_512 #(
         // Addr width (in byte) = log2(4.96 Mb / 8) = 19.24 --> 20 bits (8.3 Mb)
         .timeout_period(timeout_period),
         .retry_count(retry_count),
-        .pmtu(pmtu)
+        .pmtu(pmtu),
+        .en_retrans(en_retrans)
       );
 
       /*
@@ -1788,7 +1790,8 @@ module RoCE_minimal_stack_512 #(
         .probe_in9(last_buffered_psn),
         .probe_in10(psn_diff),
         .probe_in11(used_memory),
-        .probe_out0(n_transfers)
+        .probe_out0(n_transfers),
+        .probe_out1(en_retrans)
       );
 
       /*
@@ -1814,6 +1817,7 @@ module RoCE_minimal_stack_512 #(
       */
     end else begin
       assign n_transfers = 1;
+      assign en_retrans  = 1'b1;
     end
   endgenerate
 
