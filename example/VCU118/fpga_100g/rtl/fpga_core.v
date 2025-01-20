@@ -31,7 +31,8 @@ THE SOFTWARE.
  */
 module fpga_core #(
     parameter TARGET = "XILINX",
-    parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00
+    parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00,
+    parameter FIFO_REGS = 4
 ) (
     /*
      * Clock: TX cmac
@@ -458,19 +459,89 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
       .busy()
   );
 
-  assign qsfp1_tx_axis_tdata  = tx_axis_tdata;
-  assign qsfp1_tx_axis_tkeep  = tx_axis_tkeep;
-  assign qsfp1_tx_axis_tvalid = tx_axis_tvalid;
-  assign qsfp1_tx_axis_tuser  = tx_axis_tuser;
-  assign qsfp1_tx_axis_tlast  = tx_axis_tlast;
-  assign tx_axis_tready       = qsfp1_tx_axis_tready;
+  //assign qsfp1_tx_axis_tdata  = tx_axis_tdata;
+  //assign qsfp1_tx_axis_tkeep  = tx_axis_tkeep;
+  //assign qsfp1_tx_axis_tvalid = tx_axis_tvalid;
+  //assign qsfp1_tx_axis_tuser  = tx_axis_tuser;
+  //assign qsfp1_tx_axis_tlast  = tx_axis_tlast;
+  //assign tx_axis_tready       = qsfp1_tx_axis_tready;
 
-  assign rx_axis_tdata        = qsfp1_rx_axis_tdata;
-  assign rx_axis_tkeep        = qsfp1_rx_axis_tkeep;
-  assign rx_axis_tvalid       = qsfp1_rx_axis_tvalid;
-  assign rx_axis_tuser        = qsfp1_rx_axis_tuser;
-  assign rx_axis_tlast        = qsfp1_rx_axis_tlast;
+  //assign rx_axis_tdata        = qsfp1_rx_axis_tdata;
+  //assign rx_axis_tkeep        = qsfp1_rx_axis_tkeep;
+  //assign rx_axis_tvalid       = qsfp1_rx_axis_tvalid;
+  //assign rx_axis_tuser        = qsfp1_rx_axis_tuser;
+  //assign rx_axis_tlast        = qsfp1_rx_axis_tlast;
   //assign qsfp1_rx_axis_tready = rx_axis_tready;
+  
+  // to aid timings
+  axis_srl_fifo #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .DEPTH(FIFO_REGS)
+  ) tx_axis_srl_fifo (
+    .clk(clk),
+    .rst(rst),
+
+    // AXI input
+    .s_axis_tdata (tx_axis_tdata),
+    .s_axis_tkeep (tx_axis_tkeep),
+    .s_axis_tvalid(tx_axis_tvalid),
+    .s_axis_tready(tx_axis_tready),
+    .s_axis_tlast (tx_axis_tlast),
+    .s_axis_tid   (0),
+    .s_axis_tdest (0),
+    .s_axis_tuser (tx_axis_tuser),
+
+    // AXI output
+    .m_axis_tdata (qsfp1_tx_axis_tdata),
+    .m_axis_tkeep (qsfp1_tx_axis_tkeep),
+    .m_axis_tvalid(qsfp1_tx_axis_tvalid),
+    .m_axis_tready(qsfp1_tx_axis_tready),
+    .m_axis_tlast (qsfp1_tx_axis_tlast),
+    .m_axis_tid   (),
+    .m_axis_tdest (),
+    .m_axis_tuser (qsfp1_tx_axis_tuser)
+  );
+  
+  // to aid timings
+  axis_srl_fifo #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .DEPTH(FIFO_REGS)
+  ) rx_axis_srl_fifo (
+    .clk(clk),
+    .rst(rst),
+
+    // AXI input
+    .s_axis_tdata (qsfp1_rx_axis_tdata),
+    .s_axis_tkeep (qsfp1_rx_axis_tkeep),
+    .s_axis_tvalid(qsfp1_rx_axis_tvalid),
+    .s_axis_tready(),
+    .s_axis_tlast (qsfp1_rx_axis_tlast),
+    .s_axis_tid   (0),
+    .s_axis_tdest (0),
+    .s_axis_tuser (qsfp1_rx_axis_tuser),
+
+    // AXI output
+    .m_axis_tdata (rx_axis_tdata),
+    .m_axis_tkeep (rx_axis_tkeep),
+    .m_axis_tvalid(rx_axis_tvalid),
+    .m_axis_tready(1'b1),
+    .m_axis_tlast (rx_axis_tlast),
+    .m_axis_tid   (),
+    .m_axis_tdest (),
+    .m_axis_tuser (rx_axis_tuser)
+  );
 
   // not really used
   assign qsfp2_tx_axis_tdata  = 512'd0;
