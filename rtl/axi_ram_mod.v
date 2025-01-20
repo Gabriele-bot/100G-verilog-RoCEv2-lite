@@ -40,9 +40,7 @@ module axi_ram_mod #
     // Width of wstrb (width of data bus in words)
     parameter STRB_WIDTH = (DATA_WIDTH/8),
     // Width of ID signal
-    parameter ID_WIDTH = 8,
-    // pipeline stages
-    parameter PIPELINE_REGS = 1
+    parameter ID_WIDTH = 8
 )
 (
     input  wire                   clk,
@@ -105,11 +103,6 @@ module axi_ram_mod #
             $error("Error: AXI word width must be even power of two (instance %m)");
             $finish;
         end
-
-        if (PIPELINE_REGS < 1) begin
-            $error("Error: Required at least 1 pipeline register (instance %m)");
-            $finish;
-        end
     end
 
     localparam [0:0]
@@ -152,10 +145,10 @@ module axi_ram_mod #
     //reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg = {DATA_WIDTH{1'b0}};
     //reg s_axi_rlast_pipe_reg = 1'b0;
     //reg s_axi_rvalid_pipe_reg = 1'b0;
-    reg [ID_WIDTH-1:0] s_axi_rid_pipe_reg [PIPELINE_REGS-1:0];
-    reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg [PIPELINE_REGS-1:0];
-    reg [PIPELINE_REGS-1:0] s_axi_rlast_pipe_reg = {PIPELINE_REGS{1'b0}};
-    reg [PIPELINE_REGS-1:0] s_axi_rvalid_pipe_reg = {PIPELINE_REGS{1'b0}};
+    reg [ID_WIDTH-1:0] s_axi_rid_pipe_reg [1:0];
+    reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg [1:0];
+    reg [1:0] s_axi_rlast_pipe_reg = 1'b0;
+    reg [1:0] s_axi_rvalid_pipe_reg = 1'b0;
 
 
     wire [VALID_ADDR_WIDTH-1:0] s_axi_awaddr_valid = s_axi_awaddr >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
@@ -174,9 +167,36 @@ module axi_ram_mod #
     wire ren [N_RAMS-1:0];
     wire wen [N_RAMS-1:0];
 
-    reg [N_RAMS_WIDTH-1:0] ram_sel_shreg [PIPELINE_REGS:0];
+    reg [N_RAMS_WIDTH-1:0] ram_sel_shreg [2:0];
+
+    // output logic
+    reg                  temp_s_axi_rvalid_next, temp_s_axi_rvalid_reg;
+    reg [DATA_WIDTH-1:0] temp_s_axi_rdata_reg;
+    reg [ID_WIDTH  -1:0] temp_s_axi_rid_reg;
+    reg                  temp_s_axi_rlast_reg;
+    wire s_axi_rready_int_early;
+    reg store_axi_int_to_output;
+    reg store_axi_int_to_temp;
+    reg store_axi_temp_to_output;
+
+    reg  s_axi_rready_int_reg;
+    wire s_axi_rvalid_int;
+    wire [DATA_WIDTH-1:0] s_axi_rdata_int;
+    wire [ID_WIDTH  -1:0] s_axi_rid_int;
+    wire s_axi_rlast_int;
+
+    reg                  s_axi_rvalid_next_out, s_axi_rvalid_reg_out;
+    reg [DATA_WIDTH-1:0] s_axi_rdata_reg_out;
+    reg [ID_WIDTH  -1:0] s_axi_rid_reg_out;
+    reg                  s_axi_rlast_reg_out;
 
     integer i, j;
+
+    assign s_axi_rvalid_int = s_axi_rvalid_pipe_reg[0];
+    assign s_axi_rdata_int  = ramout;
+    assign s_axi_rid_int    = s_axi_rid_pipe_reg[0];
+    assign s_axi_rlast_int  = s_axi_rlast_pipe_reg[0];
+
 
     assign waddr = write_addr_valid[VALID_ADDR_WIDTH_SINGLE -1 : 0];
     assign raddr = read_addr_valid[VALID_ADDR_WIDTH_SINGLE -1 : 0];
@@ -192,7 +212,7 @@ module axi_ram_mod #
             .ADDR_WIDTH(VALID_ADDR_WIDTH_SINGLE),
             .DATA_WIDTH(DATA_WIDTH),
             .STRB_WIDTH(STRB_WIDTH),
-            .NPIPES(PIPELINE_REGS-1)
+            .NPIPES(0)
         ) test_ith_ram_instance (
             .clk(clk),
             .rst(rst),
@@ -213,12 +233,13 @@ module axi_ram_mod #
         //    ram_sel_shreg[0][i] <= mem_rd_en && (read_addr_valid  >> VALID_ADDR_WIDTH_SINGLE == i);
         //end
 
-        for(i = 1; i < PIPELINE_REGS + 1; i = i + 1) begin
+        for(i = 1; i < 3; i = i + 1) begin
             ram_sel_shreg[i] <= ram_sel_shreg[i-1];
         end
     end
 
-    assign ramout = ramout_single[ram_sel_shreg[PIPELINE_REGS]];
+    assign ramout = ramout_single[ram_sel_shreg[1]];
+    
 
     assign s_axi_awready = s_axi_awready_reg;
     assign s_axi_wready = s_axi_wready_reg;
@@ -226,16 +247,22 @@ module axi_ram_mod #
     assign s_axi_bresp = 2'b00;
     assign s_axi_bvalid = s_axi_bvalid_reg;
     assign s_axi_arready = s_axi_arready_reg;
-    assign s_axi_rid = s_axi_rid_pipe_reg[PIPELINE_REGS-1];
-    //assign s_axi_rdata =s_axi_rdata_pipe_reg[PIPELINE_REGS-1];
-    assign s_axi_rdata =s_axi_rdata_reg;
-    //assign s_axi_rdata  = PIPELINE_OUTPUT ? s_axi_rdata_pipe_reg : s_axi_rdata_reg;
+    assign s_axi_rid    = s_axi_rid_reg_out;
+    assign s_axi_rdata  = s_axi_rdata_reg_out;
     assign s_axi_rresp  = 2'b00;
-    assign s_axi_rlast  = s_axi_rlast_pipe_reg[PIPELINE_REGS-1];
-    assign s_axi_rvalid = s_axi_rvalid_pipe_reg[PIPELINE_REGS-1];
+    assign s_axi_rlast  = s_axi_rlast_reg_out;
+    assign s_axi_rvalid = s_axi_rvalid_reg_out;
+
+    //assign s_axi_rid = s_axi_rid_pipe_reg[1];
+    //assign s_axi_rdata =s_axi_rdata_pipe_reg[PIPELINE_REGS-1];
+    //assign s_axi_rdata =s_axi_rdata_pipe_reg[1];
+    //assign s_axi_rdata  = PIPELINE_OUTPUT ? s_axi_rdata_pipe_reg : s_axi_rdata_reg;
+    //assign s_axi_rresp  = 2'b00;
+    //assign s_axi_rlast  = s_axi_rlast_pipe_reg[1];
+    //assign s_axi_rvalid = s_axi_rvalid_pipe_reg[1];
 
     initial begin
-        for(i = 0; i < PIPELINE_REGS + 1; i = i + 1) begin
+        for(i = 0; i < 2; i = i + 1) begin
             ram_sel_shreg[i] <= {N_RAMS_WIDTH{1'b0}};
         end
     end
@@ -428,33 +455,97 @@ module axi_ram_mod #
             s_axi_rvalid_pipe_reg <= s_axi_rvalid_reg;
         end
         */
-
+        /*
         if (!s_axi_rvalid_pipe_reg[0] || s_axi_rready) begin
-            s_axi_rid_pipe_reg[0]    <= s_axi_rid_reg;
-            s_axi_rdata_pipe_reg[0]  <= s_axi_rdata_reg;
-            s_axi_rlast_pipe_reg[0]  <= s_axi_rlast_reg;
-            s_axi_rvalid_pipe_reg[0] <= s_axi_rvalid_reg;
+            s_axi_rid_pipe_reg[0]       <= s_axi_rid_reg;
+           //s_axi_rdata_pipe_reg[0]     <= s_axi_rdata_reg; //data is already pipelined inside the ram module
+            s_axi_rlast_pipe_reg[0]     <= s_axi_rlast_reg;
+            s_axi_rvalid_pipe_reg[0]    <= s_axi_rvalid_reg;
         end
+        */
+        s_axi_rid_pipe_reg[0]       <= s_axi_rid_reg;
+        s_axi_rlast_pipe_reg[0]     <= s_axi_rlast_reg;
+        s_axi_rvalid_pipe_reg[0]    <= s_axi_rvalid_reg;
 
-        for (i = 1 ; i < PIPELINE_REGS; i = i + 1) begin
-            s_axi_rid_pipe_reg[i]    <= s_axi_rid_pipe_reg[i-1];
-            s_axi_rdata_pipe_reg[i]  <= s_axi_rdata_pipe_reg[i-1];
-            s_axi_rlast_pipe_reg[i]  <= s_axi_rlast_pipe_reg[i-1];
-            s_axi_rvalid_pipe_reg[i] <= s_axi_rvalid_pipe_reg[i-1];
-
-        end
 
         if (rst) begin
             read_state_reg <= READ_STATE_IDLE;
 
             s_axi_arready_reg <= 1'b0;
             s_axi_rvalid_reg <= 1'b0;
-            s_axi_rvalid_pipe_reg <= {PIPELINE_REGS{1'b0}};
+            s_axi_rvalid_pipe_reg <= 2'b00;
         end
     end
 
     always @* begin
         s_axi_rdata_reg = ramout;
+    end
+
+    
+
+
+    // enable ready input next cycle if output is ready or if both output registers are empty
+    assign s_axi_rready_int_early = s_axi_rready || (!temp_s_axi_rvalid_reg && !s_axi_rvalid_reg_out);
+    // enable ready input next cycle if output is ready or the temp reg will not be filled on the next cycle (output reg empty or no input)
+
+    always @* begin
+        // transfer sink ready state to source
+        temp_s_axi_rvalid_next = temp_s_axi_rvalid_reg;
+
+        store_axi_int_to_output = 1'b0;
+        store_axi_int_to_temp = 1'b0;
+        store_axi_temp_to_output = 1'b0;
+
+        if (s_axi_rready_int_reg) begin
+            // input is ready
+            if (s_axi_rready || !s_axi_rvalid_reg_out) begin
+                // output is ready or currently not valid, transfer data to output
+                s_axi_rvalid_next_out = s_axi_rvalid_int;
+                store_axi_int_to_output = 1'b1;
+            end else begin
+                // output is not ready, store input in temp
+                temp_s_axi_rvalid_next = s_axi_rvalid_int;
+                store_axi_int_to_temp  = 1'b1;
+            end
+        end else if (s_axi_rready) begin
+            // input is not ready, but output is ready
+            s_axi_rvalid_next_out = temp_s_axi_rvalid_reg;
+            temp_s_axi_rvalid_next = 1'b0;
+            store_axi_temp_to_output = 1'b1;
+        end
+    end
+
+    always @(posedge clk) begin
+        s_axi_rvalid_reg_out <= s_axi_rvalid_next_out;
+        s_axi_rready_int_reg <= s_axi_rready_int_early;
+        temp_s_axi_rvalid_reg <= temp_s_axi_rvalid_next;
+
+        // datapath
+        if (store_axi_int_to_output) begin
+            s_axi_rdata_reg_out <= s_axi_rdata_int;
+            s_axi_rid_reg_out   <= s_axi_rid_int;
+            s_axi_rlast_reg_out <= s_axi_rlast_int;
+
+
+        end else if (store_axi_temp_to_output) begin
+            s_axi_rdata_reg_out <= temp_s_axi_rdata_reg;
+            s_axi_rid_reg_out   <= temp_s_axi_rid_reg;
+            s_axi_rlast_reg_out <= temp_s_axi_rlast_reg;
+
+        end
+
+        if (store_axi_int_to_temp) begin
+            temp_s_axi_rdata_reg <= s_axi_rdata_int;
+            temp_s_axi_rid_reg   <= s_axi_rid_int;
+            temp_s_axi_rlast_reg <= s_axi_rlast_int;
+
+        end
+
+        if (rst) begin
+            s_axi_rvalid_reg_out <= 1'b0;
+            s_axi_rready_int_reg <= 1'b0;
+            temp_s_axi_rvalid_reg <= 1'b0;
+        end
     end
 
 endmodule
