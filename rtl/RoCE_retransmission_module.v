@@ -795,8 +795,9 @@ Simple DMA write logic
 
             single_packet_frame_reg <= 1'b0;
 
-            last_sent_psn_reg <= 24'd0;
+            last_sent_psn_reg     <= 24'd0;
             last_buffered_psn_reg <= 24'd0;
+            last_acked_psn_reg    <= 24'd0;
             retry_start_psn_reg   <= 24'd0;
 
             retry_counter_reg <= 4'd0;
@@ -1055,6 +1056,7 @@ Simple DMA write logic
                 .probe_in11(psn_diff_reg << memory_steps)
             );
 
+            /*
             ila_axis ila_dma_write(
                 .clk(clk),
                 .probe0(s_axis_dma_write_data_tdata),
@@ -1064,6 +1066,7 @@ Simple DMA write logic
                 .probe4(s_axis_dma_write_data_tlast),
                 .probe5(s_axis_dma_write_data_tuser)
             );
+            */
 
             ila_axis ila_dma_read(
                 .clk(clk),
