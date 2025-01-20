@@ -105,6 +105,11 @@ module axi_ram_mod #
             $error("Error: AXI word width must be even power of two (instance %m)");
             $finish;
         end
+
+        if (PIPELINE_REGS < 1) begin
+            $error("Error: Required at least 1 pipeline register (instance %m)");
+            $finish;
+        end
     end
 
     localparam [0:0]
@@ -169,7 +174,7 @@ module axi_ram_mod #
     wire ren [N_RAMS-1:0];
     wire wen [N_RAMS-1:0];
 
-    reg [N_RAMS_WIDTH-1:0] ram_sel_shreg [PIPELINE_REGS-1:0];
+    reg [N_RAMS_WIDTH-1:0] ram_sel_shreg [PIPELINE_REGS:0];
 
     integer i, j;
 
@@ -204,13 +209,16 @@ module axi_ram_mod #
 
     always @(posedge clk) begin
         ram_sel_shreg[0] <= read_addr_valid >> VALID_ADDR_WIDTH_SINGLE;
+        //for (i = 0; i < N_RAMS; i = i + 1) begin
+        //    ram_sel_shreg[0][i] <= mem_rd_en && (read_addr_valid  >> VALID_ADDR_WIDTH_SINGLE == i);
+        //end
 
-        for(i = 1; i < PIPELINE_REGS; i = i + 1) begin
+        for(i = 1; i < PIPELINE_REGS + 1; i = i + 1) begin
             ram_sel_shreg[i] <= ram_sel_shreg[i-1];
         end
     end
 
-    assign ramout = ramout_single[ram_sel_shreg[PIPELINE_REGS-1]];
+    assign ramout = ramout_single[ram_sel_shreg[PIPELINE_REGS]];
 
     assign s_axi_awready = s_axi_awready_reg;
     assign s_axi_wready = s_axi_wready_reg;
@@ -227,7 +235,7 @@ module axi_ram_mod #
     assign s_axi_rvalid = s_axi_rvalid_pipe_reg[PIPELINE_REGS-1];
 
     initial begin
-        for(i = 0; i < PIPELINE_REGS; i = i + 1) begin
+        for(i = 0; i < PIPELINE_REGS + 1; i = i + 1) begin
             ram_sel_shreg[i] <= {N_RAMS_WIDTH{1'b0}};
         end
     end
@@ -344,7 +352,7 @@ module axi_ram_mod #
 
         s_axi_rid_next = s_axi_rid_reg;
         s_axi_rlast_next = s_axi_rlast_reg;
-        s_axi_rvalid_next = s_axi_rvalid_reg && !(s_axi_rready || !s_axi_rvalid_pipe_reg);
+        s_axi_rvalid_next = s_axi_rvalid_reg && !(s_axi_rready || !s_axi_rvalid_pipe_reg[0]);
 
         read_id_next = read_id_reg;
         read_addr_next = read_addr_reg;
@@ -372,7 +380,7 @@ module axi_ram_mod #
                 end
             end
             READ_STATE_BURST: begin
-                if (s_axi_rready || !s_axi_rvalid_pipe_reg || !s_axi_rvalid_reg) begin
+                if (s_axi_rready || (!s_axi_rvalid_pipe_reg[0]) || !s_axi_rvalid_reg) begin
                     mem_rd_en = 1'b1;
                     s_axi_rvalid_next = 1'b1;
                     s_axi_rid_next = read_id_reg;
@@ -428,7 +436,7 @@ module axi_ram_mod #
             s_axi_rvalid_pipe_reg[0] <= s_axi_rvalid_reg;
         end
 
-        for (i = 1 ; i < PIPELINE_REGS; i = i+1) begin
+        for (i = 1 ; i < PIPELINE_REGS; i = i + 1) begin
             s_axi_rid_pipe_reg[i]    <= s_axi_rid_pipe_reg[i-1];
             s_axi_rdata_pipe_reg[i]  <= s_axi_rdata_pipe_reg[i-1];
             s_axi_rlast_pipe_reg[i]  <= s_axi_rlast_pipe_reg[i-1];

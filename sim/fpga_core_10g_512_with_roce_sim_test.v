@@ -695,7 +695,7 @@ module top (
   RoCE_minimal_stack_512 #(
       .DEBUG(0),
       .RETRANSMISSION(1),
-      .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
+      .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
       .ENABLE_SIM_PACKET_DROP_TX(1),
       .ENABLE_SIM_PACKET_DROP_RX(1)
   ) RoCE_minimal_stack_512_instance (

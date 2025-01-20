@@ -1102,7 +1102,7 @@ module RoCE_minimal_stack_512 #(
         .ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
         .STRB_WIDTH(64),
         .ID_WIDTH(1),
-        .PIPELINE_REGS(4)
+        .PIPELINE_REGS(2)
       ) RoCE_axi_ram_mod_instance (
         .clk(clk),
         .rst(rst),
