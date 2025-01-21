@@ -1599,7 +1599,8 @@ module cmac_gty_wrapper #(
       .stat_rx_pause_req({rx_lfc_req, rx_pfc_req}),
       .stat_rx_pause_valid(),
       .stat_rx_user_pause(),
-
+       
+      // RX PFC config
       .ctl_rx_check_etype_gcp(1'b1),
       .ctl_rx_check_etype_gpp(1'b1),
       .ctl_rx_check_etype_pcp(1'b1),
@@ -1671,7 +1672,7 @@ module cmac_gty_wrapper #(
       .stat_rx_pcsl_number_18(cmac_stat_rx_pcsl_number[5*18+:5]),
       .stat_rx_pcsl_number_19(cmac_stat_rx_pcsl_number[5*19+:5]),
       
-      /*
+      /* //PTP
       .ctl_tx_systemtimerin(tx_ptp_time),
       .stat_tx_ptp_fifo_read_error(cmac_stat_tx_ptp_fifo_read_error),
       .stat_tx_ptp_fifo_write_error(cmac_stat_tx_ptp_fifo_write_error),
@@ -1682,6 +1683,7 @@ module cmac_gty_wrapper #(
       .tx_ptp_1588op_in(2'b10),
       .tx_ptp_tag_field_in(cmac_tx_axis_tuser[16:1]),
       */
+      
       .stat_tx_bad_fcs(cmac_stat_tx_bad_fcs),
       .stat_tx_broadcast(cmac_stat_tx_broadcast),
       .stat_tx_frame_error(cmac_stat_tx_frame_error),
@@ -1719,7 +1721,8 @@ module cmac_gty_wrapper #(
       .stat_tx_pause_valid(),
       .stat_tx_pause(),
       .stat_tx_user_pause(),
-
+	
+      // Link and Priority tx flow config registers
       .ctl_tx_pause_enable({tx_lfc_en, tx_pfc_en}),
       .ctl_tx_pause_quanta0(16'hffff),
       .ctl_tx_pause_quanta1(16'hffff),
