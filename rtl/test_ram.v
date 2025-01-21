@@ -6,7 +6,8 @@ module test_ram #
     parameter DATA_WIDTH     = 128,
     parameter STRB_WIDTH = DATA_WIDTH/8,
     parameter SIZE = 1 << ADDR_WIDTH,
-    parameter NPIPES = 1
+    parameter NPIPES = 1,
+    parameter STYLE  = "bram"
 )
 (
     input wire clk,
@@ -34,7 +35,7 @@ module test_ram #
 
     integer i;
 
-    (*ram_style="ultra"*) reg [DATA_WIDTH-1:0] mem [SIZE-1:0];
+    (*ram_style=STYLE*) reg [DATA_WIDTH-1:0] mem [SIZE-1:0];
     always @(posedge clk) begin
         if (ena) begin
             if (ren) begin

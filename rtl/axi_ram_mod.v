@@ -212,7 +212,8 @@ module axi_ram_mod #
             .ADDR_WIDTH(VALID_ADDR_WIDTH_SINGLE),
             .DATA_WIDTH(DATA_WIDTH),
             .STRB_WIDTH(STRB_WIDTH),
-            .NPIPES(0)
+            .NPIPES(0),
+            .STYLE("ultra")
         ) test_ith_ram_instance (
             .clk(clk),
             .rst(rst),

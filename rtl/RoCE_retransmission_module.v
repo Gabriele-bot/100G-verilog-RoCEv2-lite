@@ -321,7 +321,8 @@ module RoCE_retransmission_module #(
         .ADDR_WIDTH(HEADER_ADDR_WIDTH),
         .DATA_WIDTH(256),
         .STRB_WIDTH(1),
-        .NPIPES(-1)
+        .NPIPES(-1),
+        .STYLE("bram")
     ) test_ram_instance (
         .clk(clk),
         .rst(rst),
