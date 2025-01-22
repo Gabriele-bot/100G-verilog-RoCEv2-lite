@@ -164,6 +164,7 @@ module RoCE_retransmission_module #(
     output wire [23:0]                   last_acked_psn,
     output wire [23:0]                   psn_diff,
     output wire [BUFFER_ADDR_WIDTH -1:0] used_memory, // in bytes
+    output wire [31:0]                   n_retransmit_triggers,
     /*
     Configuration
     */
@@ -307,6 +308,8 @@ module RoCE_retransmission_module #(
 
     reg [23:0] psn_diff_next, psn_diff_reg = 24'd0;
 
+    reg [31:0] n_retransmit_triggers_reg, n_retransmit_triggers_next;
+
     wire axis_mux_select;
 
     reg ram_we_reg = 1'b0, ram_we_next;
@@ -316,7 +319,7 @@ module RoCE_retransmission_module #(
     // Header buffer is 8 times smaller, 256 bits
     wire [HEADER_ADDR_WIDTH - 1: 0] hdr_ram_addr;
     wire [255 :0] hdr_data_in, hdr_data_out;
-    
+
     test_ram #(
         .ADDR_WIDTH(HEADER_ADDR_WIDTH),
         .DATA_WIDTH(256),
@@ -365,10 +368,11 @@ module RoCE_retransmission_module #(
     assign ram_we = s_roce_bth_valid && s_roce_bth_ready;
     assign hdr_ram_addr = axis_mux_select ? s_roce_bth_psn[HEADER_ADDR_WIDTH - 1:0] : hdr_ram_addr_reg;
 
-    assign last_buffered_psn = last_buffered_psn_reg; 
-    assign last_acked_psn    = last_acked_psn_reg; 
-    assign psn_diff          = psn_diff_reg; 
-    assign used_memory = psn_diff_reg << memory_steps;
+    assign last_buffered_psn     = last_buffered_psn_reg;
+    assign last_acked_psn        = last_acked_psn_reg;
+    assign psn_diff              = psn_diff_reg;
+    assign used_memory           = psn_diff_reg << memory_steps;
+    assign n_retransmit_triggers = n_retransmit_triggers_reg;
 
     always @(posedge clk) begin
         case (pmtu)
@@ -550,6 +554,8 @@ Simple DMA write logic
 
         psn_diff_next = last_buffered_psn_reg - last_acked_psn_reg;
 
+        n_retransmit_triggers_next = n_retransmit_triggers_reg;
+
         case (state_reg)
             STATE_IDLE: begin
 
@@ -573,6 +579,8 @@ Simple DMA write logic
                     s_roce_bth_psn_memory_next = nak_detected ? nak_psn_reg : (last_acked_psn_reg + 1);
                     reset_timeout_counter_next = 1'b1;
 
+                    n_retransmit_triggers_next = n_retransmit_triggers_reg + 32'd1;
+
                     if (retry_start_psn_reg == (last_acked_psn_reg + 24'd1)) begin
                         if (retry_counter_reg < retry_count) begin
                             retry_counter_next = retry_counter_reg + 1;
@@ -580,6 +588,7 @@ Simple DMA write logic
                             last_sent_psn_next = last_acked_psn_reg;
                             state_next  = STATE_IDLE;
                             stop_transfer_next = 1'b1;
+                            n_retransmit_triggers_next = 32'd0;
                         end
                     end else begin
                         retry_counter_next = 0;
@@ -770,7 +779,7 @@ Simple DMA write logic
                     timeout_counter <= timeout_counter + 64'd1;
                     trigger_retransmit <= 1'b0;
                 end
-            end 
+            end
         end
 
     end
@@ -806,6 +815,8 @@ Simple DMA write logic
             stop_transfer_reg <= 1'b0;
 
             psn_diff_reg <= 24'd0;
+
+            n_retransmit_triggers_reg <= 32'd0;
         end
 
         if (s_roce_aeth_valid && (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00)) begin
@@ -853,15 +864,19 @@ Simple DMA write logic
         retry_start_psn_reg   <= retry_start_psn_next;
 
         psn_diff_reg <= psn_diff_next;
+        
 
         if (rst_retry_cntr) begin
             retry_counter_reg <= 4'd0;
+            n_retransmit_triggers_reg <= 32'd0;
         end else begin
             retry_counter_reg <= retry_counter_next;
+            n_retransmit_triggers_reg <= n_retransmit_triggers_next;
         end
 
         stop_transfer_reg <= stop_transfer_next;
     end
+
 
     assign stop_transfer = stop_transfer_reg;
 
@@ -914,44 +929,44 @@ Simple DMA write logic
     assign m_udp_checksum       = s_udp_checksum;
 
     axis_fifo #(
-    .DEPTH(256),
-    .DATA_WIDTH(512),
-    .KEEP_ENABLE(1),
-    .KEEP_WIDTH(64),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .FRAME_FIFO(0)
-  ) dma_wr_input_axis_fifo (
-    .clk(clk),
-    .rst(rst),
+        .DEPTH(256),
+        .DATA_WIDTH(512),
+        .KEEP_ENABLE(1),
+        .KEEP_WIDTH(64),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1),
+        .FRAME_FIFO(0)
+    ) dma_wr_input_axis_fifo (
+        .clk(clk),
+        .rst(rst),
 
-    // AXI input
-    .s_axis_tdata (s_axis_dma_write_fifo_data_tdata),
-    .s_axis_tkeep (s_axis_dma_write_fifo_data_tkeep),
-    .s_axis_tvalid(s_axis_dma_write_fifo_data_tvalid),
-    .s_axis_tready(s_axis_dma_write_fifo_data_tready),
-    .s_axis_tlast (s_axis_dma_write_fifo_data_tlast),
-    .s_axis_tid(0),
-    .s_axis_tdest(0),
-    .s_axis_tuser (s_axis_dma_write_fifo_data_tuser),
+        // AXI input
+        .s_axis_tdata (s_axis_dma_write_fifo_data_tdata),
+        .s_axis_tkeep (s_axis_dma_write_fifo_data_tkeep),
+        .s_axis_tvalid(s_axis_dma_write_fifo_data_tvalid),
+        .s_axis_tready(s_axis_dma_write_fifo_data_tready),
+        .s_axis_tlast (s_axis_dma_write_fifo_data_tlast),
+        .s_axis_tid(0),
+        .s_axis_tdest(0),
+        .s_axis_tuser (s_axis_dma_write_fifo_data_tuser),
 
-    // AXI output
-    .m_axis_tdata (s_axis_dma_write_data_tdata),
-    .m_axis_tkeep (s_axis_dma_write_data_tkeep),
-    .m_axis_tvalid(s_axis_dma_write_data_tvalid),
-    .m_axis_tready(s_axis_dma_write_data_tready),
-    .m_axis_tlast (s_axis_dma_write_data_tlast),
-    .m_axis_tid(),
-    .m_axis_tdest(),
-    .m_axis_tuser (s_axis_dma_write_data_tuser),
+        // AXI output
+        .m_axis_tdata (s_axis_dma_write_data_tdata),
+        .m_axis_tkeep (s_axis_dma_write_data_tkeep),
+        .m_axis_tvalid(s_axis_dma_write_data_tvalid),
+        .m_axis_tready(s_axis_dma_write_data_tready),
+        .m_axis_tlast (s_axis_dma_write_data_tlast),
+        .m_axis_tid(),
+        .m_axis_tdest(),
+        .m_axis_tuser (s_axis_dma_write_data_tuser),
 
-    // Status
-    .status_overflow  (),
-    .status_bad_frame (),
-    .status_good_frame()
-  );
+        // Status
+        .status_overflow  (),
+        .status_bad_frame (),
+        .status_good_frame()
+    );
 
     axis_broadcast #(
         .M_COUNT(2),
@@ -1054,7 +1069,8 @@ Simple DMA write logic
                 .probe_in8(s_axis_dma_read_debug_len),
                 .probe_in9(m_axis_dma_read_desc_status_error_reg),
                 .probe_in10(psn_diff),
-                .probe_in11(psn_diff_reg << memory_steps)
+                .probe_in11(psn_diff_reg << memory_steps),
+                .probe_in12(n_retransmit_triggers_reg)
             );
 
             /*

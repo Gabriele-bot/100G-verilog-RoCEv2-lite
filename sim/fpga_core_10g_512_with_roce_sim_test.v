@@ -694,10 +694,10 @@ module top (
   // ROCE TX inst
   RoCE_minimal_stack_512 #(
       .DEBUG(0),
-      .RETRANSMISSION(1),
+      .RETRANSMISSION(0),
       .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
-      .ENABLE_SIM_PACKET_DROP_TX(1),
-      .ENABLE_SIM_PACKET_DROP_RX(1)
+      .ENABLE_SIM_PACKET_DROP_TX(0),
+      .ENABLE_SIM_PACKET_DROP_RX(0)
   ) RoCE_minimal_stack_512_instance (
       .clk(clk_x1),
       .rst(rst),
