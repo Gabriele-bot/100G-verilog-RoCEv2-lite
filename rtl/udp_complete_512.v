@@ -209,7 +209,7 @@ module udp_complete_512 #(
   wire [63:0] eth_tx_from_ip_payload_axis_tkeep;
   wire eth_tx_from_ip_payload_axis_tvalid;
   wire eth_tx_from_ip_payload_axis_tlast;
-  wire eth_tx_from_ip_payload_axis_tuser;
+  wire [1:0] eth_tx_from_ip_payload_axis_tuser;
   wire eth_tx_from_ip_payload_axis_tready;
 
 
@@ -443,12 +443,15 @@ module udp_complete_512 #(
 );
 
 reg eth_ip_is_roce_packet_reg;
+wire eth_ip_is_roce_packet_wire;
 
 always @(posedge clk) begin
   if ( eth_tx_from_ip_hdr_valid && eth_tx_from_ip_hdr_ready) begin
     eth_ip_is_roce_packet_reg <= eth_ip_is_roce_packet;
   end
 end
+
+assign eth_ip_is_roce_packet_wire = eth_ip_is_roce_packet_reg;
 
   // Insert ICRC
   axis_RoCE_icrc_insert_512 axis_RoCE_icrc_insert_512_instance (
@@ -467,7 +470,7 @@ end
       .s_eth_payload_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
       .s_eth_payload_axis_tready(eth_tx_from_ip_payload_axis_tready),
       .s_eth_payload_axis_tlast (eth_tx_from_ip_payload_axis_tlast),
-      .s_eth_payload_axis_tuser ({eth_ip_is_roce_packet, eth_tx_from_ip_payload_axis_tuser}),
+      .s_eth_payload_axis_tuser (eth_tx_from_ip_payload_axis_tuser),
       /*
       .m_eth_hdr_valid          (m_eth_hdr_valid),
       .m_eth_hdr_ready          (m_eth_hdr_ready),

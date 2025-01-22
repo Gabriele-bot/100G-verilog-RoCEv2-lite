@@ -67,7 +67,7 @@ module ip_complete_512 #(
     output wire         m_eth_payload_axis_tvalid,
     input  wire         m_eth_payload_axis_tready,
     output wire         m_eth_payload_axis_tlast,
-    output wire         m_eth_payload_axis_tuser,
+    output wire [1 :0]  m_eth_payload_axis_tuser,
 
     /*
      * IP input
@@ -176,7 +176,7 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire ip_tx_eth_payload_axis_tvalid;
   wire ip_tx_eth_payload_axis_tready;
   wire ip_tx_eth_payload_axis_tlast;
-  wire ip_tx_eth_payload_axis_tuser;
+  wire [1:0] ip_tx_eth_payload_axis_tuser;
 
   wire arp_rx_eth_hdr_valid;
   wire arp_rx_eth_hdr_ready;
@@ -498,7 +498,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .ID_ENABLE(0),
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
-      .USER_WIDTH(1),
+      .USER_WIDTH(2),
       .ARB_TYPE_ROUND_ROBIN(0),
       .ARB_LSB_HIGH_PRIORITY(1)
   ) eth_arb_mux_inst (
@@ -518,7 +518,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .s_eth_payload_axis_tlast( {ip_tx_eth_payload_axis_tlast,  arp_tx_eth_payload_pipeline_axis_tlast}),
       .s_eth_payload_axis_tid(0),
       .s_eth_payload_axis_tdest(0),
-      .s_eth_payload_axis_tuser({ip_tx_eth_payload_axis_tuser, arp_tx_eth_payload_pipeline_axis_tuser}),
+      .s_eth_payload_axis_tuser({ip_tx_eth_payload_axis_tuser[1], ip_tx_eth_payload_axis_tuser[0], 1'b0, arp_tx_eth_payload_pipeline_axis_tuser}),
       // Ethernet frame output
       .m_eth_hdr_valid(m_eth_hdr_valid),
       .m_eth_hdr_ready(m_eth_hdr_ready),

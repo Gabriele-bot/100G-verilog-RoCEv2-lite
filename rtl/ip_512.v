@@ -62,7 +62,7 @@ module ip_512 (
     output wire         m_eth_payload_axis_tvalid,
     input  wire         m_eth_payload_axis_tready,
     output wire         m_eth_payload_axis_tlast,
-    output wire         m_eth_payload_axis_tuser,
+    output wire [1  :0] m_eth_payload_axis_tuser,
 
     /*
      * ARP requests
