@@ -36,7 +36,7 @@ architecture RTL of CRC32_D512_matrix_pipeline is
     constant MATRIX_ARRAY : gen_matrix_array_t := gen_matrix_array(CRC32_CHECK_MATRIX, 16);
 
     --signal out_partial_crc : crc32_word_t;
-    signal out_crc         : crc32_word_t;
+    signal out_crc : crc32_word_t;
 
     signal valid_shreg : std_logic_vector(LATENCY downto 0) := (others => '0');
 
@@ -50,7 +50,7 @@ architecture RTL of CRC32_D512_matrix_pipeline is
     signal partial_crc_init_seed : partial_crc_t := (others => CRC_INIT);
     signal partial_crc_last_seed : partial_crc_t := (others => CRC_INIT);
     signal crc_seed              : crc32_word_t;
-    signal computation_ongoing   : std_logic := '0'; 
+    signal computation_ongoing   : std_logic     := '0';
 
     type crc_pipeline_stage_t is array (LATENCY downto 0) of crc32_word_t;
     signal crc_stage : crc_pipeline_stage_t := (others => X"DEADBEEF");
@@ -122,7 +122,9 @@ begin
     process(clk)
     begin
         if rising_edge(clk) then
-            if (valid_shreg(valid_shreg'high-1) and not computation_ongoing) then
+            if (valid_shreg(valid_shreg'high - 1) and rst_crc) then
+                computation_ongoing <= '1';
+            elsif (valid_shreg(valid_shreg'high - 1) and not computation_ongoing) then
                 computation_ongoing <= '1';
             elsif computation_ongoing and rst_crc then
                 computation_ongoing <= '0';
@@ -141,20 +143,24 @@ begin
     -- partial_crc_init_seed when first frame in packet
     -- partial_crc_last_seed otherwise
     --crc_seed <= partial_crc_init_seed(keep_block_number - 1) when (rst_crc or not valid_crc_out) else partial_crc_last_seed(keep_block_number - 1);
-    crc_seed <= partial_crc_init_seed(keep_block_number - 1) when (not computation_ongoing) else partial_crc_last_seed(keep_block_number - 1);
+    crc_seed <= partial_crc_init_seed(keep_block_number - 1) when (not computation_ongoing or rst_crc) else partial_crc_last_seed(keep_block_number - 1);
 
     crc_stage_0 : process(clk)
     begin
         if rising_edge(clk) then
-            if valid_shreg(0) then
-                --if keep_shreg(0)(3 downto 0) = X"F" and keep_shreg(0)(7 downto 4) = X"F" then
-                if keep_shreg(0)(3 downto 0) = X"F" then
-                    crc_stage(0) <= matrix_vector_mul(MATRIX_ARRAY(0), data_stage(0)(31 downto 0));
-                else --this should never happen for valid data words
-                    crc_stage(0) <= (others => '0');
-                end if;
+            if rst then
+                crc_stage(0) <= CRC_INIT;
             else
-                crc_stage(0) <= crc_stage(0);
+                if valid_shreg(0) then
+                    --if keep_shreg(0)(3 downto 0) = X"F" and keep_shreg(0)(7 downto 4) = X"F" then
+                    if keep_shreg(0)(3 downto 0) = X"F" then
+                        crc_stage(0) <= matrix_vector_mul(MATRIX_ARRAY(0), data_stage(0)(31 downto 0));
+                    else                --this should never happen for valid data words
+                        crc_stage(0) <= (others => '0');
+                    end if;
+                else
+                    crc_stage(0) <= crc_stage(0);
+                end if;
             end if;
         end if;
     end process;
@@ -165,15 +171,19 @@ begin
                 variable data_xor_crc : crc32_word_t;
             begin
                 if rising_edge(clk) then
-                    if valid_shreg(i) then
-                        if keep_shreg(i)((i + 1) * 4 - 1 downto (i) * 4) = X"F" then
-                            data_xor_crc := data_stage(i)((i + 1) * 32 - 1 downto i * 32) xor crc_stage(i - 1);
-                            crc_stage(i) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc);
-                        else --passthrough
-                            crc_stage(i) <= crc_stage(i - 1);
-                        end if;
+                    if rst then
+                        crc_stage(i) <= CRC_INIT;
                     else
-                        crc_stage(i) <= crc_stage(i);
+                        if valid_shreg(i) then
+                            if keep_shreg(i)((i + 1) * 4 - 1 downto (i) * 4) = X"F" then
+                                data_xor_crc := data_stage(i)((i + 1) * 32 - 1 downto i * 32) xor crc_stage(i - 1);
+                                crc_stage(i) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc);
+                            else        --passthrough
+                                crc_stage(i) <= crc_stage(i - 1);
+                            end if;
+                        else
+                            crc_stage(i) <= crc_stage(i);
+                        end if;
                     end if;
                 end if;
             end process;
@@ -185,22 +195,26 @@ begin
             variable data_xor_crc : crc32_word_t;
         begin
             if rising_edge(clk) then
-                if valid_shreg(LATENCY - 1) then
-                    if keep_shreg(LATENCY - 1)(LATENCY * 4 - 1 downto (LATENCY - 1) * 4) = X"F" then
-                        data_xor_crc           := data_stage(LATENCY - 1)((LATENCY) * 32 - 1 downto (LATENCY - 1) * 32) xor crc_stage(LATENCY - 2);
-                        crc_stage(LATENCY - 1) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc) xor crc_seed;
-                    else                    --this should never happen
-                        crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 2) xor crc_seed;
+                if rst then
+                    crc_stage(LATENCY - 1) <= CRC_INIT;
+                else
+                    if valid_shreg(LATENCY - 1) then
+                        if keep_shreg(LATENCY - 1)(LATENCY * 4 - 1 downto (LATENCY - 1) * 4) = X"F" then
+                            data_xor_crc           := data_stage(LATENCY - 1)((LATENCY) * 32 - 1 downto (LATENCY - 1) * 32) xor crc_stage(LATENCY - 2);
+                            crc_stage(LATENCY - 1) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc) xor crc_seed;
+                        else            --this should never happen
+                            crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 2) xor crc_seed;
+                        end if;
+                    else
+                        crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 1);
                     end if;
-                else                    --this should never happen
-                    crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 1);
                 end if;
             end if;
         end process;
     end generate;
 
-    out_crc  <= crc_stage(LATENCY - 1);
-    
+    out_crc <= crc_stage(LATENCY - 1);
+
     --process(clk) is
     --begin
     --    if rising_edge(clk) then
