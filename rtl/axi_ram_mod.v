@@ -491,6 +491,7 @@ module axi_ram_mod #
 
     always @* begin
         // transfer sink ready state to source
+        s_axi_rvalid_next_out  = s_axi_rvalid_reg_out;
         temp_s_axi_rvalid_next = temp_s_axi_rvalid_reg;
 
         store_axi_int_to_output = 1'b0;
