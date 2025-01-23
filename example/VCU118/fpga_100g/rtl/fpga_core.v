@@ -287,8 +287,6 @@ wire [15:0] RoCE_udp_port;
   assign tx_ip_payload_axis_tuser  = 0;
 
   assign qsfp1_tx_enable           = 1'b1;
-  assign qsfp1_tx_lfc_en           = 1'b1;
-  assign qsfp1_tx_lfc_req          = 1'b0;
   assign qsfp1_tx_pfc_en           = {8{1'b1}};
   assign qsfp1_tx_pfc_req          = {8{1'b0}};
 
