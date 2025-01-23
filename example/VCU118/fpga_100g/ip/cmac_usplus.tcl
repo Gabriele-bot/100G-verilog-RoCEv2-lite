@@ -10,7 +10,7 @@ set_property -dict [list \
     CONFIG.TX_FLOW_CONTROL {1} \
     CONFIG.RX_FLOW_CONTROL {1} \
     CONFIG.RX_FORWARD_CONTROL_FRAMES {0} \
-    CONFIG.RX_CHECK_ACK {0} \
+    CONFIG.RX_CHECK_ACK {1} \
     CONFIG.INCLUDE_RS_FEC {1} \
     CONFIG.ENABLE_TIME_STAMPING {0}
 ] [get_ips cmac_usplus]
