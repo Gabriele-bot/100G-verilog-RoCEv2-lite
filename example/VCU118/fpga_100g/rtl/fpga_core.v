@@ -63,11 +63,7 @@ module fpga_core #(
     output wire         qsfp1_tx_axis_tlast,
     output wire         qsfp1_tx_axis_tuser,
 
-    output wire       qsfp1_tx_enable,
-    output wire       qsfp1_tx_lfc_en,
-    output wire       qsfp1_tx_lfc_req,
-    output wire [7:0] qsfp1_tx_pfc_en,
-    output wire [7:0] qsfp1_tx_pfc_req,
+    output wire       qsfp1_tx_enable
 
     input wire [511:0] qsfp1_rx_axis_tdata,
     input wire [ 63:0] qsfp1_rx_axis_tkeep,
@@ -76,13 +72,7 @@ module fpga_core #(
     input wire         qsfp1_rx_axis_tuser,
 
     output wire       qsfp1_rx_enable,
-    input  wire       qsfp1_rx_status,
-    output wire       qsfp1_rx_lfc_en,
-    input  wire       qsfp1_rx_lfc_req,
-    output wire       qsfp1_rx_lfc_ack,
-    output wire [7:0] qsfp1_rx_pfc_en,
-    input  wire [7:0] qsfp1_rx_pfc_req,
-    output wire [7:0] qsfp1_rx_pfc_ack,
+    input  wire       qsfp1_rx_status
 
     input  wire        qsfp1_drp_clk,
     input  wire        qsfp1_drp_rst,
@@ -100,11 +90,7 @@ module fpga_core #(
     output wire         qsfp2_tx_axis_tlast,
     output wire         qsfp2_tx_axis_tuser,
 
-    output wire       qsfp2_tx_enable,
-    output wire       qsfp2_tx_lfc_en,
-    output wire       qsfp2_tx_lfc_req,
-    output wire [7:0] qsfp2_tx_pfc_en,
-    output wire [7:0] qsfp2_tx_pfc_req,
+    output wire       qsfp2_tx_enable
 
     input wire [511:0] qsfp2_rx_axis_tdata,
     input wire [ 63:0] qsfp2_rx_axis_tkeep,
@@ -122,13 +108,7 @@ module fpga_core #(
     input  wire        qsfp2_drp_rdy,
 
     output wire       qsfp2_rx_enable,
-    input  wire       qsfp2_rx_status,
-    output wire       qsfp2_rx_lfc_en,
-    input  wire       qsfp2_rx_lfc_req,
-    output wire       qsfp2_rx_lfc_ack,
-    output wire [7:0] qsfp2_rx_pfc_en,
-    input  wire [7:0] qsfp2_rx_pfc_req,
-    output wire [7:0] qsfp2_rx_pfc_ack
+    input  wire       qsfp2_rx_status
 );
   wire [511:0]                                               rx_axis_tdata;
   wire [ 63:0]                                               rx_axis_tkeep;

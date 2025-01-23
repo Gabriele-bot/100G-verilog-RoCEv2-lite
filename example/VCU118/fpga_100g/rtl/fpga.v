@@ -280,19 +280,19 @@ module fpga (
   wire                                         qsfp1_drp_rdy;
 
   wire                                         qsfp1_tx_enable;
-  wire                                         qsfp1_tx_lfc_en;
-  wire                                         qsfp1_tx_lfc_req;
-  wire                                 [  7:0] qsfp1_tx_pfc_en;
-  wire                                 [  7:0] qsfp1_tx_pfc_req;
+  wire                                         qsfp1_tx_lfc_en  = 1'b1;
+  wire                                         qsfp1_tx_lfc_req = 1'b0;
+  wire                                 [  7:0] qsfp1_tx_pfc_en  = 8'hFF;
+  wire                                 [  7:0] qsfp1_tx_pfc_req = 8'h00;
 
   wire                                         qsfp1_rx_enable;
   wire                                         qsfp1_rx_status;
-  wire                                         qsfp1_rx_lfc_en;
+  wire                                         qsfp1_rx_lfc_en  = 1'b1;
   wire                                         qsfp1_rx_lfc_req;
   wire                                         qsfp1_rx_lfc_ack;
-  wire                                 [  7:0] qsfp1_rx_pfc_en;
+  wire                                 [  7:0] qsfp1_rx_pfc_en  = 8'hFF;
   wire                                 [  7:0] qsfp1_rx_pfc_req;
-  wire                                 [  7:0] qsfp1_rx_pfc_ack;
+  wire                                 [  7:0] qsfp1_rx_pfc_ack = 8'h00; // define queues with axis ID bus??
 
   wire                                         qsfp1_gtpowergood;
 
@@ -444,19 +444,19 @@ module fpga (
   wire                                         qsfp2_drp_rdy;
 
   wire                                         qsfp2_tx_enable;
-  wire                                         qsfp2_tx_lfc_en;
-  wire                                         qsfp2_tx_lfc_req;
-  wire                                 [  7:0] qsfp2_tx_pfc_en;
-  wire                                 [  7:0] qsfp2_tx_pfc_req;
+  wire                                         qsfp2_tx_lfc_en  = 1'b1;
+  wire                                         qsfp2_tx_lfc_req = 1'b0;
+  wire                                 [  7:0] qsfp2_tx_pfc_en  = 8'hFF;
+  wire                                 [  7:0] qsfp2_tx_pfc_req = 8'h00;
 
   wire                                         qsfp2_rx_enable;
   wire                                         qsfp2_rx_status;
-  wire                                         qsfp2_rx_lfc_en;
+  wire                                         qsfp2_rx_lfc_en  = 1'b1;
   wire                                         qsfp2_rx_lfc_req;
   wire                                         qsfp2_rx_lfc_ack;
-  wire                                 [  7:0] qsfp2_rx_pfc_en;
+  wire                                 [  7:0] qsfp2_rx_pfc_en  = 8'hFF;
   wire                                 [  7:0] qsfp2_rx_pfc_req;
-  wire                                 [  7:0] qsfp2_rx_pfc_ack;
+  wire                                 [  7:0] qsfp2_rx_pfc_ack = 8'h00; // define queues with axis ID bus??
 
   cmac_gty_wrapper #(
       .DRP_CLK_FREQ_HZ(125000000),
@@ -577,7 +577,9 @@ ila_axis ila_eth_tx(
       .USER_WIDTH(1),
       .FRAME_FIFO(1'b1),
       .USER_BAD_FRAME_VALUE(1'b1),
-      .USER_BAD_FRAME_MASK(1'b1)
+      .USER_BAD_FRAME_MASK(1'b1),
+      .PAUSE_ENABLE(1),
+      .FRAME_PAUSE(1)
   ) tx_fifo_stack2cmac (
       // AXI input
       .s_clk              (clk_net_int),
@@ -601,6 +603,11 @@ ila_axis ila_eth_tx(
       .m_axis_tid         (),
       .m_axis_tdest       (),
       .m_axis_tuser       (qsfp1_tx_axis_tuser_int),
+      // Pause
+      .s_pause_req(1'b0),
+      .s_pause_ack(),
+      .m_pause_req(qsfp1_rx_lfc_req),
+      .m_pause_ack(qsfp1_rx_lfc_ack),
       // Status
       .s_status_overflow  (),
       .s_status_bad_frame (),
@@ -683,10 +690,6 @@ ila_axis ila_eth_tx(
       .qsfp1_tx_axis_tuser (qsfp1_fifo_tx_axis_tuser_int),
 
       .qsfp1_tx_enable (qsfp1_tx_enable),
-      .qsfp1_tx_lfc_en (qsfp1_tx_lfc_en),
-      .qsfp1_tx_lfc_req(qsfp1_tx_lfc_req),
-      .qsfp1_tx_pfc_en (qsfp1_tx_pfc_en),
-      .qsfp1_tx_pfc_req(qsfp1_tx_pfc_req),
 
       .qsfp1_rx_axis_tdata (qsfp1_fifo_rx_axis_tdata_int),
       .qsfp1_rx_axis_tkeep (qsfp1_fifo_rx_axis_tkeep_int),
@@ -696,12 +699,6 @@ ila_axis ila_eth_tx(
 
       .qsfp1_rx_enable (qsfp1_rx_enable),
       .qsfp1_rx_status (qsfp1_rx_status),
-      .qsfp1_rx_lfc_en (qsfp1_rx_lfc_en),
-      .qsfp1_rx_lfc_req(qsfp1_rx_lfc_req),
-      .qsfp1_rx_lfc_ack(qsfp1_rx_lfc_ack),
-      .qsfp1_rx_pfc_en (qsfp1_rx_pfc_en),
-      .qsfp1_rx_pfc_req(qsfp1_rx_pfc_req),
-      .qsfp1_rx_pfc_ack(qsfp1_rx_pfc_ack),
 
       .qsfp1_drp_clk (qsfp1_drp_clk),
       .qsfp1_drp_rst (qsfp1_drp_rst),
@@ -721,9 +718,6 @@ ila_axis ila_eth_tx(
 
       .qsfp2_tx_enable (qsfp2_tx_enable),
       .qsfp2_tx_lfc_en (qsfp2_tx_lfc_en),
-      .qsfp2_tx_lfc_req(qsfp2_tx_lfc_req),
-      .qsfp2_tx_pfc_en (qsfp2_tx_pfc_en),
-      .qsfp2_tx_pfc_req(qsfp2_tx_pfc_req),
 
       .qsfp2_rx_axis_tdata (qsfp2_rx_axis_tdata_int),
       .qsfp2_rx_axis_tkeep (qsfp2_rx_axis_tkeep_int),
@@ -733,12 +727,6 @@ ila_axis ila_eth_tx(
 
       .qsfp2_rx_enable (qsfp2_rx_enable),
       .qsfp2_rx_status (qsfp2_rx_status),
-      .qsfp2_rx_lfc_en (qsfp2_rx_lfc_en),
-      .qsfp2_rx_lfc_req(qsfp2_rx_lfc_req),
-      .qsfp2_rx_lfc_ack(qsfp2_rx_lfc_ack),
-      .qsfp2_rx_pfc_en (qsfp2_rx_pfc_en),
-      .qsfp2_rx_pfc_req(qsfp2_rx_pfc_req),
-      .qsfp2_rx_pfc_ack(qsfp2_rx_pfc_ack),
 
       .qsfp2_drp_clk (qsfp2_drp_clk),
       .qsfp2_drp_rst (qsfp2_drp_rst),
