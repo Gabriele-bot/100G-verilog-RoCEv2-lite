@@ -4,7 +4,7 @@ use ieee.numeric_std.all;
 
 use work.CRC32_pkg.all;
 
-entity CRC32_D512_matrix_pipeline is
+entity CRC32_matrix_pipeline is
     generic(
         DATA_WIDTH     : integer                       := 512;
         CRC_POLY       : std_logic_vector(31 downto 0) := CRC32_POLY;
@@ -23,9 +23,9 @@ entity CRC32_D512_matrix_pipeline is
         crcOut        : out std_logic_vector(31 downto 0);
         valid_crc_out : out std_logic
     );
-end entity CRC32_D512_matrix_pipeline;
+end entity CRC32_matrix_pipeline;
 
-architecture RTL of CRC32_D512_matrix_pipeline is
+architecture RTL of CRC32_matrix_pipeline is
 
     constant LATENCY : natural := DATA_WIDTH / 32;
 

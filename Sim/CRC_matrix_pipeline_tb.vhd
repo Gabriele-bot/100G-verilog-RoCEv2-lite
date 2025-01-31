@@ -6,10 +6,10 @@ use std.textio.all;
 
 use work.CRC32_pkg.all;
 
-entity CRC32_D512_matrix_pipeline_tb is
+entity CRC32_matrix_pipeline_tb is
 end;
 
-architecture bench of CRC32_D512_matrix_pipeline_tb is
+architecture bench of CRC32_matrix_pipeline_tb is
 
     constant LATENCY_CRC_BLOCK : integer := 16;
 
@@ -40,7 +40,7 @@ architecture bench of CRC32_D512_matrix_pipeline_tb is
 begin
 
     -- Insert values for generic parameters !!
-    uut : entity work.CRC32_D512_matrix_pipeline
+    uut : entity work.CRC32_matrix_pipeline
         generic map(
             DATA_WIDTH     => 512,
             CRC_POLY       => CRC32_POLY,
