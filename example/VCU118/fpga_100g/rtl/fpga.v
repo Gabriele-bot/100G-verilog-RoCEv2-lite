@@ -292,7 +292,7 @@ module fpga (
   wire                                         qsfp1_rx_lfc_ack;
   wire                                 [  7:0] qsfp1_rx_pfc_en  = 8'hFF;
   wire                                 [  7:0] qsfp1_rx_pfc_req;
-  wire                                 [  7:0] qsfp1_rx_pfc_ack = 8'h00; // define queues with axis ID bus??
+  wire                                 [  7:0] qsfp1_rx_pfc_ack; // define queues with axis ID bus??
 
   wire                                         qsfp1_gtpowergood;
 
@@ -591,7 +591,7 @@ ila_axis ila_eth_tx(
       .s_axis_tlast       (qsfp1_fifo_tx_axis_tlast_int),
       .s_axis_tid         (0),
       .s_axis_tdest       (0),
-      .s_axis_tuser       (qsfp1_rx_axis_tuser_int),
+      .s_axis_tuser       (qsfp1_tx_axis_tuser_int),
       // AXI output
       .m_clk              (qsfp1_tx_clk_int),
       .m_rst              (qsfp1_tx_rst_int),
@@ -606,8 +606,8 @@ ila_axis ila_eth_tx(
       // Pause
       .s_pause_req(1'b0),
       .s_pause_ack(),
-      .m_pause_req(qsfp1_rx_lfc_req),
-      .m_pause_ack(qsfp1_rx_lfc_ack),
+      .m_pause_req(qsfp1_rx_pfc_req[0]),
+      .m_pause_ack(qsfp1_rx_pfc_ack[0]),
       // Status
       .s_status_overflow  (),
       .s_status_bad_frame (),
@@ -717,7 +717,6 @@ ila_axis ila_eth_tx(
       .qsfp2_tx_axis_tuser  (qsfp2_tx_axis_tuser_int),
 
       .qsfp2_tx_enable (qsfp2_tx_enable),
-      .qsfp2_tx_lfc_en (qsfp2_tx_lfc_en),
 
       .qsfp2_rx_axis_tdata (qsfp2_rx_axis_tdata_int),
       .qsfp2_rx_axis_tkeep (qsfp2_rx_axis_tkeep_int),

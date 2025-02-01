@@ -259,7 +259,7 @@ module axis_RoCE_icrc_insert_512 #
     if (PIPELINED_COMPUTATION) begin
       //PIPELINED 16 CLOCKS LATENCY!!! EASIER ROUTING
       // 16 clocks latency, pipelined!
-      CRC32_D512_matrix_pipeline #(
+      CRC32_matrix_pipeline #(
           .crc_poly(32'h04C11DB7),
           .crc_init(32'hDEBB20E3),
           .reverse_result(1'b0),

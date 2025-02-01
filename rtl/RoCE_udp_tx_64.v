@@ -116,7 +116,11 @@ module RoCE_udp_tx_64 (
      * Status signals
      */
     output wire        busy,
-    output wire        error_payload_early_termination
+    output wire        error_payload_early_termination,
+    /*
+     * Config
+     */
+     input  wire [              15:0] RoCE_udp_port
 );
 
   /*
@@ -855,7 +859,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       m_ip_source_ip_reg <= s_ip_source_ip;
       m_ip_dest_ip_reg <= s_ip_dest_ip;
       m_udp_source_port_reg <= s_udp_source_port;
-      m_udp_dest_port_reg <= s_udp_dest_port;
+      m_udp_dest_port_reg <= RoCE_udp_port;
       m_udp_length_reg <= s_udp_length;
       m_udp_checksum_reg <= s_udp_checksum;
 

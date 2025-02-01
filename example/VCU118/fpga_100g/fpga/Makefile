@@ -78,7 +78,7 @@ SYN_FILES +=  lib/RoCE/rtl/test_ram.v
 #CRC FILES
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_pkg.vhd
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_D512_matrix.vhd
-SYN_FILES += lib/RoCE/lib/FAST_CRC32/Experimental/CRC32_D512_matrix_pipeline.vhd
+SYN_FILES += lib/RoCE/lib/FAST_CRC32/Experimental/CRC32_matrix_pipeline.vhd
 
 
 # XDC files

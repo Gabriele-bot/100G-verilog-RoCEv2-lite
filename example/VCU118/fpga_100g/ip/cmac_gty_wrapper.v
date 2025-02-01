@@ -146,6 +146,81 @@ module cmac_gty_wrapper #(
     input  wire [7:0] rx_pfc_ack
 );
 
+  // FLOW CONTROL INIT
+  localparam [2:0]
+  STATE_TX_IDLE = 3'd0,
+  STATE_GT_LOCKED = 3'd1,
+  STATE_WAIT_RX_ALIGNED = 3'd2,
+  STATE_PAUSE_INIT = 3'd3,
+  STATE_PAUSE_INIT_DONE = 3'd4,
+  STATE_DONE = 3'd5;
+  
+  reg [3:0] state_reg = STATE_TX_IDLE;
+  
+  reg            stat_rx_aligned_1d, reset_done;
+  reg            ctl_tx_enable_r, ctl_tx_send_lfi_r, ctl_tx_send_rfi_r;
+  reg            init_done, init_cntr_en;
+  reg  [8:0]     init_cntr;
+  
+  reg tx_enable_r;
+  
+  ////internal register declation for pause signals
+  reg            ctl_tx_resend_pause_r;
+  reg  [8:0]     ctl_tx_pause_req_r;
+  reg  [8:0]     ctl_tx_pause_enable_r;
+  reg  [15:0]    ctl_tx_pause_quanta0_r;
+  reg  [15:0]    ctl_tx_pause_quanta1_r;
+  reg  [15:0]    ctl_tx_pause_quanta2_r;
+  reg  [15:0]    ctl_tx_pause_quanta3_r;
+  reg  [15:0]    ctl_tx_pause_quanta4_r;
+  reg  [15:0]    ctl_tx_pause_quanta5_r;
+  reg  [15:0]    ctl_tx_pause_quanta6_r;
+  reg  [15:0]    ctl_tx_pause_quanta7_r;
+  reg  [15:0]    ctl_tx_pause_quanta8_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer0_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer1_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer2_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer3_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer4_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer5_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer6_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer7_r;
+  reg  [15:0]    ctl_tx_pause_refresh_timer8_r;
+
+  reg reset_done_reg;
+
+  wire            ctl_tx_enable, ctl_tx_send_lfi, ctl_tx_send_rfi;
+
+  wire            ctl_tx_resend_pause;
+  wire  [8:0]     ctl_tx_pause_req;
+  wire  [8:0]     ctl_tx_pause_enable;
+  wire  [15:0]    ctl_tx_pause_quanta0;
+  wire  [15:0]    ctl_tx_pause_quanta1;
+  wire  [15:0]    ctl_tx_pause_quanta2;
+  wire  [15:0]    ctl_tx_pause_quanta3;
+  wire  [15:0]    ctl_tx_pause_quanta4;
+  wire  [15:0]    ctl_tx_pause_quanta5;
+  wire  [15:0]    ctl_tx_pause_quanta6;
+  wire  [15:0]    ctl_tx_pause_quanta7;
+  wire  [15:0]    ctl_tx_pause_quanta8;
+  wire  [15:0]    ctl_tx_pause_refresh_timer0;
+  wire  [15:0]    ctl_tx_pause_refresh_timer1;
+  wire  [15:0]    ctl_tx_pause_refresh_timer2;
+  wire  [15:0]    ctl_tx_pause_refresh_timer3;
+  wire  [15:0]    ctl_tx_pause_refresh_timer4;
+  wire  [15:0]    ctl_tx_pause_refresh_timer5;
+  wire  [15:0]    ctl_tx_pause_refresh_timer6;
+  wire  [15:0]    ctl_tx_pause_refresh_timer7;
+  wire  [15:0]    ctl_tx_pause_refresh_timer8;
+
+  wire            ctl_rx_enable;
+  wire [8:0]      ctl_rx_pause_enable;
+  
+  wire            stat_tx_pause;
+
+  
+
+
   reg [23:0] drp_addr_reg = 24'd0;
   reg [15:0] drp_di_reg = 16'd0;
   reg drp_en_gty_reg_1 = 1'b0;
@@ -170,6 +245,7 @@ module cmac_gty_wrapper #(
   wire drp_rdy_cmac;
   reg [15:0] drp_do_ctrl_reg = 0;
   reg drp_rdy_ctrl_reg = 1'b0;
+  
 
   assign drp_do  = drp_do_reg;
   assign drp_rdy = drp_rdy_reg;
@@ -545,6 +621,18 @@ module cmac_gty_wrapper #(
     cmac_ctl_tx_send_lfi_reg <= cmac_ctl_tx_send_lfi_sync_reg;
     cmac_ctl_tx_test_pattern_sync_reg <= cmac_ctl_tx_test_pattern_drp_reg;
     cmac_ctl_tx_test_pattern_reg <= cmac_ctl_tx_test_pattern_sync_reg;
+  end
+  
+  always @( posedge tx_clk )
+  begin
+    if (tx_rst) begin
+        reset_done_reg         <= 1'b0;
+        stat_rx_aligned_1d     <= 1'b0;
+    end else begin
+        stat_rx_aligned_1d     <= cmac_stat_rx_aligned;
+        reset_done_reg         <= 1'b1;
+    end
+    
   end
 
   // watchdog
@@ -1403,11 +1491,281 @@ module cmac_gty_wrapper #(
   );
   */
 
+  //////////////////////////////////////////////////
+  ////State Machine 
+  //////////////////////////////////////////////////
+  always @( posedge tx_clk )
+  begin
+  if ( tx_rst == 1'b1 )
+      begin
+          state_reg                       <= STATE_TX_IDLE;
+  
+          init_cntr_en                      <= 1'b0;
+  
+          ctl_tx_enable_r        <= 1'b0;
+  
+          ctl_tx_send_lfi_r      <= 1'b0;
+          ctl_tx_send_rfi_r      <= 1'b0;
+  
+  
+          ctl_tx_resend_pause_r             <= 1'b0;
+          ctl_tx_pause_req_r                <= 9'h0;
+          ctl_tx_pause_enable_r             <= 9'h0;
+          ctl_tx_pause_quanta0_r            <= 16'h0;
+          ctl_tx_pause_quanta1_r            <= 16'h0;
+          ctl_tx_pause_quanta2_r            <= 16'h0;
+          ctl_tx_pause_quanta3_r            <= 16'h0;
+          ctl_tx_pause_quanta4_r            <= 16'h0;
+          ctl_tx_pause_quanta5_r            <= 16'h0;
+          ctl_tx_pause_quanta6_r            <= 16'h0;
+          ctl_tx_pause_quanta7_r            <= 16'h0;
+          ctl_tx_pause_quanta8_r            <= 16'h0;
+          ctl_tx_pause_refresh_timer0_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer1_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer2_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer3_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer4_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer5_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer6_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer7_r     <= 16'h0;
+          ctl_tx_pause_refresh_timer8_r     <= 16'h0;
+      end
+  else
+      begin
+          case (state_reg)
+              STATE_TX_IDLE            :
+              begin
+                  init_cntr_en           <= 1'b0;
+  
+                  ctl_tx_enable_r        <= 1'b0;
+  
+                  ctl_tx_send_lfi_r      <= 1'b0;
+                  ctl_tx_send_rfi_r      <= 1'b0;
+  
+                  //// State transition
+                  if  (reset_done_reg == 1'b1)
+                      state_reg <= STATE_GT_LOCKED;
+                  else
+                      state_reg <= STATE_TX_IDLE;
+              end
+              STATE_GT_LOCKED          :
+              begin
+  
+                  init_cntr_en           <= 1'b0;
+  
+                  ctl_tx_enable_r        <= 1'b1;
+  
+                  ctl_tx_send_lfi_r      <= 1'b0;
+                  ctl_tx_send_rfi_r      <= 1'b1; // Only remote fault is sent when link is down based on IEEE spec
+                  //// State transition
+                  state_reg <= STATE_WAIT_RX_ALIGNED;
+              end
+              STATE_WAIT_RX_ALIGNED    :
+              begin
+  
+                  init_cntr_en           <= 1'b0;
+  
+                  ctl_tx_enable_r        <= 1'b1;
+  
+                  //// State transition
+                  if  (stat_rx_aligned_1d == 1'b1)
+                      begin
+                          $display("INFO : START PAUSE INIT");
+                          state_reg <= STATE_PAUSE_INIT;
+                      end
+                  else
+                      state_reg <= STATE_WAIT_RX_ALIGNED;
+              end
+              STATE_PAUSE_INIT      :
+              begin
+  
+                  init_cntr_en                    <= 1'b1;
+                  init_done                       <= init_cntr[8];
+  
+                  ctl_tx_enable_r        <= 1'b1;
+  
+                  ctl_tx_send_rfi_r               <= 1'b0; // Only remote fault is sent when link is down based on IEEE spec
+  
+                  ctl_tx_pause_enable_r           <= 9'h1FF;
+                  ctl_tx_pause_quanta8_r          <= 16'hffff;
+                  ctl_tx_pause_refresh_timer8_r   <= 16'hffff;
+  
+                  if (init_done == 1'b1)
+                      ctl_tx_pause_req_r          <= 9'h100;
+                      //// State transition
+                  if  (stat_rx_aligned_1d == 1'b0)
+                      state_reg <= STATE_TX_IDLE;
+                  else if  (stat_tx_pause == 1'b1)
+                      state_reg <= STATE_PAUSE_INIT_DONE;
+                  else
+                      state_reg <= STATE_PAUSE_INIT;
+              end
+              STATE_PAUSE_INIT_DONE      :
+              begin
+                  init_done                       <= 1'b0;
+  
+                  ctl_tx_enable_r        <= 1'b1;
+  
+                  ctl_tx_pause_enable_r           <= {tx_lfc_en, tx_pfc_en};
+                  ctl_tx_pause_req_r              <= 9'h0;
+                  ctl_tx_pause_quanta0_r          <= 16'hffff;
+                  ctl_tx_pause_quanta1_r          <= 16'hffff;
+                  ctl_tx_pause_quanta2_r          <= 16'hffff;
+                  ctl_tx_pause_quanta3_r          <= 16'hffff;
+                  ctl_tx_pause_quanta4_r          <= 16'hffff;
+                  ctl_tx_pause_quanta5_r          <= 16'hffff;
+                  ctl_tx_pause_quanta6_r          <= 16'hffff;
+                  ctl_tx_pause_quanta7_r          <= 16'hffff;
+                  ctl_tx_pause_quanta8_r          <= 16'hffff;
+                  ctl_tx_pause_refresh_timer0_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer1_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer2_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer3_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer4_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer5_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer6_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer7_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer8_r   <= 16'hffff;
+  
+                  //// State transition
+                  if  (stat_rx_aligned_1d == 1'b0)
+                      state_reg <= STATE_TX_IDLE;
+                  else
+                      state_reg <= STATE_DONE;
+              end
+  
+              STATE_DONE   :
+              begin
+                  init_done                       <= 1'b0;
+                  ctl_tx_pause_enable_r           <= {tx_lfc_en, tx_pfc_en};
+                  ctl_tx_pause_req_r              <= 9'h0;
+                  ctl_tx_pause_quanta0_r          <= 16'hffff;
+                  ctl_tx_pause_quanta1_r          <= 16'hffff;
+                  ctl_tx_pause_quanta2_r          <= 16'hffff;
+                  ctl_tx_pause_quanta3_r          <= 16'hffff;
+                  ctl_tx_pause_quanta4_r          <= 16'hffff;
+                  ctl_tx_pause_quanta5_r          <= 16'hffff;
+                  ctl_tx_pause_quanta6_r          <= 16'hffff;
+                  ctl_tx_pause_quanta7_r          <= 16'hffff;
+                  ctl_tx_pause_quanta8_r          <= 16'hffff;
+                  ctl_tx_pause_refresh_timer0_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer1_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer2_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer3_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer4_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer5_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer6_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer7_r   <= 16'hffff;
+                  ctl_tx_pause_refresh_timer8_r   <= 16'hffff;
+                  if  (stat_rx_aligned_1d == 1'b0)
+                      state_reg <= STATE_TX_IDLE;
+                  else
+                      state_reg <= STATE_DONE;
+  
+              end
+              default                  :
+              begin
+                  init_cntr_en                    <= 1'b0;
+                  ctl_tx_enable_r                 <= 1'b0;
+                  ctl_tx_send_lfi_r               <= 1'b0;
+                  ctl_tx_send_rfi_r               <= 1'b0;
+                  init_done                       <= 1'b0;
+                  ctl_tx_pause_enable_r           <= 9'h0;
+                  ctl_tx_pause_quanta8_r          <= 16'h0;
+                  ctl_tx_pause_refresh_timer8_r   <= 16'h0;
+                  ctl_tx_pause_quanta0_r          <= 16'h0;
+                  ctl_tx_pause_quanta1_r          <= 16'h0;
+                  ctl_tx_pause_quanta2_r          <= 16'h0;
+                  ctl_tx_pause_quanta3_r          <= 16'h0;
+                  ctl_tx_pause_quanta4_r          <= 16'h0;
+                  ctl_tx_pause_quanta5_r          <= 16'h0;
+                  ctl_tx_pause_quanta6_r          <= 16'h0;
+                  ctl_tx_pause_quanta7_r          <= 16'h0;
+                  ctl_tx_pause_refresh_timer0_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer1_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer2_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer3_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer4_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer5_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer6_r   <= 16'h0;
+                  ctl_tx_pause_refresh_timer7_r   <= 16'h0;
+                  ctl_tx_pause_req_r              <= 9'h0;
+                  state_reg                       <= STATE_TX_IDLE;
+              end
+          endcase
+      end
+  end
+  
+  //////////////////////////////////////////////////
+  ////init_cntr signal generation 
+  //////////////////////////////////////////////////
+  always @( posedge tx_clk )
+  begin
+  if ( tx_rst == 1'b1 )
+      begin
+          init_cntr <= 0;
+      end
+  else
+      begin
+          if (init_cntr_en == 1'b1)
+              init_cntr <= init_cntr + 1;
+          else
+              init_cntr <= 0;
+      end
+  end
+  
+  assign ctl_tx_enable = state_reg  == STATE_DONE ?  tx_enable : ctl_tx_enable_r;
+  
+  assign ctl_tx_pause_enable             = state_reg  == STATE_DONE ? {tx_lfc_en, tx_pfc_en}   : ctl_tx_pause_enable_r;
+  assign ctl_tx_pause_req                = state_reg  == STATE_DONE ? {tx_lfc_req, tx_pfc_req} : ctl_tx_pause_req_r;
+  assign ctl_tx_pause_quanta0            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta0_r;
+  assign ctl_tx_pause_quanta1            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta1_r;
+  assign ctl_tx_pause_quanta2            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta2_r;
+  assign ctl_tx_pause_quanta3            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta3_r;
+  assign ctl_tx_pause_quanta4            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta4_r;
+  assign ctl_tx_pause_quanta5            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta5_r;
+  assign ctl_tx_pause_quanta6            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta6_r;
+  assign ctl_tx_pause_quanta7            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta7_r;
+  assign ctl_tx_pause_quanta8            = state_reg  == STATE_DONE ? 16'hffff                 : ctl_tx_pause_quanta8_r;
+  assign ctl_tx_pause_refresh_timer0     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer0_r;
+  assign ctl_tx_pause_refresh_timer1     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer1_r;
+  assign ctl_tx_pause_refresh_timer2     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer2_r;
+  assign ctl_tx_pause_refresh_timer3     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer3_r;
+  assign ctl_tx_pause_refresh_timer4     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer4_r;
+  assign ctl_tx_pause_refresh_timer5     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer5_r;
+  assign ctl_tx_pause_refresh_timer6     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer6_r;
+  assign ctl_tx_pause_refresh_timer7     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer7_r;
+  assign ctl_tx_pause_refresh_timer8     = state_reg  == STATE_DONE ? 16'h7fff                 : ctl_tx_pause_refresh_timer8_r;
+  assign ctl_tx_send_lfi                 = ctl_tx_send_lfi_r | cmac_ctl_tx_send_lfi_reg;
+  assign ctl_tx_send_rfi                 = ctl_tx_send_rfi_r | cmac_ctl_tx_send_rfi_reg;
+  
+  assign ctl_rx_enable                   = rx_enable;
+  assign ctl_rx_pause_enable             = {rx_lfc_en, rx_pfc_en};
+
   assign rx_axis_tdata  = cmac_rx_axis_tdata;
   assign rx_axis_tkeep  = cmac_rx_axis_tkeep;
   assign rx_axis_tvalid = cmac_rx_axis_tvalid;
   assign rx_axis_tlast  = cmac_rx_axis_tlast;
   assign rx_axis_tuser  = cmac_rx_axis_tuser;
+  
+  /*
+  ila_rx_pfc ila_pfc_inst (
+      .clk(rx_clk),
+      .probe0(rx_lfc_req),
+      .probe1(rx_lfc_ack),
+      .probe2(rx_pfc_req),
+      .probe3(rx_pfc_ack)
+  );
+  
+  ila_stat_rx_cmac ila_stat_rx_cmac_inst (
+      .clk(rx_clk),
+      .probe0(cmac_stat_rx_aligned),
+      .probe1(cmac_stat_rx_aligned_err),
+      .probe2(cmac_stat_rx_hi_ber),
+      .probe3(cmac_stat_rx_local_fault),
+      .probe4(cmac_stat_rx_status)
+  );
+  */
 
   cmac_usplus cmac_inst (
       .txdata_in  (cmac_txdata),
@@ -1626,9 +1984,9 @@ module cmac_gty_wrapper #(
       .ctl_rx_enable_pcp(rx_pfc_en != 0),
       .ctl_rx_enable_ppp(rx_pfc_en != 0),
       .ctl_rx_pause_ack({rx_lfc_ack, rx_pfc_ack}),
-      .ctl_rx_pause_enable({rx_lfc_en, rx_pfc_en}),
+      .ctl_rx_pause_enable(ctl_rx_pause_enable),
 
-      .ctl_rx_enable(cmac_ctl_rx_enable_reg && rx_enable),
+      .ctl_rx_enable(cmac_ctl_rx_enable_reg && ctl_rx_enable),
       .ctl_rx_force_resync(cmac_ctl_rx_force_resync_reg),
       .ctl_rx_test_pattern(cmac_ctl_rx_test_pattern_reg),
 
@@ -1710,39 +2068,39 @@ module cmac_gty_wrapper #(
       .stat_tx_unicast(cmac_stat_tx_unicast),
       .stat_tx_vlan(cmac_stat_tx_vlan),
 
-      .ctl_tx_enable(cmac_ctl_tx_enable_reg && tx_enable),
+      .ctl_tx_enable(cmac_ctl_tx_enable_reg && ctl_tx_enable),
       .ctl_tx_send_idle(cmac_ctl_tx_send_idle_reg),
-      .ctl_tx_send_rfi(cmac_ctl_tx_send_rfi_reg),
-      .ctl_tx_send_lfi(cmac_ctl_tx_send_lfi_reg),
+      .ctl_tx_send_rfi(ctl_tx_send_rfi),
+      .ctl_tx_send_lfi(ctl_tx_send_lfi),
       .ctl_tx_test_pattern(cmac_ctl_tx_test_pattern_reg),
 
       .tx_clk(tx_clk),
 
       .stat_tx_pause_valid(),
-      .stat_tx_pause(),
+      .stat_tx_pause(stat_tx_pause),
       .stat_tx_user_pause(),
 	
       // Link and Priority tx flow config registers
-      .ctl_tx_pause_enable({tx_lfc_en, tx_pfc_en}),
-      .ctl_tx_pause_quanta0(16'hffff),
-      .ctl_tx_pause_quanta1(16'hffff),
-      .ctl_tx_pause_quanta2(16'hffff),
-      .ctl_tx_pause_quanta3(16'hffff),
-      .ctl_tx_pause_quanta4(16'hffff),
-      .ctl_tx_pause_quanta5(16'hffff),
-      .ctl_tx_pause_quanta6(16'hffff),
-      .ctl_tx_pause_quanta7(16'hffff),
-      .ctl_tx_pause_quanta8(16'hffff),
-      .ctl_tx_pause_refresh_timer0(16'h7fff),
-      .ctl_tx_pause_refresh_timer1(16'h7fff),
-      .ctl_tx_pause_refresh_timer2(16'h7fff),
-      .ctl_tx_pause_refresh_timer3(16'h7fff),
-      .ctl_tx_pause_refresh_timer4(16'h7fff),
-      .ctl_tx_pause_refresh_timer5(16'h7fff),
-      .ctl_tx_pause_refresh_timer6(16'h7fff),
-      .ctl_tx_pause_refresh_timer7(16'h7fff),
-      .ctl_tx_pause_refresh_timer8(16'h7fff),
-      .ctl_tx_pause_req({tx_lfc_req, tx_pfc_req}),
+      .ctl_tx_pause_enable(ctl_tx_pause_enable),
+      .ctl_tx_pause_quanta0(ctl_tx_pause_quanta0),
+      .ctl_tx_pause_quanta1(ctl_tx_pause_quanta1),
+      .ctl_tx_pause_quanta2(ctl_tx_pause_quanta2),
+      .ctl_tx_pause_quanta3(ctl_tx_pause_quanta3),
+      .ctl_tx_pause_quanta4(ctl_tx_pause_quanta4),
+      .ctl_tx_pause_quanta5(ctl_tx_pause_quanta5),
+      .ctl_tx_pause_quanta6(ctl_tx_pause_quanta6),
+      .ctl_tx_pause_quanta7(ctl_tx_pause_quanta7),
+      .ctl_tx_pause_quanta8(ctl_tx_pause_quanta8),
+      .ctl_tx_pause_refresh_timer0(ctl_tx_pause_refresh_timer0),
+      .ctl_tx_pause_refresh_timer1(ctl_tx_pause_refresh_timer1),
+      .ctl_tx_pause_refresh_timer2(ctl_tx_pause_refresh_timer2),
+      .ctl_tx_pause_refresh_timer3(ctl_tx_pause_refresh_timer3),
+      .ctl_tx_pause_refresh_timer4(ctl_tx_pause_refresh_timer4),
+      .ctl_tx_pause_refresh_timer5(ctl_tx_pause_refresh_timer5),
+      .ctl_tx_pause_refresh_timer6(ctl_tx_pause_refresh_timer6),
+      .ctl_tx_pause_refresh_timer7(ctl_tx_pause_refresh_timer7),
+      .ctl_tx_pause_refresh_timer8(ctl_tx_pause_refresh_timer8),
+      .ctl_tx_pause_req(ctl_tx_pause_req),
       .ctl_tx_resend_pause(1'b0),
 
       .tx_axis_tready(cmac_tx_axis_tready),
@@ -1774,3 +2132,4 @@ module cmac_gty_wrapper #(
 endmodule
 
 `resetall
+

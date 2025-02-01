@@ -334,8 +334,8 @@ class RoCEFrame(object):
         for i in range(steps_32):
             value = struct.unpack('<L', roce_frame_temp[(i * 4):(i * 4 + 4)])[0]
             crc_temp = compute_crc(value, 0x04c11db7, crc_temp)
-            #print("Hex data value ", hex(value))
-            #if i % 16 == 15:
+            #print("Hex data value %d" % i,  hex(value))
+            #if i % 2 == 1:
             #    print(i, hex(crc_temp))
 
         crc_temp = ~np.uint32(crc_temp)
@@ -478,7 +478,7 @@ try:
 	for i in range(17):
 		data_stream = []
 
-		dma_length_set  = 81*4096 + i*4
+		dma_length_set  = 4096*40 + i*4
 		r_key_set        = 0x5514
 		starting_psn_set = 1
 		rem_qpn_set = 0x00b8

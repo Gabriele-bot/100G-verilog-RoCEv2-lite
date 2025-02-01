@@ -63,7 +63,7 @@ module fpga_core #(
     output wire         qsfp1_tx_axis_tlast,
     output wire         qsfp1_tx_axis_tuser,
 
-    output wire       qsfp1_tx_enable
+    output wire       qsfp1_tx_enable,
 
     input wire [511:0] qsfp1_rx_axis_tdata,
     input wire [ 63:0] qsfp1_rx_axis_tkeep,
@@ -72,7 +72,7 @@ module fpga_core #(
     input wire         qsfp1_rx_axis_tuser,
 
     output wire       qsfp1_rx_enable,
-    input  wire       qsfp1_rx_status
+    input  wire       qsfp1_rx_status,
 
     input  wire        qsfp1_drp_clk,
     input  wire        qsfp1_drp_rst,
@@ -90,7 +90,7 @@ module fpga_core #(
     output wire         qsfp2_tx_axis_tlast,
     output wire         qsfp2_tx_axis_tuser,
 
-    output wire       qsfp2_tx_enable
+    output wire       qsfp2_tx_enable,
 
     input wire [511:0] qsfp2_rx_axis_tdata,
     input wire [ 63:0] qsfp2_rx_axis_tkeep,
@@ -287,26 +287,12 @@ wire [15:0] RoCE_udp_port;
   assign tx_ip_payload_axis_tuser  = 0;
 
   assign qsfp1_tx_enable           = 1'b1;
-  assign qsfp1_tx_pfc_en           = {8{1'b1}};
-  assign qsfp1_tx_pfc_req          = {8{1'b0}};
 
   assign qsfp1_rx_enable           = 1'b1;
-  assign qsfp1_rx_lfc_en           = 1'b1;
-  assign qsfp1_rx_lfc_ack          = 1'b0;
-  assign qsfp1_rx_pfc_en           = {8{1'b1}};
-  assign qsfp1_rx_pfc_ack          = {8{1'b0}};
 
   assign qsfp2_tx_enable           = 1'b1;
-  assign qsfp2_tx_lfc_en           = 1'b1;
-  assign qsfp2_tx_lfc_req          = 1'b0;
-  assign qsfp2_tx_pfc_en           = {8{1'b1}};
-  assign qsfp2_tx_pfc_req          = 8'd0;
 
   assign qsfp2_rx_enable           = 1'b1;
-  assign qsfp2_rx_lfc_en           = 1'b1;
-  assign qsfp2_rx_lfc_ack          = 1'b0;
-  assign qsfp2_rx_pfc_en           = {8{1'b1}};
-  assign qsfp2_rx_pfc_ack          = {8{1'b0}};
 
   // Loop back UDP
   wire match_cond = rx_udp_dest_port == 1234;
@@ -740,7 +726,7 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
       .RoCE_udp_port(RoCE_udp_port),
       .loc_ip_addr(local_ip),
       .timeout_period(64'd20000), //3.1 ns * 20000 = 62 ns
-      .retry_count(4'd6)
+      .retry_count(4'd14)
   );
   
   /*

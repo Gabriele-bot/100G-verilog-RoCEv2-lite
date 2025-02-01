@@ -101,7 +101,7 @@ module RoCE_minimal_stack_512 #(
   input  wire [ 15:0] RoCE_udp_port,
   input  wire [ 31:0] loc_ip_addr,
   input  wire [ 63:0] timeout_period,
-  input  wire [ 3 :0] retry_count
+  input  wire [ 4 :0] retry_count
 
 );
 
@@ -393,7 +393,7 @@ module RoCE_minimal_stack_512 #(
   wire en_retrans;
 
   wire [23:0] last_acked_psn;
-  reg [23:0] last_acked_psn_reg;
+  reg  [23:0] last_acked_psn_reg;
   wire [31:0] n_transfers;
 
   reg [31:0] sent_messages = 32'd0;
@@ -419,12 +419,11 @@ module RoCE_minimal_stack_512 #(
   wire [31:0] qp_curr_rem_ip_addr;
   wire        qp_curr_write_type;
   wire start_transfer_wire;
+  wire metadata_valid;
 
   reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
   wire s_dma_meta_valid;
   wire s_dma_meta_ready;
-
-  wire metadata_valid;
 
   /*
   AXI RAM INTERFACE
@@ -848,6 +847,15 @@ module RoCE_minimal_stack_512 #(
   generate
     if (RETRANSMISSION) begin
 
+      wire [127:0] s_qp_params;
+      assign s_qp_params[31:0] = qp_curr_rem_ip_addr;
+      assign s_qp_params[31 :0  ] = qp_curr_rem_ip_addr;
+      assign s_qp_params[55 :32 ] = qp_curr_rem_qpn;
+      assign s_qp_params[79 :56 ] = qp_curr_loc_qpn;
+      assign s_qp_params[111:80 ] = qp_curr_r_key;
+      assign s_qp_params[127:112] = 16'hffff;
+
+
       RoCE_retransmission_module #(
         .DATA_WIDTH(512),
         .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
@@ -856,10 +864,13 @@ module RoCE_minimal_stack_512 #(
         .clk(clk),
         .rst(rst),
         .rst_retry_cntr              (s_dma_meta_valid & s_dma_meta_ready),
+        .s_qp_params_valid           (s_dma_meta_valid & s_dma_meta_ready),
+        .s_qp_params                 (s_qp_params),
         .s_roce_aeth_valid           (m_roce_aeth_valid),
         .s_roce_rx_aeth_syndrome     (m_roce_aeth_syndrome),
         .s_roce_rx_bth_psn           (m_roce_bth_psn),
         .s_roce_rx_bth_op_code       (m_roce_bth_op_code),
+        .s_roce_rx_bth_dest_qp       (m_roce_bth_dest_qp),
         .s_roce_rx_last_not_acked_psn(0),
         .s_roce_bth_valid            (m_roce_to_retrans_bth_valid),
         .s_roce_bth_ready            (m_roce_to_retrans_bth_ready),
@@ -983,9 +994,6 @@ module RoCE_minimal_stack_512 #(
         .psn_diff(psn_diff),
         .used_memory(used_memory),
         // Config
-        // 3.1 ns * 16000 clks = 49.6 us
-        // 49.6 us * 100 Gbps = 4.96 Mb
-        // Addr width (in byte) = log2(4.96 Mb / 8) = 19.24 --> 20 bits (8.3 Mb)
         .timeout_period(timeout_period),
         .retry_count(retry_count),
         .pmtu(pmtu),
