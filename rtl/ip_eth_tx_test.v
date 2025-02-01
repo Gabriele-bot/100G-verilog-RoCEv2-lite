@@ -264,7 +264,7 @@ always @* begin
     m_eth_payload_axis_tkeep_int = {KEEP_WIDTH{1'b0}};
     m_eth_payload_axis_tvalid_int = 1'b0;
     m_eth_payload_axis_tlast_int = 1'b0;
-    m_eth_payload_axis_tuser_int = 1'b0;
+    m_eth_payload_axis_tuser_int = 2'b0;
 
     if (s_ip_hdr_ready && s_ip_hdr_valid) begin
         store_ip_hdr = 1'b1;

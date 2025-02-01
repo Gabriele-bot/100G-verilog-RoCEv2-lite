@@ -267,7 +267,7 @@ module icmp_echo_reply #(
     assign tx_icmp_payload_axis_tuser = rx_icmp_payload_axis_tuser;
 
     icmp_ip_rx #(
-        .DATA_WIDTH(512)
+        .DATA_WIDTH(DATA_WIDTH)
     ) icmp_ip_rx_inst (
         .clk(clk),
         .rst(rst),
@@ -402,7 +402,7 @@ module icmp_echo_reply #(
     );
 
     icmp_ip_tx #(
-        .DATA_WIDTH(512)
+        .DATA_WIDTH(DATA_WIDTH)
     ) icmp_ip_tx_inst (
         .clk(clk),
         .rst(rst),

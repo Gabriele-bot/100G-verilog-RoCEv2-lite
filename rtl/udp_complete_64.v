@@ -204,12 +204,12 @@ module udp_complete_64 #(
   wire [47:0] eth_tx_from_ip_dest_mac;
   wire [47:0] eth_tx_from_ip_src_mac;
   wire [15:0] eth_tx_from_ip_type;
-  wire ip_is_roce_packet;
+  wire eth_ip_is_roce_packet;
   wire [63:0] eth_tx_from_ip_payload_axis_tdata;
   wire [7:0] eth_tx_from_ip_payload_axis_tkeep;
   wire eth_tx_from_ip_payload_axis_tvalid;
   wire eth_tx_from_ip_payload_axis_tlast;
-  wire eth_tx_from_ip_payload_axis_tuser;
+  wire [1:0] eth_tx_from_ip_payload_axis_tuser;
   wire eth_tx_from_ip_payload_axis_tready;
   
   
@@ -422,9 +422,72 @@ module udp_complete_64 #(
   (s_select_ip_reg && m_ip_payload_axis_tready);
 
 
+
   /*
    * ICRC insertion, only if is RoCE packet
    */
+   eth_hdr_fifo eth_hdr_fifo_icrc_instance (
+    .clk                      (clk),
+    .rst                      (rst),
+
+    .s_eth_hdr_valid          (eth_tx_from_ip_hdr_valid),
+    .s_eth_hdr_ready          (eth_tx_from_ip_hdr_ready),
+    .s_eth_dest_mac           (eth_tx_from_ip_dest_mac),
+    .s_eth_src_mac            (eth_tx_from_ip_src_mac),
+    .s_eth_type               (eth_tx_from_ip_type),
+    
+    .m_eth_hdr_valid          (m_eth_hdr_valid),
+    .m_eth_hdr_ready          (m_eth_hdr_ready),
+    .m_eth_dest_mac           (m_eth_dest_mac),
+    .m_eth_src_mac            (m_eth_src_mac),
+    .m_eth_type               (m_eth_type)
+);
+
+reg eth_ip_is_roce_packet_reg;
+wire eth_ip_is_roce_packet_wire;
+
+always @(posedge clk) begin
+  if ( eth_tx_from_ip_hdr_valid && eth_tx_from_ip_hdr_ready) begin
+    eth_ip_is_roce_packet_reg <= eth_ip_is_roce_packet;
+  end
+end
+
+assign eth_ip_is_roce_packet_wire = eth_ip_is_roce_packet_reg;
+
+  // Insert ICRC
+  axis_RoCE_icrc_insert_64 axis_RoCE_icrc_insert_64_instance (
+      .clk                      (clk),
+      .rst                      (rst),
+      /*
+      .s_eth_hdr_valid          (eth_tx_from_ip_hdr_valid),
+      .s_eth_hdr_ready          (eth_tx_from_ip_hdr_ready),
+      .s_eth_dest_mac           (eth_tx_from_ip_dest_mac),
+      .s_eth_src_mac            (eth_tx_from_ip_src_mac),
+      .s_eth_type               (eth_tx_from_ip_type),
+      .s_eth_is_roce_packet     (eth_ip_is_roce_packet),
+      */
+      .s_eth_payload_axis_tdata (eth_tx_from_ip_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep (eth_tx_from_ip_payload_axis_tkeep),
+      .s_eth_payload_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
+      .s_eth_payload_axis_tready(eth_tx_from_ip_payload_axis_tready),
+      .s_eth_payload_axis_tlast (eth_tx_from_ip_payload_axis_tlast),
+      .s_eth_payload_axis_tuser (eth_tx_from_ip_payload_axis_tuser),
+      /*
+      .m_eth_hdr_valid          (m_eth_hdr_valid),
+      .m_eth_hdr_ready          (m_eth_hdr_ready),
+      .m_eth_dest_mac           (m_eth_dest_mac),
+      .m_eth_src_mac            (m_eth_src_mac),
+      .m_eth_type               (m_eth_type),
+      */
+      .m_eth_payload_axis_tdata (m_eth_payload_axis_tdata),
+      .m_eth_payload_axis_tkeep (m_eth_payload_axis_tkeep),
+      .m_eth_payload_axis_tvalid(m_eth_payload_axis_tvalid),
+      .m_eth_payload_axis_tready(m_eth_payload_axis_tready),
+      .m_eth_payload_axis_tlast (m_eth_payload_axis_tlast),
+      .m_eth_payload_axis_tuser (m_eth_payload_axis_tuser),
+      .busy                     ()
+  );
+  /*
   // Ethernet demux
   eth_demux #(
       .M_COUNT(2),
@@ -530,7 +593,7 @@ module udp_complete_64 #(
       .m_eth_payload_axis_tuser(m_eth_payload_axis_tuser)
   );
 
-
+*/
 
   /*
  * Output arbiter
@@ -635,7 +698,7 @@ module udp_complete_64 #(
       .m_eth_dest_mac (eth_tx_from_ip_dest_mac),
       .m_eth_src_mac  (eth_tx_from_ip_src_mac),
       .m_eth_type     (eth_tx_from_ip_type),
-      .m_is_roce_packet(ip_is_roce_packet),
+      .m_is_roce_packet(eth_ip_is_roce_packet),
       .m_eth_payload_axis_tdata(eth_tx_from_ip_payload_axis_tdata),
       .m_eth_payload_axis_tkeep(eth_tx_from_ip_payload_axis_tkeep),
       .m_eth_payload_axis_tvalid(eth_tx_from_ip_payload_axis_tvalid),
@@ -704,7 +767,10 @@ module udp_complete_64 #(
   /*
  * UDP interface
  */
-  udp_64 #(
+  udp_test #(
+      .DATA_WIDTH(64),
+      .KEEP_ENABLE(1),
+      .KEEP_WIDTH(8),
       .CHECKSUM_GEN_ENABLE(UDP_CHECKSUM_GEN_ENABLE),
       .CHECKSUM_PAYLOAD_FIFO_DEPTH(UDP_CHECKSUM_PAYLOAD_FIFO_DEPTH),
       .CHECKSUM_HEADER_FIFO_DEPTH(UDP_CHECKSUM_HEADER_FIFO_DEPTH)

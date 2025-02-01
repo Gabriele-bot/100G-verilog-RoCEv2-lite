@@ -705,7 +705,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .local_ip(local_ip)
   );
 
-   /*
+ /*
  * ICMP Echo reply
  */
  icmp_echo_reply #(

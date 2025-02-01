@@ -80,7 +80,7 @@ module ip_eth_tx_64 (
     output wire        m_eth_payload_axis_tvalid,
     input  wire        m_eth_payload_axis_tready,
     output wire        m_eth_payload_axis_tlast,
-    output wire        m_eth_payload_axis_tuser,
+    output wire [1:0]  m_eth_payload_axis_tuser,
 
     /*
      * Status signals
@@ -191,7 +191,7 @@ interface.
   reg         m_eth_payload_axis_tvalid_int;
   reg         m_eth_payload_axis_tready_int_reg = 1'b0;
   reg         m_eth_payload_axis_tlast_int;
-  reg         m_eth_payload_axis_tuser_int;
+  reg [ 1:0]  m_eth_payload_axis_tuser_int;
   wire        m_eth_payload_axis_tready_int_early;
 
   wire [15:0] ip_length_roce_int;
@@ -288,7 +288,7 @@ interface.
     m_eth_payload_axis_tkeep_int = 1'b0;
     m_eth_payload_axis_tvalid_int = 1'b0;
     m_eth_payload_axis_tlast_int = 1'b0;
-    m_eth_payload_axis_tuser_int = 1'b0;
+    m_eth_payload_axis_tuser_int = 2'b0;
 
     case (state_reg)
       STATE_IDLE: begin
@@ -408,7 +408,8 @@ interface.
           m_eth_payload_axis_tdata_int[63:56] = shift_ip_payload_axis_tdata[63:56];
           m_eth_payload_axis_tkeep_int = {shift_ip_payload_axis_tkeep[7:4], 4'hF};
           m_eth_payload_axis_tlast_int = shift_ip_payload_axis_tlast;
-          m_eth_payload_axis_tuser_int = shift_ip_payload_axis_tuser;
+          m_eth_payload_axis_tuser_int[0] = shift_ip_payload_axis_tuser;
+          m_eth_payload_axis_tuser_int[1] = shift_ip_payload_axis_tlast & is_roce_packet_reg;
           word_count_next = word_count_reg - 16'd8;
 
           if (keep2count(m_eth_payload_axis_tkeep_int) >= word_count_reg) begin
@@ -429,7 +430,8 @@ interface.
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
               s_ip_payload_axis_tready_next = shift_ip_payload_s_tready;
-              m_eth_payload_axis_tuser_int = 1'b1;
+              m_eth_payload_axis_tuser_int[0] = 1'b1;
+              m_eth_payload_axis_tuser_int[1] = 1'b0;
               state_next = STATE_WAIT_LAST;
             end else begin
               state_next = STATE_WRITE_PAYLOAD;
@@ -443,10 +445,11 @@ interface.
         // write payload
         s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early && shift_ip_payload_s_tready;
 
-        m_eth_payload_axis_tdata_int = shift_ip_payload_axis_tdata;
-        m_eth_payload_axis_tkeep_int = shift_ip_payload_axis_tkeep;
-        m_eth_payload_axis_tlast_int = shift_ip_payload_axis_tlast;
-        m_eth_payload_axis_tuser_int = shift_ip_payload_axis_tuser;
+        m_eth_payload_axis_tdata_int    = shift_ip_payload_axis_tdata;
+        m_eth_payload_axis_tkeep_int    = shift_ip_payload_axis_tkeep;
+        m_eth_payload_axis_tlast_int    = shift_ip_payload_axis_tlast;
+        m_eth_payload_axis_tuser_int[0] = shift_ip_payload_axis_tuser;
+        m_eth_payload_axis_tuser_int[1] = shift_ip_payload_axis_tlast & is_roce_packet_reg;
 
         store_last_word = 1'b1;
 
@@ -462,7 +465,8 @@ interface.
               if (keep2count(shift_ip_payload_axis_tkeep) < word_count_reg[4:0]) begin
                 // end of frame, but length does not match
                 error_payload_early_termination_next = 1'b1;
-                m_eth_payload_axis_tuser_int = 1'b1;
+                m_eth_payload_axis_tuser_int[0] = 1'b1;
+                m_eth_payload_axis_tuser_int[1] = 1'b0;
               end
               s_ip_payload_axis_tready_next = 1'b0;
               flush_save = 1'b1;
@@ -476,7 +480,8 @@ interface.
             if (shift_ip_payload_axis_tlast) begin
               // end of frame, but length does not match
               error_payload_early_termination_next = 1'b1;
-              m_eth_payload_axis_tuser_int = 1'b1;
+              m_eth_payload_axis_tuser_int[0] = 1'b1;
+              m_eth_payload_axis_tuser_int[1] = 1'b0;
               s_ip_payload_axis_tready_next = 1'b0;
               flush_save = 1'b1;
               s_ip_hdr_ready_next = !m_eth_hdr_valid_next;
@@ -493,10 +498,11 @@ interface.
         // read and discard until end of frame
         s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early && shift_ip_payload_s_tready;
 
-        m_eth_payload_axis_tdata_int = last_word_data_reg;
-        m_eth_payload_axis_tkeep_int = last_word_keep_reg;
-        m_eth_payload_axis_tlast_int = shift_ip_payload_axis_tlast;
-        m_eth_payload_axis_tuser_int = shift_ip_payload_axis_tuser;
+        m_eth_payload_axis_tdata_int    = last_word_data_reg;
+        m_eth_payload_axis_tkeep_int    = last_word_keep_reg;
+        m_eth_payload_axis_tlast_int    = shift_ip_payload_axis_tlast;
+        m_eth_payload_axis_tuser_int[0] = shift_ip_payload_axis_tuser;
+        m_eth_payload_axis_tuser_int[1] = shift_ip_payload_axis_tlast & is_roce_packet_reg;
 
         if (m_eth_payload_axis_tready_int_reg && shift_ip_payload_axis_tvalid) begin
           transfer_in_save = 1'b1;
@@ -604,13 +610,13 @@ interface.
   reg [ 7:0] m_eth_payload_axis_tkeep_reg = 8'd0;
   reg m_eth_payload_axis_tvalid_reg = 1'b0, m_eth_payload_axis_tvalid_next;
   reg        m_eth_payload_axis_tlast_reg = 1'b0;
-  reg        m_eth_payload_axis_tuser_reg = 1'b0;
+  reg [ 1:0] m_eth_payload_axis_tuser_reg = 2'b0;
 
   reg [63:0] temp_m_eth_payload_axis_tdata_reg = 64'd0;
   reg [ 7:0] temp_m_eth_payload_axis_tkeep_reg = 8'd0;
   reg temp_m_eth_payload_axis_tvalid_reg = 1'b0, temp_m_eth_payload_axis_tvalid_next;
   reg temp_m_eth_payload_axis_tlast_reg = 1'b0;
-  reg temp_m_eth_payload_axis_tuser_reg = 1'b0;
+  reg [ 1:0] temp_m_eth_payload_axis_tuser_reg = 2'b0;
 
   // datapath control
   reg store_eth_payload_int_to_output;
