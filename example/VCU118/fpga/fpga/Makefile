@@ -76,7 +76,7 @@ SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_register.v
 
 
 # RoCE Files
-SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.sv
+SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.v
 SYN_FILES +=  lib/RoCE/rtl/axis_RoCE_icrc_insert_64.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_tx_64.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_rx_64.v

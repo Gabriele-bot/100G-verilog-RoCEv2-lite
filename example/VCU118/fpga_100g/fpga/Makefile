@@ -60,7 +60,7 @@ SYN_FILES += ip/cmac_pad.v
 
 
 # RoCE Files
-SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.sv
+SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.v
 SYN_FILES +=  lib/RoCE/rtl/axis_RoCE_icrc_insert_512.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_tx_512.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_rx_512.v
