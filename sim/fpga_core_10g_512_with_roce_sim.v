@@ -563,7 +563,7 @@ module top (
   );
 
   udp_complete_512 #(
-      .UDP_CHECKSUM_GEN_ENABLE(0)
+      .UDP_CHECKSUM_GEN_ENABLE(1)
   ) udp_complete_inst (
       .clk(clk),
       .rst(rst),

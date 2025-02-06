@@ -30,62 +30,62 @@ THE SOFTWARE.
  * roce ethernet frame receiver (UDP frame in, RoCE frame out, 64 bit datapath)
  */
 module RoCE_udp_rx_64 #(
-    parameter ENABLE_ICRC_CHECK = 1'b1
+  parameter ENABLE_ICRC_CHECK = 1'b1
 ) (
-    input wire clk,
-    input wire rst,
+  input wire clk,
+  input wire rst,
 
-    /*
-     * UDP frame input
-     */
-    input  wire        s_udp_hdr_valid,
-    output wire        s_udp_hdr_ready,
-    input  wire [47:0] s_eth_dest_mac,
-    input  wire [47:0] s_eth_src_mac,
-    input  wire [15:0] s_eth_type,
-    input  wire [ 3:0] s_ip_version,
-    input  wire [ 3:0] s_ip_ihl,
-    input  wire [ 5:0] s_ip_dscp,
-    input  wire [ 1:0] s_ip_ecn,
-    input  wire [15:0] s_ip_length,
-    input  wire [15:0] s_ip_identification,
-    input  wire [ 2:0] s_ip_flags,
-    input  wire [12:0] s_ip_fragment_offset,
-    input  wire [ 7:0] s_ip_ttl,
-    input  wire [ 7:0] s_ip_protocol,
-    input  wire [15:0] s_ip_header_checksum,
-    input  wire [31:0] s_ip_source_ip,
-    input  wire [31:0] s_ip_dest_ip,
-    input  wire [15:0] s_udp_source_port,
-    input  wire [15:0] s_udp_dest_port,
-    input  wire [15:0] s_udp_length,
-    input  wire [15:0] s_udp_checksum,
-    input  wire [31:0] s_roce_computed_icrc,
-    input  wire [63:0] s_udp_payload_axis_tdata,
-    input  wire [ 7:0] s_udp_payload_axis_tkeep,
-    input  wire        s_udp_payload_axis_tvalid,
-    output wire        s_udp_payload_axis_tready,
-    input  wire        s_udp_payload_axis_tlast,
-    input  wire        s_udp_payload_axis_tuser,
+  /*
+   * UDP frame input
+   */
+  input  wire        s_udp_hdr_valid,
+  output wire        s_udp_hdr_ready,
+  input  wire [47:0] s_eth_dest_mac,
+  input  wire [47:0] s_eth_src_mac,
+  input  wire [15:0] s_eth_type,
+  input  wire [ 3:0] s_ip_version,
+  input  wire [ 3:0] s_ip_ihl,
+  input  wire [ 5:0] s_ip_dscp,
+  input  wire [ 1:0] s_ip_ecn,
+  input  wire [15:0] s_ip_length,
+  input  wire [15:0] s_ip_identification,
+  input  wire [ 2:0] s_ip_flags,
+  input  wire [12:0] s_ip_fragment_offset,
+  input  wire [ 7:0] s_ip_ttl,
+  input  wire [ 7:0] s_ip_protocol,
+  input  wire [15:0] s_ip_header_checksum,
+  input  wire [31:0] s_ip_source_ip,
+  input  wire [31:0] s_ip_dest_ip,
+  input  wire [15:0] s_udp_source_port,
+  input  wire [15:0] s_udp_dest_port,
+  input  wire [15:0] s_udp_length,
+  input  wire [15:0] s_udp_checksum,
+  input  wire [31:0] s_roce_computed_icrc,
+  input  wire [63:0] s_udp_payload_axis_tdata,
+  input  wire [ 7:0] s_udp_payload_axis_tkeep,
+  input  wire        s_udp_payload_axis_tvalid,
+  output wire        s_udp_payload_axis_tready,
+  input  wire        s_udp_payload_axis_tlast,
+  input  wire        s_udp_payload_axis_tuser,
 
 
-    /*
-     * RoCE frame output
-     */
-    // BTH
-    output wire        m_roce_bth_valid,
-    input  wire        m_roce_bth_ready,
-    output wire [ 7:0] m_roce_bth_op_code,
-    output wire [15:0] m_roce_bth_p_key,
-    output wire [23:0] m_roce_bth_psn,
-    output wire [23:0] m_roce_bth_dest_qp,
-    output wire        m_roce_bth_ack_req,
-    // AETH
-    output wire        m_roce_aeth_valid,
-    input  wire        m_roce_aeth_ready,
-    output wire [ 7:0] m_roce_aeth_syndrome,
-    output wire [23:0] m_roce_aeth_msn,
-    /*
+  /*
+   * RoCE frame output
+   */
+  // BTH
+  output wire        m_roce_bth_valid,
+  input  wire        m_roce_bth_ready,
+  output wire [ 7:0] m_roce_bth_op_code,
+  output wire [15:0] m_roce_bth_p_key,
+  output wire [23:0] m_roce_bth_psn,
+  output wire [23:0] m_roce_bth_dest_qp,
+  output wire        m_roce_bth_ack_req,
+  // AETH
+  output wire        m_roce_aeth_valid,
+  input  wire        m_roce_aeth_ready,
+  output wire [ 7:0] m_roce_aeth_syndrome,
+  output wire [23:0] m_roce_aeth_msn,
+  /*
     // RETH
     output wire        m_roce_reth_valid,
     input  wire        m_roce_reth_ready,
@@ -97,27 +97,27 @@ module RoCE_udp_rx_64 #(
     input  wire        m_roce_immdh_ready,
     output wire [31:0] m_roce_immdh_data,
     */
-    // udp, ip, eth
-    output wire [47:0] m_eth_dest_mac,
-    output wire [47:0] m_eth_src_mac,
-    output wire [15:0] m_eth_type,
-    output wire [ 3:0] m_ip_version,
-    output wire [ 3:0] m_ip_ihl,
-    output wire [ 5:0] m_ip_dscp,
-    output wire [ 1:0] m_ip_ecn,
-    output wire [15:0] m_ip_identification,
-    output wire [ 2:0] m_ip_flags,
-    output wire [12:0] m_ip_fragment_offset,
-    output wire [ 7:0] m_ip_ttl,
-    output wire [ 7:0] m_ip_protocol,
-    output wire [15:0] m_ip_header_checksum,
-    output wire [31:0] m_ip_source_ip,
-    output wire [31:0] m_ip_dest_ip,
-    output wire [15:0] m_udp_source_port,
-    output wire [15:0] m_udp_dest_port,
-    output wire [15:0] m_udp_length,
-    output wire [15:0] m_udp_checksum,
-    /* TODO maybe implement something here?
+  // udp, ip, eth
+  output wire [47:0] m_eth_dest_mac,
+  output wire [47:0] m_eth_src_mac,
+  output wire [15:0] m_eth_type,
+  output wire [ 3:0] m_ip_version,
+  output wire [ 3:0] m_ip_ihl,
+  output wire [ 5:0] m_ip_dscp,
+  output wire [ 1:0] m_ip_ecn,
+  output wire [15:0] m_ip_identification,
+  output wire [ 2:0] m_ip_flags,
+  output wire [12:0] m_ip_fragment_offset,
+  output wire [ 7:0] m_ip_ttl,
+  output wire [ 7:0] m_ip_protocol,
+  output wire [15:0] m_ip_header_checksum,
+  output wire [31:0] m_ip_source_ip,
+  output wire [31:0] m_ip_dest_ip,
+  output wire [15:0] m_udp_source_port,
+  output wire [15:0] m_udp_dest_port,
+  output wire [15:0] m_udp_length,
+  output wire [15:0] m_udp_checksum,
+  /* TODO maybe implement something here?
     output wire [63:0] m_roce_payload_axis_tdata,
     output wire [ 7:0] m_roce_payload_axis_tkeep,
     output wire        m_roce_payload_axis_tvalid,
@@ -125,11 +125,11 @@ module RoCE_udp_rx_64 #(
     output wire        m_roce_payload_axis_tlast,
     output wire        m_roce_payload_axis_tuser,
     */
-    /*
-     * Status signals
-     */
-    output wire        busy,
-    output wire        error_header_early_termination
+  /*
+   * Status signals
+   */
+  output wire        busy,
+  output wire        error_header_early_termination
 );
 
   /*
@@ -189,13 +189,13 @@ separate AXI stream.
 */
 
   localparam [7:0]
-    RC_RDMA_WRITE_FIRST   = 8'h06,
-    RC_RDMA_WRITE_MIDDLE  = 8'h07,
-    RC_RDMA_WRITE_LAST    = 8'h08,
-    RC_RDMA_WRITE_LAST_IMD= 8'h09,
-    RC_RDMA_WRITE_ONLY    = 8'h0A,
-    RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
-    RC_RDMA_ACK           = 8'h11;
+  RC_RDMA_WRITE_FIRST   = 8'h06,
+  RC_RDMA_WRITE_MIDDLE  = 8'h07,
+  RC_RDMA_WRITE_LAST    = 8'h08,
+  RC_RDMA_WRITE_LAST_IMD= 8'h09,
+  RC_RDMA_WRITE_ONLY    = 8'h0A,
+  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
+  RC_RDMA_ACK           = 8'h11;
 
   localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
