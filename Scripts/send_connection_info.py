@@ -17,10 +17,12 @@ parser.add_argument('-a', '--BaseAddr', metavar='N', type=int, default=0x1234124
                     help='Remote base address')
 parser.add_argument('-o', '--addrOffset', metavar='N', type=int, default=0x0,
                     help='Remote address offset')
-parser.add_argument('-q', '--qpn', metavar='N', type=int, default=0x11,
-                    help='Remote queue pair number')
+parser.add_argument('-qf', '--qpnf', metavar='N', type=int, default=0x11,
+                    help='FPGA queue pair number')
+parser.add_argument('-qc', '--qpnc', metavar='N', type=int, default=0x12,
+                    help='Client queue pair number')
 parser.add_argument('-p', '--psn', metavar='N', type=int, default=0x0,
-                    help='Remote packet sequence number')
+                    help='Packet sequence number')
 parser.add_argument('-s', '--start', action='store_true',
                     help='Start transfer')
 
@@ -28,19 +30,20 @@ args = parser.parse_args()
 
 UDP_PORT = 0x4321
 
-def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_qpn=0x11, rem_psn=0x0, r_key=0x0, rem_base_addr=0x0):
+def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", fpga_qpn=0x11, client_qpn=0x12, psn=0x0, r_key=0x0, rem_base_addr=0x0):
     
     REM_IP_ADDRESS = client_ip_addr
-    R_KEY = r_key
-    QPN = rem_qpn
-    PSN = rem_psn
-    REM_BASE_ADDR = rem_base_addr
+    R_KEY          = r_key
+    FPGA_QPN       = fpga_qpn
+    CLIENT_QPN     = client_qpn
+    PSN            = psn
+    REM_BASE_ADDR  = rem_base_addr
 
     MESSAGE = b''
 
     MESSAGE += struct.pack(">B", 0x1)  #QP_info_valid
-    MESSAGE += struct.pack('>L', QPN)[-3:]  # rem_qpn
-    MESSAGE += struct.pack('>L', 0x0012)[-3:]  # loc_qpn
+    MESSAGE += struct.pack('>L', FPGA_QPN)[-3:]  # fpga_qpn
+    MESSAGE += struct.pack('>L', CLIENT_QPN)[-3:]  # client_qpn
     MESSAGE += struct.pack('>L', PSN)[-3:]  # rem_psn
     MESSAGE += struct.pack('>L', 0x0)[-3:]  # loc_psn
     MESSAGE += struct.pack(">L", R_KEY)  #R key
@@ -103,5 +106,5 @@ if __name__ == "__main__":
     if args.start:
         send_txmeta(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start)
     else:
-        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
-        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_qpn=args.qpn, rem_psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
+        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, fpga_qpn=args.qpnf, client_qpn=args.qpnc, psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
+        send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, fpga_qpn=args.qpnf, client_qpn=args.qpnc, psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)

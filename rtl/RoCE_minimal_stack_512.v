@@ -793,6 +793,7 @@ module RoCE_minimal_stack_512 #(
     .s_rem_ip_addr             (qp_curr_rem_ip_addr),
     .s_rem_addr                (qp_curr_rem_addr),
     .s_is_immediate            (qp_curr_write_type),
+    .s_trasfer_type            (1'b0),
     .s_axis_tdata              (s_payload_fifo_axis_tdata),
     .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
     .s_axis_tvalid             (s_payload_fifo_axis_tvalid),

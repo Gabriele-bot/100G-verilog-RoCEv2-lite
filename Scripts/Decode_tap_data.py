@@ -11,7 +11,7 @@ from ipaddress import ip_address, IPv4Address
 import argparse
 
 parser = argparse.ArgumentParser(description='Send QP information via UDP')
-parser.add_argument('-it', '--tap_ip_addr', metavar='N', type=str, default="22.1.212.11",
+parser.add_argument('-it', '--tap_ip_addr', metavar='N', type=str, default="22.1.212.21",
                     help='TAP IP address (PC)')
 parser.add_argument('-is', '--sim_ip_addr', metavar='N', type=str, default="22.1.212.10",
                     help='SIM IP address')
@@ -228,6 +228,12 @@ class RoCEFrame(object):
                  roce_reth_dma_length=0,
                  roce_immdata=0xDEADBEEF
                  ):
+        self.RC_SEND_FIRST = 0x00
+        self.RC_SEND_MIDDLE = 0x01
+        self.RC_SEND_LAST = 0x02
+        self.RC_SEND_LAST_IMD = 0x03
+        self.RC_SEND_ONLY = 0x04
+        self.RC_SEND_ONLY_IMD = 0x05
         self.RC_RDMA_WRITE_FIRST = 0x06
         self.RC_RDMA_WRITE_MIDDLE = 0x07
         self.RC_RDMA_WRITE_LAST = 0x08
@@ -237,6 +243,12 @@ class RoCEFrame(object):
         self.RC_RDMA_ACK = 0x11
 
         self.OP_codes = {
+            0x00: 'RC_SEND_FIRST',
+            0x01: 'RC_SEND_MIDDLE',
+            0x02: 'RC_SEND_LAST',
+            0x03: 'RC_SEND_LAST_IMD',
+            0x04: 'RC_SEND_ONLY',
+            0x05: 'RC_SEND_ONLY_IMD',
             0x06: 'RC_RDMA_WRITE_FIRST',
             0x07: 'RC_RDMA_WRITE_MIDDLE',
             0x08: 'RC_RDMA_WRITE_LAST',
@@ -370,8 +382,8 @@ class RoCEStream(object):
                     if UDP_frame_data.udp_dest_port == 4791:
                         RoCE_frame_data = RoCEFrame(raw_ip_frame=IP_frame_data.raw_frame, raw_frame=UDP_frame_data.payload)
                         RoCE_frame_data.decode_BTH()
-                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
-                        	is_last = True
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST_IMD:
+                            is_last = True
                         	
         return is_last
 
@@ -403,7 +415,7 @@ class RoCEStream(object):
                         RoCE_frame_data = RoCEFrame(raw_ip_frame=IP_frame_data.raw_frame, raw_frame=UDP_frame_data.payload)
                         RoCE_frame_data.decode_BTH()
                         RoCE_frame_data.decode_icrc()
-                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD :
                             #self.exp_psn = RoCE_frame_data.roce_bth_psn
                             self.exp_psn = starting_psn
                         else:
@@ -414,15 +426,19 @@ class RoCEStream(object):
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY:
                             self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4
                             self.received_r_key = RoCE_frame_data.roce_reth_rkey
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_FIRST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY:
+                            self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 4
                         elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
                             self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 16 - 4 - 4
                             self.received_r_key = RoCE_frame_data.roce_reth_rkey
-                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_MIDDLE or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST:
+                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD:
+                            self.measured_data_legth = RoCE_frame_data.frame_length - 12 - 4 - 4
+                        elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_MIDDLE or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST:
                             self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4
                         elif RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD:
                             self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4 - 4
                         SW_icrc = RoCE_frame_data.compute_sw_icrc()
-                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD:
+                        if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD or  RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST_IMD:
                         	is_last = True
                         if DEBUG_OUT:
                             print('RoCE packet recieved!')
@@ -485,8 +501,8 @@ try:
 		base_addr = 0x7ff1c2377000
 
 		#time.sleep(0.5)
-		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_qpn=rem_qpn_set, rem_psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
 
 		send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
 		

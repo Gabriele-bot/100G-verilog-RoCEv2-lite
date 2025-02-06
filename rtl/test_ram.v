@@ -31,7 +31,7 @@ module test_ram #
     reg [DATA_WIDTH-1:0] dout_reg;
 
     reg [DATA_WIDTH-1: 0] data_pipes [NPIPES-1:0] ; // N Stage  Data Pipe line
-    reg                   ena_pipes [NPIPES:0] ; // N+1  Stage enable pipe. +1 for the last stage (fabric)
+    reg                   ena_pipes  [NPIPES:0] ; // N+1  Stage enable pipe. +1 for the last stage (fabric)
 
     integer i;
 

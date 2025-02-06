@@ -20,6 +20,7 @@ module RoCE_tx_header_producer #(
     input wire [31:0] s_rem_ip_addr,
     input wire [63:0] s_rem_addr,
     input wire        s_is_immediate,
+    input wire        s_trasfer_type, // 0 SEND 1 RDMA_WRITE 
 
     /*
      * AXIS input
@@ -232,6 +233,12 @@ module RoCE_tx_header_producer #(
 
 
     localparam [7:0]
+    RC_SEND_FIRST         = 8'h00,
+    RC_SEND_MIDDLE        = 8'h01,
+    RC_SEND_LAST          = 8'h02,
+    RC_SEND_LAST_IMD      = 8'h03,
+    RC_SEND_ONLY          = 8'h04,
+    RC_SEND_ONLY_IMD      = 8'h05,
     RC_RDMA_WRITE_FIRST   = 8'h06,
     RC_RDMA_WRITE_MIDDLE  = 8'h07,
     RC_RDMA_WRITE_LAST    = 8'h08,
@@ -326,6 +333,7 @@ module RoCE_tx_header_producer #(
     //assign tx_metadata[95:32] = 64'h00001122334455;  //rem_addr
 
     reg is_immediate_reg;
+    reg trasfer_type_reg;
 
     reg [31:0] remaining_length_next, remaining_length_reg;
     reg [13:0] packet_inst_length_next, packet_inst_length_reg; // MAX 16384
@@ -433,7 +441,7 @@ module RoCE_tx_header_producer #(
                 end
             end
             STATE_STORE_PAR: begin
-                
+
                 udp_dest_port_next = udp_dest_port_reg;
 
                 s_axis_tready_next = m_axis_tready_int_early;
@@ -458,7 +466,7 @@ module RoCE_tx_header_producer #(
                     state_next            = STATE_ONLY;
                     s_dma_meta_ready_next = 1'b0;
                     roce_bth_valid_next   = 1'b1;
-                    roce_reth_valid_next  = 1'b1;
+                    roce_reth_valid_next  = trasfer_type_reg;
                     roce_immdh_valid_next = is_immediate_reg;
                     // TODO add option for immediate 
 
@@ -468,15 +476,26 @@ module RoCE_tx_header_producer #(
                     udp_source_port_next  = LOC_UDP_PORT;
                     udp_dest_port_next    = RoCE_udp_port;
                     if (is_immediate_reg) begin
-                        udp_length_next = tx_metadata[31:0] + 12 + 16 + 4 + 8;
+                        if (trasfer_type_reg) begin // RDMA_WRITE, need to add RETH
+                            udp_length_next = tx_metadata[31:0] + 12 + 16 + 4 + 8;
+                        end else begin
+                            udp_length_next = tx_metadata[31:0] + 12 + 4 + 8;
+                        end
                         // dma length (less than PMTU) + BTH + RETH + + IMMDH UDP HEADER 
                     end else begin
-                        udp_length_next = tx_metadata[31:0] + 12 + 16 + 8;
+                        if (trasfer_type_reg) begin // RDMA_WRITE, need to add RETH
+                            udp_length_next = tx_metadata[31:0] + 12 + 16 + 8;
+                        end else begin
+                            udp_length_next = tx_metadata[31:0] + 12 + 8;
+                        end
                         // dma length (less than PMTU) + BTH + RETH + UDP HEADER 
                     end
 
-
-                    roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_ONLY_IMD : RC_RDMA_WRITE_ONLY;
+                    if (trasfer_type_reg) begin
+                        roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_ONLY_IMD : RC_RDMA_WRITE_ONLY;
+                    end else begin
+                        roce_bth_op_code_next = is_immediate_reg ? RC_SEND_ONLY_IMD : RC_SEND_ONLY;
+                    end
                     roce_bth_p_key_next   = 16'hFFFF;
                     roce_bth_psn_next     = qp_info[74:51];
                     roce_bth_dest_qp_next = qp_conn[47:24];
@@ -491,7 +510,7 @@ module RoCE_tx_header_producer #(
                     state_next            = STATE_FIRST;
                     s_dma_meta_ready_next = 1'b0;
                     roce_bth_valid_next   = 1'b1;
-                    roce_reth_valid_next  = 1'b1;
+                    roce_reth_valid_next  = trasfer_type_reg;
                     roce_immdh_valid_next = 1'b0;
 
                     ip_source_ip_next     = loc_ip_addr;
@@ -499,10 +518,14 @@ module RoCE_tx_header_producer #(
 
                     udp_source_port_next  = LOC_UDP_PORT;
                     udp_dest_port_next    = RoCE_udp_port;
-                    udp_length_next       = pmtu + 12 + 16 + 8;
+                    if (trasfer_type_reg) begin
+                        udp_length_next       = pmtu + 12 + 16 + 8;
+                    end else begin
+                        udp_length_next       = pmtu + 12 + 8; // for SEND  
+                    end
                     // PMTU + BTH + RETH + UDP HEADER
 
-                    roce_bth_op_code_next = RC_RDMA_WRITE_FIRST;
+                    roce_bth_op_code_next = trasfer_type_reg ? RC_RDMA_WRITE_FIRST : RC_SEND_FIRST;
                     roce_bth_p_key_next   = 16'hFFFF;
                     roce_bth_psn_next     = qp_info[74:51];
                     roce_bth_dest_qp_next = qp_conn[47:24];
@@ -555,7 +578,11 @@ module RoCE_tx_header_producer #(
                                     // remaining length + BTH + UDP HEADER
                                 end
                             end
-                            roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
+                            if (trasfer_type_reg) begin
+                                roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
+                            end else begin
+                                roce_bth_op_code_next = s_is_immediate ? RC_SEND_LAST_IMD : RC_SEND_LAST;
+                            end
                             roce_bth_psn_next     = psn_reg + 1;
                             roce_bth_ack_req_next = 1'b1;
 
@@ -572,7 +599,7 @@ module RoCE_tx_header_producer #(
                             udp_length_next         = pmtu + 12 + 8; //no RETH
                             // PMTU + BTH + UDP HEADER
 
-                            roce_bth_op_code_next   = RC_RDMA_WRITE_MIDDLE;
+                            roce_bth_op_code_next   = trasfer_type_reg ? RC_RDMA_WRITE_MIDDLE : RC_SEND_MIDDLE;
                             roce_bth_psn_next       = psn_reg + 1;
                             roce_bth_ack_req_next   = 1'b1;
 
@@ -620,7 +647,11 @@ module RoCE_tx_header_producer #(
                                     // remaining length + BTH + UDP HEADER
                                 end
                             end
-                            roce_bth_op_code_next = s_is_immediate ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
+                            if (trasfer_type_reg) begin
+                                roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
+                            end else begin
+                                roce_bth_op_code_next = is_immediate_reg ? RC_SEND_LAST_IMD : RC_SEND_LAST;
+                            end
                             roce_bth_psn_next     = psn_reg + 1;
                             roce_bth_ack_req_next = 1'b1;
 
@@ -637,7 +668,7 @@ module RoCE_tx_header_producer #(
                             udp_length_next         = pmtu + 12 + 8; //no RETH
                             // PMTU + BTH + UDP HEADER
 
-                            roce_bth_op_code_next   = RC_RDMA_WRITE_MIDDLE;
+                            roce_bth_op_code_next   = trasfer_type_reg ? RC_RDMA_WRITE_MIDDLE : RC_SEND_MIDDLE;
                             roce_bth_psn_next       = psn_reg + 1;
                             roce_bth_ack_req_next   = 1'b1;
 
@@ -847,10 +878,10 @@ module RoCE_tx_header_producer #(
     always @(posedge clk) begin
 
         if (rst) begin
-            state_reg <= STATE_IDLE;
-            qp_info = 171'h0;
-            qp_conn = 155'h0;
-            tx_metadata = 80'h0;
+            state_reg   <= STATE_IDLE;
+            qp_info     <= 171'h0;
+            qp_conn     <= 155'h0;
+            tx_metadata <= 80'h0;
 
             remaining_length_reg         <= {32{1'b1}};
             packet_inst_length_reg       <= 14'd0;
@@ -924,6 +955,7 @@ module RoCE_tx_header_producer #(
                 //assign tx_metadata[79:32] = 64'h001122334455;  //rem_addr
 
                 is_immediate_reg <= s_is_immediate;
+                trasfer_type_reg <= s_trasfer_type;
             end
 
 

@@ -415,8 +415,8 @@ separate AXI stream.
                 end
               end else begin
                 state_next = STATE_CHECK_ICRC;
-                m_roce_bth_valid_next  <= 1'b0;
-                m_roce_aeth_valid_next <= 1'b0;
+                m_roce_bth_valid_next  = 1'b0;
+                m_roce_aeth_valid_next = 1'b0;
               end
 
             end
@@ -479,14 +479,14 @@ separate AXI stream.
     end else begin
       state_reg <= state_next;
 
-      s_udp_hdr_ready_reg <= s_udp_hdr_ready_next;
+      s_udp_hdr_ready_reg           <= s_udp_hdr_ready_next;
       s_udp_payload_axis_tready_reg <= s_udp_payload_axis_tready_next;
 
-      m_roce_bth_valid_reg <= m_roce_bth_valid_next;
+      m_roce_bth_valid_reg  <= m_roce_bth_valid_next;
       m_roce_aeth_valid_reg <= m_roce_aeth_valid_next;
 
       error_header_early_termination_reg <= error_header_early_termination_next;
-      error_not_roce_ack_reg <= error_not_roce_ack_next;
+      error_not_roce_ack_reg             <= error_not_roce_ack_next;
 
       busy_reg <= state_next != STATE_IDLE;
     end
