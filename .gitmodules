@@ -1,0 +1,7 @@
+[submodule "lib/FAST_CRC32"]
+	path = lib/FAST_CRC32
+	url = https://github.com/Gabriele-bot/FAST_CRC32
+[submodule "lib/eth"]
+	path = lib/eth
+	url = https://github.com/Gabriele-bot/verilog-ethernet
+	branch = Clean-UP

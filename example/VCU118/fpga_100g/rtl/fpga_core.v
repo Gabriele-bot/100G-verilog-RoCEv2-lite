@@ -1,3 +1,27 @@
+/*
+
+Copyright (c) 2014-2021 Alex Forencich
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+*/
+
 // Language: Verilog 2001
 
 `resetall `timescale 1ns / 1ps `default_nettype none
@@ -5,23 +29,18 @@
 /*
  * FPGA core logic
  */
-module top (
+module fpga_core #(
+    parameter TARGET = "XILINX",
+    parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00,
+    parameter FIFO_REGS = 4
+) (
     /*
-     * Clock: 390.625 MHz
+     * Clock: TX cmac
      * Synchronous reset
      */
-<<<<<<< HEAD
-    input wire clk_x1,
-    input wire clk_x8,
-    input wire rst,
-
-    input wire clk_mem,
-    input wire rst_mem,
-=======
     input wire clk,
     input wire rst,
 
->>>>>>> main
     /*
      * GPIO
      */
@@ -36,58 +55,74 @@ module top (
     /*
      * Ethernet: QSFP28
      */
-    input  wire        xgmii_tx_clk,
-    input  wire        xgmii_tx_rst,
-    output wire [63:0] xgmii_txd,
-    output wire [ 7:0] xgmii_txc,
-    input  wire        xgmii_rx_clk,
-    input  wire        xgmii_rx_rst,
-    input  wire [63:0] xgmii_rxd,
-    input  wire [ 7:0] xgmii_rxc
+
+    output wire [511:0] qsfp1_tx_axis_tdata,
+    output wire [ 63:0] qsfp1_tx_axis_tkeep,
+    output wire         qsfp1_tx_axis_tvalid,
+    input  wire         qsfp1_tx_axis_tready,
+    output wire         qsfp1_tx_axis_tlast,
+    output wire         qsfp1_tx_axis_tuser,
+
+    output wire       qsfp1_tx_enable,
+
+    input wire [511:0] qsfp1_rx_axis_tdata,
+    input wire [ 63:0] qsfp1_rx_axis_tkeep,
+    input wire         qsfp1_rx_axis_tvalid,
+    input wire         qsfp1_rx_axis_tlast,
+    input wire         qsfp1_rx_axis_tuser,
+
+    output wire       qsfp1_rx_enable,
+    input  wire       qsfp1_rx_status,
+
+    input  wire        qsfp1_drp_clk,
+    input  wire        qsfp1_drp_rst,
+    output wire [23:0] qsfp1_drp_addr,
+    output wire [15:0] qsfp1_drp_di,
+    output wire        qsfp1_drp_en,
+    output wire        qsfp1_drp_we,
+    input  wire [15:0] qsfp1_drp_do,
+    input  wire        qsfp1_drp_rdy,
+
+    output wire [511:0] qsfp2_tx_axis_tdata,
+    output wire [ 63:0] qsfp2_tx_axis_tkeep,
+    output wire         qsfp2_tx_axis_tvalid,
+    input  wire         qsfp2_tx_axis_tready,
+    output wire         qsfp2_tx_axis_tlast,
+    output wire         qsfp2_tx_axis_tuser,
+
+    output wire       qsfp2_tx_enable,
+
+    input wire [511:0] qsfp2_rx_axis_tdata,
+    input wire [ 63:0] qsfp2_rx_axis_tkeep,
+    input wire         qsfp2_rx_axis_tvalid,
+    input wire         qsfp2_rx_axis_tlast,
+    input wire         qsfp2_rx_axis_tuser,
+
+    input  wire        qsfp2_drp_clk,
+    input  wire        qsfp2_drp_rst,
+    output wire [23:0] qsfp2_drp_addr,
+    output wire [15:0] qsfp2_drp_di,
+    output wire        qsfp2_drp_en,
+    output wire        qsfp2_drp_we,
+    input  wire [15:0] qsfp2_drp_do,
+    input  wire        qsfp2_drp_rdy,
+
+    output wire       qsfp2_rx_enable,
+    input  wire       qsfp2_rx_status
 );
-
-
-  wire [ 63:0]                                               rx_axis_tdata;
-  wire [  7:0]                                               rx_axis_tkeep;
+  wire [511:0]                                               rx_axis_tdata;
+  wire [ 63:0]                                               rx_axis_tkeep;
   wire                                                       rx_axis_tvalid;
   wire                                                       rx_axis_tready;
   wire                                                       rx_axis_tlast;
   wire                                                       rx_axis_tuser;
 
-  wire [ 63:0]                                               tx_axis_tdata;
-  wire [  7:0]                                               tx_axis_tkeep;
+  wire [511:0]                                               tx_axis_tdata;
+  wire [ 63:0]                                               tx_axis_tkeep;
   wire                                                       tx_axis_tvalid;
   wire                                                       tx_axis_tready;
   wire                                                       tx_axis_tlast;
   wire                                                       tx_axis_tuser;
-
-  wire [ 63:0]                                               tx_to_pad_axis_tdata;
-  wire [  7:0]                                               tx_to_pad_axis_tkeep;
-  wire                                                       tx_to_pad_axis_tvalid;
-  wire                                                       tx_to_pad_axis_tready;
-  wire                                                       tx_to_pad_axis_tlast;
-  wire                                                       tx_to_pad_axis_tuser;
-
-  wire [511:0]                                               rx_512_axis_tdata;
-  wire [ 63:0]                                               rx_512_axis_tkeep;
-  wire                                                       rx_512_axis_tvalid;
-  wire                                                       rx_512_axis_tready;
-  wire                                                       rx_512_axis_tlast;
-  wire                                                       rx_512_axis_tuser;
-
-  wire [511:0]                                               tx_512_axis_tdata;
-  wire [ 63:0]                                               tx_512_axis_tkeep;
-  wire                                                       tx_512_axis_tvalid;
-  wire                                                       tx_512_axis_tready;
-  wire                                                       tx_512_axis_tlast;
-  wire                                                       tx_512_axis_tuser;
-
-  wire [511:0]                                               tx_512_fifo_axis_tdata;
-  wire [ 63:0]                                               tx_512_fifo_axis_tkeep;
-  wire                                                       tx_512_fifo_axis_tvalid;
-  wire                                                       tx_512_fifo_axis_tready;
-  wire                                                       tx_512_fifo_axis_tlast;
-  wire                                                       tx_512_fifo_axis_tuser;
 
   // Ethernet frame between Ethernet modules and UDP stack
   wire                                                       rx_eth_hdr_ready;
@@ -191,10 +226,6 @@ module top (
   wire [  5:0]                                               tx_udp_ip_dscp;
   wire [  1:0]                                               tx_udp_ip_ecn;
   wire [  7:0]                                               tx_udp_ip_ttl;
-<<<<<<< HEAD
-  wire [ 15:0]                                               tx_udp_ip_identification;
-=======
->>>>>>> main
   wire [ 31:0]                                               tx_udp_ip_source_ip;
   wire [ 31:0]                                               tx_udp_ip_dest_ip;
   wire [ 15:0]                                               tx_udp_source_port;
@@ -215,54 +246,53 @@ module top (
   wire                                                       rx_fifo_udp_payload_axis_tlast;
   wire                                                       rx_fifo_udp_payload_axis_tuser;
 
-  wire [511:0]                                               tx_fifo_udp_payload_axis_tdata;
-  wire [ 63:0]                                               tx_fifo_udp_payload_axis_tkeep;
-  wire                                                       tx_fifo_udp_payload_axis_tvalid;
-  wire                                                       tx_fifo_udp_payload_axis_tready;
-  wire                                                       tx_fifo_udp_payload_axis_tlast;
-  wire                                                       tx_fifo_udp_payload_axis_tuser;
-
-<<<<<<< HEAD
-  wire [511:0]                                               rx_delay_axis_tdata;
-  wire [ 63:0]                                               rx_delay_axis_tkeep;
-  wire                                                       rx_delay_axis_tvalid;
-  wire                                                       rx_delay_axis_tready;
-  wire                                                       rx_delay_axis_tlast;
-  wire                                                       rx_delay_axis_tuser;
-
   // Configuration
+//wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10 };
+//wire [31:0] gateway_ip  = {8'd22 , 8'd1  , 8'd212, 8'd1  };
+wire [31:0] local_ip;
+wire [31:0] gateway_ip;
+wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0  };
 
-  wire [ 12:0] pmtu = 13'd4096;
-=======
-  // Configuration
+wire clear_arp_cache;
 
-  wire [ 12:0] pmtu = 13'd2048;
->>>>>>> main
-  wire [ 15:0] RoCE_udp_port = 16'h12b7;
-
-  wire [ 47:0] local_mac = 48'h02_00_00_00_00_00;
-  wire [ 31:0] local_ip = {8'd22, 8'd1, 8'd212, 8'd10};
-  wire [ 31:0] dest_ip = {8'd22, 8'd1, 8'd212, 8'd11};
-  wire [ 31:0] gateway_ip = {8'd22, 8'd1, 8'd212, 8'd1};
-  wire [ 31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0};
+wire [12:0] pmtu;
+wire [15:0] RoCE_udp_port;
+  
+  vio_roce_ip_cfg vio_roce_ip_cfg_inst (
+    .clk(clk),
+    .probe_out0(pmtu),
+    .probe_out1(RoCE_udp_port),
+    .probe_out2(local_ip),
+    .probe_out3(clear_arp_cache)
+  );
+  
+ assign gateway_ip = {local_ip[31:8], 8'd1};
 
   // IP ports not used
-  assign rx_ip_hdr_ready = 1;
+  assign rx_ip_hdr_ready           = 1;
   assign rx_ip_payload_axis_tready = 1;
 
-  assign tx_ip_hdr_valid = 0;
-  assign tx_ip_dscp = 0;
-  assign tx_ip_ecn = 0;
-  assign tx_ip_length = 0;
-  assign tx_ip_ttl = 0;
-  assign tx_ip_protocol = 0;
-  assign tx_ip_source_ip = 0;
-  assign tx_ip_dest_ip = 0;
-  assign tx_ip_payload_axis_tdata = 0;
-  assign tx_ip_payload_axis_tkeep = 0;
+  assign tx_ip_hdr_valid           = 0;
+  assign tx_ip_dscp                = 0;
+  assign tx_ip_ecn                 = 0;
+  assign tx_ip_length              = 0;
+  assign tx_ip_ttl                 = 0;
+  assign tx_ip_protocol            = 0;
+  assign tx_ip_source_ip           = 0;
+  assign tx_ip_dest_ip             = 0;
+  assign tx_ip_payload_axis_tdata  = 0;
+  assign tx_ip_payload_axis_tkeep  = 0;
   assign tx_ip_payload_axis_tvalid = 0;
-  assign tx_ip_payload_axis_tlast = 0;
-  assign tx_ip_payload_axis_tuser = 0;
+  assign tx_ip_payload_axis_tlast  = 0;
+  assign tx_ip_payload_axis_tuser  = 0;
+
+  assign qsfp1_tx_enable           = 1'b1;
+
+  assign qsfp1_rx_enable           = 1'b1;
+
+  assign qsfp2_tx_enable           = 1'b1;
+
+  assign qsfp2_rx_enable           = 1'b1;
 
   // Loop back UDP
   wire match_cond = rx_udp_dest_port == 1234;
@@ -271,13 +301,7 @@ module top (
   reg match_cond_reg = 0;
   reg no_match_reg = 0;
 
-<<<<<<< HEAD
-  integer i;
-
-  always @(posedge clk_x8) begin
-=======
   always @(posedge clk) begin
->>>>>>> main
     if (rst) begin
       match_cond_reg <= 0;
       no_match_reg   <= 0;
@@ -296,43 +320,39 @@ module top (
   end
 
   /*
-  assign tx_udp_hdr_valid = rx_udp_hdr_valid && match_cond;
-  assign rx_udp_hdr_ready = (tx_eth_hdr_ready && match_cond) || no_match;
-  assign tx_udp_ip_dscp = 0;
-  assign tx_udp_ip_ecn = 0;
-  assign tx_udp_ip_ttl = 64;
-  assign tx_udp_ip_source_ip = local_ip;
-  assign tx_udp_ip_dest_ip = rx_udp_ip_source_ip;
-  assign tx_udp_source_port = rx_udp_dest_port;
-  assign tx_udp_dest_port = rx_udp_source_port;
-  assign tx_udp_length = rx_udp_length;
-  assign tx_udp_checksum = 0;
+assign tx_udp_hdr_valid = rx_udp_hdr_valid && match_cond;
+assign rx_udp_hdr_ready = (tx_eth_hdr_ready && match_cond) || no_match;
+assign tx_udp_ip_dscp = 0;
+assign tx_udp_ip_ecn = 0;
+assign tx_udp_ip_ttl = 64;
+assign tx_udp_ip_source_ip = local_ip;
+assign tx_udp_ip_dest_ip = rx_udp_ip_source_ip;
+assign tx_udp_source_port = rx_udp_dest_port;
+assign tx_udp_dest_port = rx_udp_source_port;
+assign tx_udp_length = rx_udp_length;
+assign tx_udp_checksum = 0;
 
-  assign tx_udp_payload_axis_tdata = tx_fifo_udp_payload_axis_tdata;
-  assign tx_udp_payload_axis_tkeep = tx_fifo_udp_payload_axis_tkeep;
-  assign tx_udp_payload_axis_tvalid = tx_fifo_udp_payload_axis_tvalid;
-  assign tx_fifo_udp_payload_axis_tready = tx_udp_payload_axis_tready;
-  assign tx_udp_payload_axis_tlast = tx_fifo_udp_payload_axis_tlast;
-  assign tx_udp_payload_axis_tuser = tx_fifo_udp_payload_axis_tuser;
-  */
-  /*
-  assign rx_fifo_udp_payload_axis_tdata = rx_udp_payload_axis_tdata;
-  assign rx_fifo_udp_payload_axis_tkeep = rx_udp_payload_axis_tkeep;
-  assign rx_fifo_udp_payload_axis_tvalid = rx_udp_payload_axis_tvalid && match_cond_reg;
-  assign rx_udp_payload_axis_tready = (rx_fifo_udp_payload_axis_tready && match_cond_reg) || no_match_reg;
-  assign rx_fifo_udp_payload_axis_tlast = rx_udp_payload_axis_tlast;
-  assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
+assign tx_udp_payload_axis_tdata = tx_fifo_udp_payload_axis_tdata;
+assign tx_udp_payload_axis_tkeep = tx_fifo_udp_payload_axis_tkeep;
+assign tx_udp_payload_axis_tvalid = tx_fifo_udp_payload_axis_tvalid;
+assign tx_fifo_udp_payload_axis_tready = tx_udp_payload_axis_tready;
+assign tx_udp_payload_axis_tlast = tx_fifo_udp_payload_axis_tlast;
+assign tx_udp_payload_axis_tuser = tx_fifo_udp_payload_axis_tuser;
 
-  */
+assign rx_fifo_udp_payload_axis_tdata = rx_udp_payload_axis_tdata;
+assign rx_fifo_udp_payload_axis_tkeep = rx_udp_payload_axis_tkeep;
+assign rx_fifo_udp_payload_axis_tvalid = rx_udp_payload_axis_tvalid && match_cond_reg;
+assign rx_udp_payload_axis_tready = (rx_fifo_udp_payload_axis_tready && match_cond_reg) || no_match_reg;
+assign rx_fifo_udp_payload_axis_tlast = rx_udp_payload_axis_tlast;
+assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
+
+*/
+
   // Place first payload byte onto LEDs
   reg valid_last = 0;
   reg [7:0] led_reg = 0;
 
-<<<<<<< HEAD
-  always @(posedge clk_x8) begin
-=======
   always @(posedge clk) begin
->>>>>>> main
     if (rst) begin
       led_reg <= 0;
     end else begin
@@ -345,90 +365,10 @@ module top (
 
   //assign led = sw;
   assign led = led_reg;
-  //assign phy_reset_n = !rst;
 
-  eth_mac_10g_fifo #(
-      .ENABLE_PADDING(1),
-      .ENABLE_DIC(1),
-      .MIN_FRAME_LENGTH(64),
-      .TX_FIFO_DEPTH(4200),
-      .TX_FRAME_FIFO(1),
-      .RX_FIFO_DEPTH(4200),
-      .RX_FRAME_FIFO(1)
-  ) eth_mac_10g_fifo_inst (
-      .rx_clk(xgmii_rx_clk),
-      .rx_rst(xgmii_rx_rst),
-      .tx_clk(xgmii_tx_clk),
-      .tx_rst(xgmii_tx_rst),
-<<<<<<< HEAD
-      .logic_clk(clk_x8),
-=======
-      .logic_clk(clk),
->>>>>>> main
-      .logic_rst(rst),
-
-      .tx_axis_tdata (tx_axis_tdata),
-      .tx_axis_tkeep (tx_axis_tkeep),
-      .tx_axis_tvalid(tx_axis_tvalid),
-      .tx_axis_tready(tx_axis_tready),
-      .tx_axis_tlast (tx_axis_tlast),
-      .tx_axis_tuser (tx_axis_tuser),
-
-      .rx_axis_tdata (rx_axis_tdata),
-      .rx_axis_tkeep (rx_axis_tkeep),
-      .rx_axis_tvalid(rx_axis_tvalid),
-      .rx_axis_tready(rx_axis_tready),
-      .rx_axis_tlast (rx_axis_tlast),
-      .rx_axis_tuser (rx_axis_tuser),
-
-      .xgmii_rxd(xgmii_rxd),
-      .xgmii_rxc(xgmii_rxc),
-      .xgmii_txd(xgmii_txd),
-      .xgmii_txc(xgmii_txc),
-
-      .tx_fifo_overflow  (),
-      .tx_fifo_bad_frame (),
-      .tx_fifo_good_frame(),
-      .rx_error_bad_frame(),
-      .rx_error_bad_fcs  (),
-      .rx_fifo_overflow  (),
-      .rx_fifo_bad_frame (),
-      .rx_fifo_good_frame(),
-
-      .cfg_ifg(8'd12),
-      .cfg_tx_enable(1'b1),
-      .cfg_rx_enable(1'b1)
-  );
-
-<<<<<<< HEAD
-  
-  axis_async_fifo_adapter #(
-      .DEPTH(5000),
-      .S_DATA_WIDTH(512),
-      .S_KEEP_ENABLE(1),
-      .S_KEEP_WIDTH(64),
-      .M_DATA_WIDTH(64),
-      .M_KEEP_ENABLE(1),
-      .M_KEEP_WIDTH(8),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .FRAME_FIFO(0)
-  ) eth_tx_axis_fifo (
-      .s_clk(clk_x1),
-      .s_rst(rst),
-
-=======
-
-  axis_adapter #(
-      .S_DATA_WIDTH(64),
-      .M_DATA_WIDTH(512),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) rx_axis_64_to_512_adapter_inst (
+  eth_axis_rx #(
+      .DATA_WIDTH(512)
+  ) eth_axis_rx_inst (
       .clk(clk),
       .rst(rst),
       // AXI input
@@ -438,199 +378,6 @@ module top (
       .s_axis_tready(rx_axis_tready),
       .s_axis_tlast(rx_axis_tlast),
       .s_axis_tuser(rx_axis_tuser),
-      // AXI output
-      .m_axis_tdata(rx_512_axis_tdata),
-      .m_axis_tkeep(rx_512_axis_tkeep),
-      .m_axis_tvalid(rx_512_axis_tvalid),
-      .m_axis_tready(rx_512_axis_tready),
-      .m_axis_tlast(rx_512_axis_tlast),
-      .m_axis_tuser(rx_512_axis_tuser)
-  );
-
-  axis_adapter #(
-      .S_DATA_WIDTH(512),
-      .M_DATA_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1)
-  ) tx_axis_512_to_64_adapter_inst (
-      .clk(clk),
-      .rst(rst),
->>>>>>> main
-      // AXI input
-      .s_axis_tdata(tx_512_axis_tdata),
-      .s_axis_tkeep(tx_512_axis_tkeep),
-      .s_axis_tvalid(tx_512_axis_tvalid),
-      .s_axis_tready(tx_512_axis_tready),
-      .s_axis_tlast(tx_512_axis_tlast),
-<<<<<<< HEAD
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      .s_axis_tuser(tx_512_axis_tuser),
-      
-      .m_clk(clk_x8),
-      .m_rst(rst),
-
-      // AXI output
-      .m_axis_tdata(tx_axis_tdata),
-      .m_axis_tkeep(tx_axis_tkeep),
-      .m_axis_tvalid(tx_axis_tvalid),
-      .m_axis_tready(tx_axis_tready),
-      .m_axis_tlast(tx_axis_tlast),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      .m_axis_tuser(tx_axis_tuser)
-  );
-
-
-  
-  axis_async_fifo_adapter #(
-      .DEPTH(5000),
-      .S_DATA_WIDTH(64),
-      .S_KEEP_ENABLE(1),
-      .S_KEEP_WIDTH(8),
-      .M_DATA_WIDTH(512),
-      .M_KEEP_ENABLE(1),
-      .M_KEEP_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .FRAME_FIFO(0)
-  ) eth_rx_axis_fifo (
-      .s_clk(clk_x8),
-      .s_rst(rst),
-
-      // AXI input
-      .s_axis_tdata( rx_axis_tdata),
-      .s_axis_tkeep( rx_axis_tkeep),
-      .s_axis_tvalid(rx_axis_tvalid),
-      .s_axis_tready(rx_axis_tready),
-      .s_axis_tlast( rx_axis_tlast),
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      .s_axis_tuser( rx_axis_tuser),
-      
-      .m_clk(clk_x1),
-      .m_rst(rst),
-
-      // AXI output
-      .m_axis_tdata (rx_512_axis_tdata),
-      .m_axis_tkeep (rx_512_axis_tkeep),
-      .m_axis_tvalid(rx_512_axis_tvalid),
-      .m_axis_tready(rx_512_axis_tready),
-      .m_axis_tlast (rx_512_axis_tlast),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      .m_axis_tuser (rx_512_axis_tuser)
-  );
-
-  axis_fifo #(
-    .DEPTH(128),
-    .DATA_WIDTH(512),
-    .KEEP_ENABLE(1),
-    .KEEP_WIDTH(64),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .FRAME_FIFO(0),
-    .RAM_PIPELINE(0)
-  ) rx_axis_delay_inst (
-      .clk(clk_x1),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata(rx_512_axis_tdata),
-      .s_axis_tkeep(rx_512_axis_tkeep),
-      .s_axis_tvalid(rx_512_axis_tvalid),
-      .s_axis_tready(rx_512_axis_tready),
-      .s_axis_tlast(rx_512_axis_tlast),
-      .s_axis_tuser(rx_512_axis_tuser),
-      // Ethernet frame output
-      .m_axis_tdata( rx_delay_axis_tdata),
-      .m_axis_tkeep( rx_delay_axis_tkeep),
-      .m_axis_tvalid(rx_delay_axis_tvalid),
-      .m_axis_tready(rx_delay_axis_tready),
-      .m_axis_tlast( rx_delay_axis_tlast),
-      .m_axis_tuser( rx_delay_axis_tuser)
-=======
-      .s_axis_tuser(tx_512_axis_tuser),
-      // AXI output
-      .m_axis_tdata( tx_to_pad_axis_tdata),
-      .m_axis_tkeep( tx_to_pad_axis_tkeep),
-      .m_axis_tvalid(tx_to_pad_axis_tvalid),
-      .m_axis_tready(tx_to_pad_axis_tready),
-      .m_axis_tlast( tx_to_pad_axis_tlast),
-      .m_axis_tuser( tx_to_pad_axis_tuser)
-  );
-
-  axis_frame_length_adjust #(
-    .DATA_WIDTH(64),
-    .KEEP_ENABLE(1),
-    .KEEP_WIDTH(8),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1)
-  ) tx_axis_frame_length_adjust_inst (
-
-      .clk(clk),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata( tx_to_pad_axis_tdata),
-      .s_axis_tkeep( tx_to_pad_axis_tkeep),
-      .s_axis_tvalid(tx_to_pad_axis_tvalid),
-      .s_axis_tready(tx_to_pad_axis_tready),
-      .s_axis_tlast( tx_to_pad_axis_tlast),
-      .s_axis_tuser( tx_to_pad_axis_tuser),
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      // AXI output
-      .m_axis_tdata( tx_axis_tdata),
-      .m_axis_tkeep( tx_axis_tkeep),
-      .m_axis_tvalid(tx_axis_tvalid),
-      .m_axis_tready(tx_axis_tready),
-      .m_axis_tlast( tx_axis_tlast),
-      .m_axis_tuser( tx_axis_tuser),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      //stat
-      .status_ready(1'b1),
-      //cfg
-      .length_min(60),
-      .length_max(9600)
-
->>>>>>> main
-  );
-
-
-
-
-  eth_axis_rx #(
-      .DATA_WIDTH(512)
-  ) eth_axis_rx_inst (
-<<<<<<< HEAD
-      .clk(clk_x1),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata( rx_delay_axis_tdata),
-      .s_axis_tkeep( rx_delay_axis_tkeep),
-      .s_axis_tvalid(rx_delay_axis_tvalid),
-      .s_axis_tready(rx_delay_axis_tready),
-      .s_axis_tlast( rx_delay_axis_tlast),
-      .s_axis_tuser( rx_delay_axis_tuser),
-=======
-      .clk(clk),
-      .rst(rst),
-      // AXI input
-      .s_axis_tdata(rx_512_axis_tdata),
-      .s_axis_tkeep(rx_512_axis_tkeep),
-      .s_axis_tvalid(rx_512_axis_tvalid),
-      .s_axis_tready(rx_512_axis_tready),
-      .s_axis_tlast(rx_512_axis_tlast),
-      .s_axis_tuser(rx_512_axis_tuser),
->>>>>>> main
       // Ethernet frame output
       .m_eth_hdr_valid(rx_eth_hdr_valid),
       .m_eth_hdr_ready(rx_eth_hdr_ready),
@@ -651,96 +398,126 @@ module top (
   eth_axis_tx #(
       .DATA_WIDTH(512)
   ) eth_axis_tx_inst (
-<<<<<<< HEAD
-      .clk                      (clk_x1),
-=======
-      .clk                      (clk),
->>>>>>> main
-      .rst                      (rst),
-      // Ethernet frame input
-      .s_eth_hdr_valid          (tx_eth_hdr_valid),
-      .s_eth_hdr_ready          (tx_eth_hdr_ready),
-      .s_eth_dest_mac           (tx_eth_dest_mac),
-      .s_eth_src_mac            (tx_eth_src_mac),
-      .s_eth_type               (tx_eth_type),
-      .s_eth_payload_axis_tdata (tx_eth_payload_axis_tdata),
-      .s_eth_payload_axis_tkeep (tx_eth_payload_axis_tkeep),
-      .s_eth_payload_axis_tvalid(tx_eth_payload_axis_tvalid),
-      .s_eth_payload_axis_tready(tx_eth_payload_axis_tready),
-      .s_eth_payload_axis_tlast (tx_eth_payload_axis_tlast),
-      .s_eth_payload_axis_tuser (tx_eth_payload_axis_tuser),
-      // AXI output
-<<<<<<< HEAD
-      .m_axis_tdata             (tx_512_axis_tdata),
-      .m_axis_tkeep             (tx_512_axis_tkeep),
-      .m_axis_tvalid            (tx_512_axis_tvalid),
-      .m_axis_tready            (tx_512_axis_tready),
-      .m_axis_tlast             (tx_512_axis_tlast),
-      .m_axis_tuser             (tx_512_axis_tuser),
-=======
-      .m_axis_tdata             (tx_512_fifo_axis_tdata),
-      .m_axis_tkeep             (tx_512_fifo_axis_tkeep),
-      .m_axis_tvalid            (tx_512_fifo_axis_tvalid),
-      .m_axis_tready            (tx_512_fifo_axis_tready),
-      .m_axis_tlast             (tx_512_fifo_axis_tlast),
-      .m_axis_tuser             (tx_512_fifo_axis_tuser),
->>>>>>> main
-      // Status signals
-      .busy                     ()
-  );
-
-<<<<<<< HEAD
-  
-  udp_complete_512 #(
-      .UDP_CHECKSUM_GEN_ENABLE(0)
-  ) udp_complete_inst (
-      .clk(clk_x1),
-=======
-  axis_fifo #(
-      .DEPTH(40960),
-      .DATA_WIDTH(512),
-      .KEEP_ENABLE(1),
-      .KEEP_WIDTH(64),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .FRAME_FIFO(1)
-  ) eth_tx_axis_fifo (
       .clk(clk),
       .rst(rst),
-
-      // AXI input
-      .s_axis_tdata(tx_512_fifo_axis_tdata),
-      .s_axis_tkeep(tx_512_fifo_axis_tkeep),
-      .s_axis_tvalid(tx_512_fifo_axis_tvalid),
-      .s_axis_tready(tx_512_fifo_axis_tready),
-      .s_axis_tlast(tx_512_fifo_axis_tlast),
-      .s_axis_tid(0),
-      .s_axis_tdest(0),
-      .s_axis_tuser(tx_512_fifo_axis_tuser),
-
+      // Ethernet frame input
+      .s_eth_hdr_valid(tx_eth_hdr_valid),
+      .s_eth_hdr_ready(tx_eth_hdr_ready),
+      .s_eth_dest_mac(tx_eth_dest_mac),
+      .s_eth_src_mac(tx_eth_src_mac),
+      .s_eth_type(tx_eth_type),
+      .s_eth_payload_axis_tdata(tx_eth_payload_axis_tdata),
+      .s_eth_payload_axis_tkeep(tx_eth_payload_axis_tkeep),
+      .s_eth_payload_axis_tvalid(tx_eth_payload_axis_tvalid),
+      .s_eth_payload_axis_tready(tx_eth_payload_axis_tready),
+      .s_eth_payload_axis_tlast(tx_eth_payload_axis_tlast),
+      .s_eth_payload_axis_tuser(tx_eth_payload_axis_tuser),
       // AXI output
-      .m_axis_tdata(tx_512_axis_tdata),
-      .m_axis_tkeep(tx_512_axis_tkeep),
-      .m_axis_tvalid(tx_512_axis_tvalid),
-      .m_axis_tready(tx_512_axis_tready),
-      .m_axis_tlast(tx_512_axis_tlast),
-      .m_axis_tid(),
-      .m_axis_tdest(),
-      .m_axis_tuser(tx_512_axis_tuser),
-
-      // Status
-      .status_overflow  (),
-      .status_bad_frame (),
-      .status_good_frame()
+      .m_axis_tdata(tx_axis_tdata),
+      .m_axis_tkeep(tx_axis_tkeep),
+      .m_axis_tvalid(tx_axis_tvalid),
+      .m_axis_tready(tx_axis_tready),
+      .m_axis_tlast(tx_axis_tlast),
+      .m_axis_tuser(tx_axis_tuser),
+      // Status signals
+      .busy()
   );
+
+  //assign qsfp1_tx_axis_tdata  = tx_axis_tdata;
+  //assign qsfp1_tx_axis_tkeep  = tx_axis_tkeep;
+  //assign qsfp1_tx_axis_tvalid = tx_axis_tvalid;
+  //assign qsfp1_tx_axis_tuser  = tx_axis_tuser;
+  //assign qsfp1_tx_axis_tlast  = tx_axis_tlast;
+  //assign tx_axis_tready       = qsfp1_tx_axis_tready;
+
+  //assign rx_axis_tdata        = qsfp1_rx_axis_tdata;
+  //assign rx_axis_tkeep        = qsfp1_rx_axis_tkeep;
+  //assign rx_axis_tvalid       = qsfp1_rx_axis_tvalid;
+  //assign rx_axis_tuser        = qsfp1_rx_axis_tuser;
+  //assign rx_axis_tlast        = qsfp1_rx_axis_tlast;
+  //assign qsfp1_rx_axis_tready = rx_axis_tready;
+  
+  // to aid timings
+  axis_srl_fifo #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .DEPTH(FIFO_REGS)
+  ) tx_axis_srl_fifo (
+    .clk(clk),
+    .rst(rst),
+
+    // AXI input
+    .s_axis_tdata (tx_axis_tdata),
+    .s_axis_tkeep (tx_axis_tkeep),
+    .s_axis_tvalid(tx_axis_tvalid),
+    .s_axis_tready(tx_axis_tready),
+    .s_axis_tlast (tx_axis_tlast),
+    .s_axis_tid   (0),
+    .s_axis_tdest (0),
+    .s_axis_tuser (tx_axis_tuser),
+
+    // AXI output
+    .m_axis_tdata (qsfp1_tx_axis_tdata),
+    .m_axis_tkeep (qsfp1_tx_axis_tkeep),
+    .m_axis_tvalid(qsfp1_tx_axis_tvalid),
+    .m_axis_tready(qsfp1_tx_axis_tready),
+    .m_axis_tlast (qsfp1_tx_axis_tlast),
+    .m_axis_tid   (),
+    .m_axis_tdest (),
+    .m_axis_tuser (qsfp1_tx_axis_tuser)
+  );
+  
+  // to aid timings
+  axis_srl_fifo #(
+    .DATA_WIDTH(512),
+    .KEEP_ENABLE(1),
+    .KEEP_WIDTH(64),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .DEPTH(FIFO_REGS)
+  ) rx_axis_srl_fifo (
+    .clk(clk),
+    .rst(rst),
+
+    // AXI input
+    .s_axis_tdata (qsfp1_rx_axis_tdata),
+    .s_axis_tkeep (qsfp1_rx_axis_tkeep),
+    .s_axis_tvalid(qsfp1_rx_axis_tvalid),
+    .s_axis_tready(),
+    .s_axis_tlast (qsfp1_rx_axis_tlast),
+    .s_axis_tid   (0),
+    .s_axis_tdest (0),
+    .s_axis_tuser (qsfp1_rx_axis_tuser),
+
+    // AXI output
+    .m_axis_tdata (rx_axis_tdata),
+    .m_axis_tkeep (rx_axis_tkeep),
+    .m_axis_tvalid(rx_axis_tvalid),
+    .m_axis_tready(1'b1),
+    .m_axis_tlast (rx_axis_tlast),
+    .m_axis_tid   (),
+    .m_axis_tdest (),
+    .m_axis_tuser (rx_axis_tuser)
+  );
+
+  // not really used
+  assign qsfp2_tx_axis_tdata  = 512'd0;
+  assign qsfp2_tx_axis_tkeep  = 64'd0;
+  assign qsfp2_tx_axis_tvalid = 1'b0;
+  assign qsfp2_tx_axis_tuser  = 1'b0;
+  assign qsfp2_tx_axis_tlast  = 1'b0;
 
   udp_complete_512 #(
       .UDP_CHECKSUM_GEN_ENABLE(0)
   ) udp_complete_inst (
       .clk(clk),
->>>>>>> main
       .rst(rst),
       // Ethernet frame input
       .s_eth_hdr_valid(rx_eth_hdr_valid),
@@ -869,30 +646,23 @@ module top (
       .udp_rx_error_payload_early_termination(),
       .udp_tx_error_payload_early_termination(),
       // Configuration
-      .local_mac(local_mac),
+      .local_mac(LOCAL_MAC_ADDRESS),
       .local_ip(local_ip),
       .gateway_ip(gateway_ip),
       .subnet_mask(subnet_mask),
-      .clear_arp_cache(1'b0),
+      .clear_arp_cache(clear_arp_cache),
       .RoCE_udp_port(RoCE_udp_port)
   );
 
   assign rx_fifo_udp_payload_axis_tready = 1'b1;
 
   // ROCE TX inst
-<<<<<<< HEAD
   RoCE_minimal_stack_512 #(
-      .DEBUG(0),
+      .DEBUG(1),
       .RETRANSMISSION(1),
-      .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
-      .ENABLE_SIM_PACKET_DROP_TX(1),
-      .ENABLE_SIM_PACKET_DROP_RX(1)
+      .RETRANSMISSION_ADDR_BUFFER_WIDTH(21) // 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
   ) RoCE_minimal_stack_512_instance (
-      .clk(clk_x1),
-=======
-  RoCE_minimal_stack_512 RoCE_minimal_stack_512_instance (
       .clk(clk),
->>>>>>> main
       .rst(rst),
       .s_udp_hdr_valid(rx_udp_hdr_valid),
       .s_udp_hdr_ready(rx_udp_hdr_ready),
@@ -932,11 +702,7 @@ module top (
       .m_ip_dscp(tx_udp_ip_dscp),
       .m_ip_ecn(tx_udp_ip_ecn),
       .m_ip_length(),
-<<<<<<< HEAD
-      .m_ip_identification(tx_udp_ip_identification),
-=======
       .m_ip_identification(),
->>>>>>> main
       .m_ip_flags(),
       .m_ip_fragment_offset(),
       .m_ip_ttl(tx_udp_ip_ttl),
@@ -958,15 +724,23 @@ module top (
       .error_payload_early_termination(),
       .pmtu(pmtu),
       .RoCE_udp_port(RoCE_udp_port),
-<<<<<<< HEAD
       .loc_ip_addr(local_ip),
-      .timeout_period(64'd4000),
-      .retry_count(4'd5)
-=======
-      .loc_ip_addr(local_ip)
->>>>>>> main
+      .timeout_period(64'd20000), //3.1 ns * 20000 = 62 ns
+      .retry_count(4'd14)
   );
-
+  
+  /*
+  ila_axis ila_eth_payload_tx(
+    .clk(clk),
+    .probe0(tx_eth_payload_axis_tdata),
+    .probe1(tx_eth_payload_axis_tkeep),
+    .probe2(tx_eth_payload_axis_tvalid),
+    .probe3(tx_eth_payload_axis_tready),
+    .probe4(tx_eth_payload_axis_tlast),
+    .probe5(tx_eth_payload_axis_tuser)
+  );
+  */
 endmodule
 
 `resetall
+
