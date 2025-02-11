@@ -23,6 +23,10 @@ parser.add_argument('-qc', '--qpnc', metavar='N', type=int, default=0x12,
                     help='Client queue pair number')
 parser.add_argument('-p', '--psn', metavar='N', type=int, default=0x0,
                     help='Packet sequence number')
+parser.add_argument('-i', '--immediate', action='store_true',
+                    help='Immediate transfer')
+parser.add_argument('-t', '--txtype', action='store_false',
+                    help='Default transmit type is WRITE, set to transmit SEND instead')                    
 parser.add_argument('-s', '--start', action='store_true',
                     help='Start transfer')
 
@@ -65,15 +69,15 @@ def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", fpga_
     sock.sendto(MESSAGE, (fpga_ip_addr, UDP_PORT))
 
 
-def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_addr_offset=0x0, rdma_length=0x0, start_flag=0):
+def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_addr_offset=0x0, rdma_length=0x0, start_flag=0, immd_flag=0, txtype_flag=1):
 
     REM_IP_ADDRESS = client_ip_addr
     REM_IP_ADDRESS_INT = int(ip_address(client_ip_addr))
     DMA_LENGTH = rdma_length
     REM_ADDR_OFFSET = rem_addr_offset
 
-    start_and_valid = 0x1 | (start_flag << 1)
-    print(start_and_valid)
+    txmeta_flags = 0x1 | (start_flag << 1) |  (immd_flag << 2) | (txtype_flag << 3)
+    print(txtype_flag)
 
     MESSAGE = b''
 
@@ -85,7 +89,7 @@ def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_ad
     MESSAGE += struct.pack(">L", 0x0)  # R key
     MESSAGE += struct.pack(">Q", 0x0)  # Base Address
 
-    MESSAGE += struct.pack(">B", start_and_valid)  # No transimt values
+    MESSAGE += struct.pack(">B", txmeta_flags)  # TX meta flags, valid, start, is_immd, txtype
     MESSAGE += struct.pack(">L", REM_IP_ADDRESS_INT)  # TXmeta_rem_ip_addr
     MESSAGE += struct.pack(">Q", REM_ADDR_OFFSET)  # TXmeta_rem_addr_offset
     MESSAGE += struct.pack(">L", DMA_LENGTH)  # DMA length
@@ -104,7 +108,7 @@ def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_ad
 if __name__ == "__main__":
 
     if args.start:
-        send_txmeta(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start)
+        send_txmeta(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, rem_addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start, immd_flag=args.immediate, txtype_flag=args.txtype)
     else:
         send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, fpga_qpn=args.qpnf, client_qpn=args.qpnc, psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)
         send_qp_info(client_ip_addr=args.client_ip_addr, fpga_ip_addr=args.fpga_ip_addr, fpga_qpn=args.qpnf, client_qpn=args.qpnc, psn=args.psn, r_key=args.rkey, rem_base_addr=args.BaseAddr)

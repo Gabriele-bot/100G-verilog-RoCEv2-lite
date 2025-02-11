@@ -373,7 +373,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire [31:0] qp_init_r_key;
   wire [63:0] qp_init_rem_addr;
   wire [31:0] qp_init_rem_ip_addr;
-  wire        qp_write_type;
+  wire        qp_is_immediate;
+  wire        qp_tx_type;
 
   wire [31:0] qp_update_dma_transfer_length;
   wire [23:0] qp_update_rem_qpn;
@@ -405,9 +406,10 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   reg [63:0] qp_update_rem_addr_base_reg;
   reg [31:0] qp_update_rem_addr_offset_reg;
   reg [31:0] qp_update_rem_ip_addr_reg;
-  reg        qp_update_write_type_reg;
-  reg start_transfer_reg;
-  reg update_qp_state_reg;
+  reg        qp_update_is_immediate_reg;
+  reg        qp_update_tx_type_reg;
+  reg        start_transfer_reg;
+  reg        update_qp_state_reg;
 
   wire [31:0] qp_curr_dma_transfer_length;
   wire [23:0] qp_curr_rem_qpn;
@@ -416,7 +418,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire [31:0] qp_curr_r_key;
   wire [63:0] qp_curr_rem_addr;
   wire [31:0] qp_curr_rem_ip_addr;
-  wire        qp_curr_write_type;
+  wire        qp_curr_is_immediate;
+  wire        qp_curr_tx_type;
   wire start_transfer_wire;
   wire metadata_valid;
 
@@ -665,7 +668,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .s_r_key                   (qp_curr_r_key),
     .s_rem_ip_addr             (qp_curr_rem_ip_addr),
     .s_rem_addr                (qp_curr_rem_addr),
-    .s_is_immediate            (qp_curr_write_type),
+    .s_is_immediate            (qp_curr_is_immediate),
+    .s_trasfer_type            (qp_curr_tx_type),
     .s_axis_tdata              (s_payload_fifo_axis_tdata),
     .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
     .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -1444,7 +1448,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .loc_psn(qp_init_loc_psn),
     .rem_addr(qp_init_rem_addr),
     .rem_ip_addr(qp_init_rem_ip_addr),
-    .write_type(qp_write_type),
+    .is_immediate(qp_is_immediate),
+    .tx_type(qp_tx_type),
     .start_transfer(start_transfer),
     .metadata_valid(metadata_valid),
     .busy()
@@ -1584,7 +1589,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
       qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
       qp_update_rem_psn_reg             <= qp_init_rem_psn;
       qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
-      qp_update_write_type_reg          <= qp_write_type;
+      qp_update_is_immediate_reg        <= qp_is_immediate;
+      qp_update_tx_type_reg             <= qp_tx_type;
       qp_update_rem_addr_base_reg       <= qp_init_rem_addr;
       qp_update_rem_addr_offset_reg     <= 32'd0;
       sent_messages                     <= 32'd0;
@@ -1601,8 +1607,9 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
           qp_update_rem_psn_reg <= qp_update_rem_psn_reg + (qp_update_dma_transfer_length_reg >> pmtu_shift) + 1;
         end
 
-        qp_update_rem_ip_addr_reg <= qp_update_rem_ip_addr_reg;
-        qp_update_write_type_reg  <= qp_update_write_type_reg;
+        qp_update_rem_ip_addr_reg  <= qp_update_rem_ip_addr_reg;
+        qp_update_is_immediate_reg <= qp_update_is_immediate_reg;
+        qp_update_tx_type_reg      <= qp_update_tx_type_reg;
         qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
       end
     end
@@ -1650,7 +1657,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
   assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
   assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
-  assign qp_curr_write_type          = qp_update_write_type_reg;
+  assign qp_curr_is_immediate        = qp_update_is_immediate_reg;
+  assign qp_curr_tx_type             = qp_update_tx_type_reg;
   assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
 
   assign start_transfer_wire         = start_transfer_reg || new_transfer;
