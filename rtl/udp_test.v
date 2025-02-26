@@ -209,7 +209,7 @@ module udp_test #(
 
   udp_ip_rx_test #(
     .DATA_WIDTH(DATA_WIDTH)
-  ) udp_ip_rx_64_inst (
+  ) udp_ip_rx_inst (
       .clk(clk),
       .rst(rst),
       // IP frame input
@@ -304,7 +304,7 @@ module udp_test #(
             .s_udp_source_port(s_udp_source_port),
             .s_udp_dest_port(s_udp_dest_port),
             .s_udp_payload_axis_tdata(s_udp_payload_axis_tdata),
-            .s_udp_payload_axis_tkeep(s_udp_payload_axis_tkeep),
+            //.s_udp_payload_axis_tkeep(s_udp_payload_axis_tkeep),
             .s_udp_payload_axis_tvalid(s_udp_payload_axis_tvalid),
             .s_udp_payload_axis_tready(s_udp_payload_axis_tready),
             .s_udp_payload_axis_tlast(s_udp_payload_axis_tlast),
@@ -332,7 +332,7 @@ module udp_test #(
             .m_udp_length(tx_udp_length),
             .m_udp_checksum(tx_udp_checksum),
             .m_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
-            .m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
+            //.m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
             .m_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
             .m_udp_payload_axis_tready(tx_udp_payload_axis_tready),
             .m_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
@@ -344,6 +344,7 @@ module udp_test #(
 
         udp_checksum_gen_test #(
             .DATA_WIDTH(DATA_WIDTH),
+            .ADDER_STEPS(2**$clog2((DATA_WIDTH/64))),
             .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
             .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
         ) udp_checksum_gen_inst (
@@ -443,7 +444,7 @@ module udp_test #(
 
   udp_ip_tx_test #(
     .DATA_WIDTH(DATA_WIDTH)
-  )udp_ip_tx_64_inst (
+  )udp_ip_tx_inst (
       .clk(clk),
       .rst(rst),
       // UDP frame input

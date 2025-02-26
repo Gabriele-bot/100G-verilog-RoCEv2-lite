@@ -336,7 +336,7 @@ module udp_512 #(
       if (DATA_WIDTH > 64) begin
         udp_checksum_gen_test #(
             .DATA_WIDTH(DATA_WIDTH),
-            .ADDER_STEPS(4),
+            .ADDER_STEPS(8),
             .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
             .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
         ) udp_checksum_gen_test_inst (

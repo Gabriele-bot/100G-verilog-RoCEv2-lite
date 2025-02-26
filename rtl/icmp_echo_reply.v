@@ -333,7 +333,7 @@ module icmp_echo_reply #(
 
     icmp_checksum_gen #(
       .DATA_WIDTH(DATA_WIDTH),
-      .ADDER_STEPS(4),
+      .ADDER_STEPS(8),
       .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
       .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
       ) icmp_checksum_gen_test_inst (
@@ -466,14 +466,14 @@ module icmp_echo_reply #(
     );
 
     axis_pipeline_register #(
-    .DATA_WIDTH(512),
+    .DATA_WIDTH(DATA_WIDTH),
     .KEEP_ENABLE(1),
     .ID_ENABLE(0),
     .DEST_ENABLE(0),
     .USER_ENABLE(1),
     .USER_WIDTH(1),
-    .REG_TYPE(1),
-    .LENGTH(2)
+    .REG_TYPE(2),
+    .LENGTH(1)
   ) eth_tx_pipeline_inst (
     .clk(clk),
     .rst(rst),

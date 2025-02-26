@@ -27,9 +27,17 @@ THE SOFTWARE.
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 /*
- * IPv4 and ARP block with UDP support, ethernet frame interface (512 bit datapath)
+ * IPv4 and ARP block with UDP support, ethernet frame interface 
  */
-module udp_complete_512 #(
+module udp_complete_test #(
+  // Width of AXI stream interfaces in bits
+  parameter DATA_WIDTH = 64,
+  // Propagate tkeep signal
+  // If disabled, tkeep assumed to be 1'b1
+  parameter KEEP_ENABLE = (DATA_WIDTH>8),
+  // tkeep signal width (words per cycle)
+  parameter KEEP_WIDTH = (DATA_WIDTH/8),
+
   parameter ARP_CACHE_ADDR_WIDTH = 9,
   parameter ARP_REQUEST_RETRY_COUNT = 4,
   parameter ARP_REQUEST_RETRY_INTERVAL = 125000000 * 2,
@@ -45,132 +53,132 @@ module udp_complete_512 #(
   /*
    * Ethernet frame input
    */
-  input  wire         s_eth_hdr_valid,
-  output wire         s_eth_hdr_ready,
-  input  wire [ 47:0] s_eth_dest_mac,
-  input  wire [ 47:0] s_eth_src_mac,
-  input  wire [ 15:0] s_eth_type,
-  input  wire [511:0] s_eth_payload_axis_tdata,
-  input  wire [ 63:0] s_eth_payload_axis_tkeep,
-  input  wire         s_eth_payload_axis_tvalid,
-  output wire         s_eth_payload_axis_tready,
-  input  wire         s_eth_payload_axis_tlast,
-  input  wire         s_eth_payload_axis_tuser,
+  input  wire                  s_eth_hdr_valid,
+  output wire                  s_eth_hdr_ready,
+  input  wire [ 47:0]          s_eth_dest_mac,
+  input  wire [ 47:0]          s_eth_src_mac,
+  input  wire [ 15:0]          s_eth_type,
+  input  wire [DATA_WIDTH-1:0] s_eth_payload_axis_tdata,
+  input  wire [KEEP_WIDTH-1:0] s_eth_payload_axis_tkeep,
+  input  wire                  s_eth_payload_axis_tvalid,
+  output wire                  s_eth_payload_axis_tready,
+  input  wire                  s_eth_payload_axis_tlast,
+  input  wire                  s_eth_payload_axis_tuser,
 
   /*
    * Ethernet frame output
    */
-  output wire         m_eth_hdr_valid,
-  input  wire         m_eth_hdr_ready,
-  output wire [ 47:0] m_eth_dest_mac,
-  output wire [ 47:0] m_eth_src_mac,
-  output wire [ 15:0] m_eth_type,
-  output wire [511:0] m_eth_payload_axis_tdata,
-  output wire [ 63:0] m_eth_payload_axis_tkeep,
-  output wire         m_eth_payload_axis_tvalid,
-  input  wire         m_eth_payload_axis_tready,
-  output wire         m_eth_payload_axis_tlast,
-  output wire         m_eth_payload_axis_tuser,
+  output wire                  m_eth_hdr_valid,
+  input  wire                  m_eth_hdr_ready,
+  output wire [ 47:0]          m_eth_dest_mac,
+  output wire [ 47:0]          m_eth_src_mac,
+  output wire [ 15:0]          m_eth_type,
+  output wire [DATA_WIDTH-1:0] m_eth_payload_axis_tdata,
+  output wire [KEEP_WIDTH-1:0] m_eth_payload_axis_tkeep,
+  output wire                  m_eth_payload_axis_tvalid,
+  input  wire                  m_eth_payload_axis_tready,
+  output wire                  m_eth_payload_axis_tlast,
+  output wire                  m_eth_payload_axis_tuser,
 
   /*
    * IP input
    */
-  input  wire         s_ip_hdr_valid,
-  output wire         s_ip_hdr_ready,
-  input  wire [  5:0] s_ip_dscp,
-  input  wire [  1:0] s_ip_ecn,
-  input  wire [ 15:0] s_ip_length,
-  input  wire [  7:0] s_ip_ttl,
-  input  wire [  7:0] s_ip_protocol,
-  input  wire [ 31:0] s_ip_source_ip,
-  input  wire [ 31:0] s_ip_dest_ip,
-  input  wire [511:0] s_ip_payload_axis_tdata,
-  input  wire [ 63:0] s_ip_payload_axis_tkeep,
-  input  wire         s_ip_payload_axis_tvalid,
-  output wire         s_ip_payload_axis_tready,
-  input  wire         s_ip_payload_axis_tlast,
-  input  wire         s_ip_payload_axis_tuser,
+  input  wire                  s_ip_hdr_valid,
+  output wire                  s_ip_hdr_ready,
+  input  wire [  5:0]          s_ip_dscp,
+  input  wire [  1:0]          s_ip_ecn,
+  input  wire [ 15:0]          s_ip_length,
+  input  wire [  7:0]          s_ip_ttl,
+  input  wire [  7:0]          s_ip_protocol,
+  input  wire [ 31:0]          s_ip_source_ip,
+  input  wire [ 31:0]          s_ip_dest_ip,
+  input  wire [DATA_WIDTH-1:0] s_ip_payload_axis_tdata,
+  input  wire [KEEP_WIDTH-1:0] s_ip_payload_axis_tkeep,
+  input  wire                  s_ip_payload_axis_tvalid,
+  output wire                  s_ip_payload_axis_tready,
+  input  wire                  s_ip_payload_axis_tlast,
+  input  wire                  s_ip_payload_axis_tuser,
 
   /*
    * IP output
    */
-  output wire         m_ip_hdr_valid,
-  input  wire         m_ip_hdr_ready,
-  output wire [ 47:0] m_ip_eth_dest_mac,
-  output wire [ 47:0] m_ip_eth_src_mac,
-  output wire [ 15:0] m_ip_eth_type,
-  output wire [  3:0] m_ip_version,
-  output wire [  3:0] m_ip_ihl,
-  output wire [  5:0] m_ip_dscp,
-  output wire [  1:0] m_ip_ecn,
-  output wire [ 15:0] m_ip_length,
-  output wire [ 15:0] m_ip_identification,
-  output wire [  2:0] m_ip_flags,
-  output wire [ 12:0] m_ip_fragment_offset,
-  output wire [  7:0] m_ip_ttl,
-  output wire [  7:0] m_ip_protocol,
-  output wire [ 15:0] m_ip_header_checksum,
-  output wire [ 31:0] m_ip_source_ip,
-  output wire [ 31:0] m_ip_dest_ip,
-  output wire [511:0] m_ip_payload_axis_tdata,
-  output wire [ 63:0] m_ip_payload_axis_tkeep,
-  output wire         m_ip_payload_axis_tvalid,
-  input  wire         m_ip_payload_axis_tready,
-  output wire         m_ip_payload_axis_tlast,
-  output wire         m_ip_payload_axis_tuser,
+  output wire                  m_ip_hdr_valid,
+  input  wire                  m_ip_hdr_ready,
+  output wire [ 47:0]          m_ip_eth_dest_mac,
+  output wire [ 47:0]          m_ip_eth_src_mac,
+  output wire [ 15:0]          m_ip_eth_type,
+  output wire [  3:0]          m_ip_version,
+  output wire [  3:0]          m_ip_ihl,
+  output wire [  5:0]          m_ip_dscp,
+  output wire [  1:0]          m_ip_ecn,
+  output wire [ 15:0]          m_ip_length,
+  output wire [ 15:0]          m_ip_identification,
+  output wire [  2:0]          m_ip_flags,
+  output wire [ 12:0]          m_ip_fragment_offset,
+  output wire [  7:0]          m_ip_ttl,
+  output wire [  7:0]          m_ip_protocol,
+  output wire [ 15:0]          m_ip_header_checksum,
+  output wire [ 31:0]          m_ip_source_ip,
+  output wire [ 31:0]          m_ip_dest_ip,
+  output wire [DATA_WIDTH-1:0] m_ip_payload_axis_tdata,
+  output wire [KEEP_WIDTH-1:0] m_ip_payload_axis_tkeep,
+  output wire                  m_ip_payload_axis_tvalid,
+  input  wire                  m_ip_payload_axis_tready,
+  output wire                  m_ip_payload_axis_tlast,
+  output wire                  m_ip_payload_axis_tuser,
 
   /*
    * UDP input
    */
-  input  wire         s_udp_hdr_valid,
-  output wire         s_udp_hdr_ready,
-  input  wire [  5:0] s_udp_ip_dscp,
-  input  wire [  1:0] s_udp_ip_ecn,
-  input  wire [  7:0] s_udp_ip_ttl,
-  input  wire [ 31:0] s_udp_ip_source_ip,
-  input  wire [ 31:0] s_udp_ip_dest_ip,
-  input  wire [ 15:0] s_udp_source_port,
-  input  wire [ 15:0] s_udp_dest_port,
-  input  wire [ 15:0] s_udp_length,
-  input  wire [ 15:0] s_udp_checksum,
-  input  wire [511:0] s_udp_payload_axis_tdata,
-  input  wire [ 63:0] s_udp_payload_axis_tkeep,
-  input  wire         s_udp_payload_axis_tvalid,
-  output wire         s_udp_payload_axis_tready,
-  input  wire         s_udp_payload_axis_tlast,
-  input  wire         s_udp_payload_axis_tuser,
+  input  wire                  s_udp_hdr_valid,
+  output wire                  s_udp_hdr_ready,
+  input  wire [  5:0]          s_udp_ip_dscp,
+  input  wire [  1:0]          s_udp_ip_ecn,
+  input  wire [  7:0]          s_udp_ip_ttl,
+  input  wire [ 31:0]          s_udp_ip_source_ip,
+  input  wire [ 31:0]          s_udp_ip_dest_ip,
+  input  wire [ 15:0]          s_udp_source_port,
+  input  wire [ 15:0]          s_udp_dest_port,
+  input  wire [ 15:0]          s_udp_length,
+  input  wire [ 15:0]          s_udp_checksum,
+  input  wire [DATA_WIDTH-1:0] s_udp_payload_axis_tdata,
+  input  wire [KEEP_WIDTH-1:0] s_udp_payload_axis_tkeep,
+  input  wire                  s_udp_payload_axis_tvalid,
+  output wire                  s_udp_payload_axis_tready,
+  input  wire                  s_udp_payload_axis_tlast,
+  input  wire                  s_udp_payload_axis_tuser,
 
   /*
    * UDP output
    */
-  output wire         m_udp_hdr_valid,
-  input  wire         m_udp_hdr_ready,
-  output wire [ 47:0] m_udp_eth_dest_mac,
-  output wire [ 47:0] m_udp_eth_src_mac,
-  output wire [ 15:0] m_udp_eth_type,
-  output wire [  3:0] m_udp_ip_version,
-  output wire [  3:0] m_udp_ip_ihl,
-  output wire [  5:0] m_udp_ip_dscp,
-  output wire [  1:0] m_udp_ip_ecn,
-  output wire [ 15:0] m_udp_ip_length,
-  output wire [ 15:0] m_udp_ip_identification,
-  output wire [  2:0] m_udp_ip_flags,
-  output wire [ 12:0] m_udp_ip_fragment_offset,
-  output wire [  7:0] m_udp_ip_ttl,
-  output wire [  7:0] m_udp_ip_protocol,
-  output wire [ 15:0] m_udp_ip_header_checksum,
-  output wire [ 31:0] m_udp_ip_source_ip,
-  output wire [ 31:0] m_udp_ip_dest_ip,
-  output wire [ 15:0] m_udp_source_port,
-  output wire [ 15:0] m_udp_dest_port,
-  output wire [ 15:0] m_udp_length,
-  output wire [ 15:0] m_udp_checksum,
-  output wire [511:0] m_udp_payload_axis_tdata,
-  output wire [ 63:0] m_udp_payload_axis_tkeep,
-  output wire         m_udp_payload_axis_tvalid,
-  input  wire         m_udp_payload_axis_tready,
-  output wire         m_udp_payload_axis_tlast,
-  output wire         m_udp_payload_axis_tuser,
+  output wire                  m_udp_hdr_valid,
+  input  wire                  m_udp_hdr_ready,
+  output wire [ 47:0]          m_udp_eth_dest_mac,
+  output wire [ 47:0]          m_udp_eth_src_mac,
+  output wire [ 15:0]          m_udp_eth_type,
+  output wire [  3:0]          m_udp_ip_version,
+  output wire [  3:0]          m_udp_ip_ihl,
+  output wire [  5:0]          m_udp_ip_dscp,
+  output wire [  1:0]          m_udp_ip_ecn,
+  output wire [ 15:0]          m_udp_ip_length,
+  output wire [ 15:0]          m_udp_ip_identification,
+  output wire [  2:0]          m_udp_ip_flags,
+  output wire [ 12:0]          m_udp_ip_fragment_offset,
+  output wire [  7:0]          m_udp_ip_ttl,
+  output wire [  7:0]          m_udp_ip_protocol,
+  output wire [ 15:0]          m_udp_ip_header_checksum,
+  output wire [ 31:0]          m_udp_ip_source_ip,
+  output wire [ 31:0]          m_udp_ip_dest_ip,
+  output wire [ 15:0]          m_udp_source_port,
+  output wire [ 15:0]          m_udp_dest_port,
+  output wire [ 15:0]          m_udp_length,
+  output wire [ 15:0]          m_udp_checksum,
+  output wire [DATA_WIDTH-1:0] m_udp_payload_axis_tdata,
+  output wire [KEEP_WIDTH-1:0] m_udp_payload_axis_tkeep,
+  output wire                  m_udp_payload_axis_tvalid,
+  input  wire                  m_udp_payload_axis_tready,
+  output wire                  m_udp_payload_axis_tlast,
+  output wire                  m_udp_payload_axis_tuser,
 
   /*
    * Status
@@ -206,8 +214,8 @@ module udp_complete_512 #(
   wire [47:0] eth_tx_from_ip_src_mac;
   wire [15:0] eth_tx_from_ip_type;
   wire eth_ip_is_roce_packet;
-  wire [511:0] eth_tx_from_ip_payload_axis_tdata;
-  wire [63:0] eth_tx_from_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] eth_tx_from_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] eth_tx_from_ip_payload_axis_tkeep;
   wire eth_tx_from_ip_payload_axis_tvalid;
   wire eth_tx_from_ip_payload_axis_tlast;
   wire [1:0] eth_tx_from_ip_payload_axis_tuser;
@@ -219,8 +227,8 @@ module udp_complete_512 #(
   wire [47:0] eth_tx_to_icrc_module_dest_mac;
   wire [47:0] eth_tx_to_icrc_module_src_mac;
   wire [15:0] eth_tx_to_icrc_module_type;
-  wire [511:0] eth_tx_to_icrc_module_payload_axis_tdata;
-  wire [63:0] eth_tx_to_icrc_module_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] eth_tx_to_icrc_module_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] eth_tx_to_icrc_module_payload_axis_tkeep;
   wire eth_tx_to_icrc_module_payload_axis_tvalid;
   wire eth_tx_to_icrc_module_payload_axis_tlast;
   wire eth_tx_to_icrc_module_payload_axis_tuser;
@@ -231,8 +239,8 @@ module udp_complete_512 #(
   wire [47:0] eth_tx_with_roce_icrc_dest_mac;
   wire [47:0] eth_tx_with_roce_icrc_src_mac;
   wire [15:0] eth_tx_with_roce_icrc_type;
-  wire [511:0] eth_tx_with_roce_icrc_payload_axis_tdata;
-  wire [63:0] eth_tx_with_roce_icrc_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] eth_tx_with_roce_icrc_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] eth_tx_with_roce_icrc_payload_axis_tkeep;
   wire eth_tx_with_roce_icrc_payload_axis_tvalid;
   wire eth_tx_with_roce_icrc_payload_axis_tlast;
   wire eth_tx_with_roce_icrc_payload_axis_tuser;
@@ -243,15 +251,15 @@ module udp_complete_512 #(
   wire [47:0] eth_tx_icrc_bypass_dest_mac;
   wire [47:0] eth_tx_icrc_bypass_src_mac;
   wire [15:0] eth_tx_icrc_bypass_type;
-  wire [511:0] eth_tx_icrc_bypass_payload_axis_tdata_int;
-  wire [63:0] eth_tx_icrc_bypass_payload_axis_tkeep_int;
+  wire [DATA_WIDTH-1:0] eth_tx_icrc_bypass_payload_axis_tdata_int;
+  wire [KEEP_WIDTH-1:0] eth_tx_icrc_bypass_payload_axis_tkeep_int;
   wire eth_tx_icrc_bypass_payload_axis_tvalid_int;
   wire eth_tx_icrc_bypass_payload_axis_tready_int;
   wire eth_tx_icrc_bypass_payload_axis_tlast_int;
   wire eth_tx_icrc_bypass_payload_axis_tuser_int;
 
-  wire [511:0] eth_tx_from_fifo_payload_axis_tdata_int;
-  wire [63:0] eth_tx_from_fifo_payload_axis_tkeep_int;
+  wire [DATA_WIDTH-1:0] eth_tx_from_fifo_payload_axis_tdata_int;
+  wire [KEEP_WIDTH-1:0] eth_tx_from_fifo_payload_axis_tkeep_int;
   wire eth_tx_from_fifo_payload_axis_tvalid_int;
   wire eth_tx_from_fifo_payload_axis_tready_int;
   wire eth_tx_from_fifo_payload_axis_tlast_int;
@@ -275,8 +283,8 @@ module udp_complete_512 #(
   wire [15:0] ip_rx_ip_header_checksum;
   wire [31:0] ip_rx_ip_source_ip;
   wire [31:0] ip_rx_ip_dest_ip;
-  wire [511:0] ip_rx_ip_payload_axis_tdata;
-  wire [63:0] ip_rx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] ip_rx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] ip_rx_ip_payload_axis_tkeep;
   wire ip_rx_ip_payload_axis_tvalid;
   wire ip_rx_ip_payload_axis_tlast;
   wire ip_rx_ip_payload_axis_tuser;
@@ -292,8 +300,8 @@ module udp_complete_512 #(
   wire [31:0] ip_tx_ip_source_ip;
   wire [31:0] ip_tx_ip_dest_ip;
   wire ip_tx_is_roce_packet;
-  wire [511:0] ip_tx_ip_payload_axis_tdata;
-  wire [63:0] ip_tx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] ip_tx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] ip_tx_ip_payload_axis_tkeep;
   wire ip_tx_ip_payload_axis_tvalid;
   wire ip_tx_ip_payload_axis_tlast;
   wire ip_tx_ip_payload_axis_tuser;
@@ -317,8 +325,8 @@ module udp_complete_512 #(
   wire [15:0] udp_rx_ip_header_checksum;
   wire [31:0] udp_rx_ip_source_ip;
   wire [31:0] udp_rx_ip_dest_ip;
-  wire [511:0] udp_rx_ip_payload_axis_tdata;
-  wire [63:0] udp_rx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] udp_rx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] udp_rx_ip_payload_axis_tkeep;
   wire udp_rx_ip_payload_axis_tvalid;
   wire udp_rx_ip_payload_axis_tlast;
   wire udp_rx_ip_payload_axis_tuser;
@@ -334,8 +342,8 @@ module udp_complete_512 #(
   wire [31:0] udp_tx_ip_source_ip;
   wire [31:0] udp_tx_ip_dest_ip;
   wire udp_tx_is_roce_packet;
-  wire [511:0] udp_tx_ip_payload_axis_tdata;
-  wire [63:0] udp_tx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0] udp_tx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0] udp_tx_ip_payload_axis_tkeep;
   wire udp_tx_ip_payload_axis_tvalid;
   wire udp_tx_ip_payload_axis_tlast;
   wire udp_tx_ip_payload_axis_tuser;
@@ -448,8 +456,8 @@ module udp_complete_512 #(
 
       // Insert ICRC
       axis_RoCE_icrc_insert_test #(
-      .DATA_WIDTH(512) 
-      ) axis_RoCE_icrc_insert_512_instance (
+      .DATA_WIDTH(DATA_WIDTH) 
+      ) axis_RoCE_icrc_insert_instance (
         .clk                      (clk),
         .rst                      (rst),
 
@@ -492,7 +500,7 @@ module udp_complete_512 #(
    */
   ip_arb_mux #(
   .S_COUNT(2),
-  .DATA_WIDTH(512),
+  .DATA_WIDTH(DATA_WIDTH),
   .KEEP_ENABLE(1),
   .ID_ENABLE(0),
   .DEST_ENABLE(0),
@@ -564,12 +572,14 @@ module udp_complete_512 #(
   /*
    * IP stack
    */
-  ip_complete_512 #(
+  ip_complete_test #(
+  .DATA_WIDTH(DATA_WIDTH),
+  .KEEP_ENABLE(1),
   .ARP_CACHE_ADDR_WIDTH(ARP_CACHE_ADDR_WIDTH),
   .ARP_REQUEST_RETRY_COUNT(ARP_REQUEST_RETRY_COUNT),
   .ARP_REQUEST_RETRY_INTERVAL(ARP_REQUEST_RETRY_INTERVAL),
   .ARP_REQUEST_TIMEOUT(ARP_REQUEST_TIMEOUT)
-  ) ip_complete_512_inst (
+  ) ip_complete_inst (
   .clk                               (clk),
   .rst                               (rst),
   // Ethernet frame input
@@ -659,11 +669,13 @@ module udp_complete_512 #(
   /*
    * UDP interface
    */
-  udp_512 #(
+  udp_test #(
+  .DATA_WIDTH(DATA_WIDTH),
+  .KEEP_ENABLE(1),
   .CHECKSUM_GEN_ENABLE(UDP_CHECKSUM_GEN_ENABLE),
   .CHECKSUM_PAYLOAD_FIFO_DEPTH(UDP_CHECKSUM_PAYLOAD_FIFO_DEPTH),
   .CHECKSUM_HEADER_FIFO_DEPTH(UDP_CHECKSUM_HEADER_FIFO_DEPTH)
-  ) udp_512_inst (
+  ) udp_inst (
   .clk(clk),
   .rst(rst),
   // IP frame input
