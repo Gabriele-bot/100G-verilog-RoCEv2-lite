@@ -31,7 +31,8 @@
  * TOTAL length 352 bits, 44 bytes
  */
 
-module udp_RoCE_connection_manager_512 #(
+module udp_RoCE_connection_manager_test #(
+  parameter DATA_WIDTH      = 256,
   parameter LISTEN_UDP_PORT = 16'h4321
 ) (
   input wire clk,
@@ -62,8 +63,8 @@ module udp_RoCE_connection_manager_512 #(
   input  wire [ 15:0] s_udp_dest_port,
   input  wire [ 15:0] s_udp_length,
   input  wire [ 15:0] s_udp_checksum,
-  input  wire [511:0] s_udp_payload_axis_tdata,
-  input  wire [ 63:0] s_udp_payload_axis_tkeep,
+  input  wire [DATA_WIDTH   - 1 : 0] s_udp_payload_axis_tdata,
+  input  wire [DATA_WIDTH/8 - 1 : 0] s_udp_payload_axis_tkeep,
   input  wire         s_udp_payload_axis_tvalid,
   output wire         s_udp_payload_axis_tready,
   input  wire         s_udp_payload_axis_tlast,
@@ -93,9 +94,9 @@ module udp_RoCE_connection_manager_512 #(
 );
 
   parameter KEEP_ENABLE = 1;
-  parameter KEEP_WIDTH  = 64;
+  parameter KEEP_WIDTH  = DATA_WIDTH/8;
 
-  parameter BYTE_LANES = 64;
+  parameter BYTE_LANES = KEEP_WIDTH;
 
   parameter QP_INFO_SIZE = 44;
 
@@ -182,6 +183,8 @@ module udp_RoCE_connection_manager_512 #(
     metadata_valid_next            = metadata_valid_reg;
 
     udp_port_next                  = udp_port_reg;
+
+    ptr_next = ptr_reg;
 
     qp_info_valid_next             = qp_info_valid_reg;
     qp_info_rem_qpn_next           = qp_info_rem_qpn_reg;

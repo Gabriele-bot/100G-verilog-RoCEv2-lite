@@ -107,6 +107,21 @@ module RoCE_minimal_stack_512 #(
 
   localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
 
+  localparam [7:0]
+  RC_SEND_FIRST         = 8'h00,
+  RC_SEND_MIDDLE        = 8'h01,
+  RC_SEND_LAST          = 8'h02,
+  RC_SEND_LAST_IMD      = 8'h03,
+  RC_SEND_ONLY          = 8'h04,
+  RC_SEND_ONLY_IMD      = 8'h05,
+  RC_RDMA_WRITE_FIRST   = 8'h06,
+  RC_RDMA_WRITE_MIDDLE  = 8'h07,
+  RC_RDMA_WRITE_LAST    = 8'h08,
+  RC_RDMA_WRITE_LAST_IMD= 8'h09,
+  RC_RDMA_WRITE_ONLY    = 8'h0A,
+  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
+  RC_RDMA_ACK           = 8'h11;
+
   reg [31:0] dma_length_reg = 32'd0;
   reg start_1;
   reg start_2;
@@ -355,10 +370,6 @@ module RoCE_minimal_stack_512 #(
   wire [23:0] m_roce_rx_to_dropper_aeth_msn;
 
 
-
-  reg [63:0] word_counter = {64{1'b1}} - 64;
-  reg [63:0] remaining_words;
-
   // redirect udp rx traffic either to CM or RoCE RX
   wire s_select_udp = (s_udp_dest_port != 16'h12B7);
   wire s_select_roce = (s_udp_dest_port == 16'h12B7);
@@ -467,203 +478,34 @@ module RoCE_minimal_stack_512 #(
   wire                                        m_axi_rvalid;
   wire                                        m_axi_rready;
 
+  wire is_last_packet;
+
   assign s_dma_meta_valid = s_dma_meta_valid_reg;
-
-  function [15:0] keep2count;
-    input [63:0] k;
-    casez (k)
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0: keep2count = 16'd0;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01: keep2count = 16'd1;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011: keep2count = 16'd2;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111: keep2count = 16'd3;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111: keep2count = 16'd4;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111: keep2count = 16'd5;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111: keep2count = 16'd6;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111: keep2count = 16'd7;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111: keep2count = 16'd8;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111: keep2count = 16'd9;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111: keep2count = 16'd10;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111: keep2count = 16'd11;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111: keep2count = 16'd12;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111: keep2count = 16'd13;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111: keep2count = 16'd14;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111: keep2count = 16'd15;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111: keep2count = 16'd16;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111: keep2count = 16'd17;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111: keep2count = 16'd18;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111: keep2count = 16'd19;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111: keep2count = 16'd20;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111: keep2count = 16'd21;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111: keep2count = 16'd22;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111: keep2count = 16'd23;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111: keep2count = 16'd24;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111: keep2count = 16'd25;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111: keep2count = 16'd26;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111: keep2count = 16'd27;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111: keep2count = 16'd28;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111: keep2count = 16'd29;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111: keep2count = 16'd30;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111: keep2count = 16'd31;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111: keep2count = 16'd32;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111: keep2count = 16'd33;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111: keep2count = 16'd34;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111: keep2count = 16'd35;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111: keep2count = 16'd36;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111: keep2count = 16'd37;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111: keep2count = 16'd38;
-      64'bzzzzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111: keep2count = 16'd39;
-      64'bzzzzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111: keep2count = 16'd40;
-      64'bzzzzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111: keep2count = 16'd41;
-      64'bzzzzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111: keep2count = 16'd42;
-      64'bzzzzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111111: keep2count = 16'd43;
-      64'bzzzzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111111: keep2count = 16'd44;
-      64'bzzzzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111111: keep2count = 16'd45;
-      64'bzzzzzzzzzzzzzzzzz01111111111111111111111111111111111111111111111: keep2count = 16'd46;
-      64'bzzzzzzzzzzzzzzzz011111111111111111111111111111111111111111111111: keep2count = 16'd47;
-      64'bzzzzzzzzzzzzzzz0111111111111111111111111111111111111111111111111: keep2count = 16'd48;
-      64'bzzzzzzzzzzzzzz01111111111111111111111111111111111111111111111111: keep2count = 16'd49;
-      64'bzzzzzzzzzzzzz011111111111111111111111111111111111111111111111111: keep2count = 16'd50;
-      64'bzzzzzzzzzzzz0111111111111111111111111111111111111111111111111111: keep2count = 16'd51;
-      64'bzzzzzzzzzzz01111111111111111111111111111111111111111111111111111: keep2count = 16'd52;
-      64'bzzzzzzzzzz011111111111111111111111111111111111111111111111111111: keep2count = 16'd53;
-      64'bzzzzzzzzz0111111111111111111111111111111111111111111111111111111: keep2count = 16'd54;
-      64'bzzzzzzzz01111111111111111111111111111111111111111111111111111111: keep2count = 16'd55;
-      64'bzzzzzzz011111111111111111111111111111111111111111111111111111111: keep2count = 16'd56;
-      64'bzzzzzz0111111111111111111111111111111111111111111111111111111111: keep2count = 16'd57;
-      64'bzzzzz01111111111111111111111111111111111111111111111111111111111: keep2count = 16'd58;
-      64'bzzzz011111111111111111111111111111111111111111111111111111111111: keep2count = 16'd59;
-      64'bzzz0111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd60;
-      64'bzz01111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd61;
-      64'bz011111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd62;
-      64'b0111111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd63;
-      64'b1111111111111111111111111111111111111111111111111111111111111111: keep2count = 16'd64;
-    endcase
-  endfunction
-
-  function [63:0] count2keep;
-    input [6:0] k;
-    case (k)
-      7'd0:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000000;
-      7'd1:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000001;
-      7'd2:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000011;
-      7'd3:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000111;
-      7'd4:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000001111;
-      7'd5:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000011111;
-      7'd6:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000111111;
-      7'd7:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000001111111;
-      7'd8:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000011111111;
-      7'd9:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000111111111;
-      7'd10:   count2keep = 64'b0000000000000000000000000000000000000000000000000000001111111111;
-      7'd11:   count2keep = 64'b0000000000000000000000000000000000000000000000000000011111111111;
-      7'd12:   count2keep = 64'b0000000000000000000000000000000000000000000000000000111111111111;
-      7'd13:   count2keep = 64'b0000000000000000000000000000000000000000000000000001111111111111;
-      7'd14:   count2keep = 64'b0000000000000000000000000000000000000000000000000011111111111111;
-      7'd15:   count2keep = 64'b0000000000000000000000000000000000000000000000000111111111111111;
-      7'd16:   count2keep = 64'b0000000000000000000000000000000000000000000000001111111111111111;
-      7'd17:   count2keep = 64'b0000000000000000000000000000000000000000000000011111111111111111;
-      7'd18:   count2keep = 64'b0000000000000000000000000000000000000000000000111111111111111111;
-      7'd19:   count2keep = 64'b0000000000000000000000000000000000000000000001111111111111111111;
-      7'd20:   count2keep = 64'b0000000000000000000000000000000000000000000011111111111111111111;
-      7'd21:   count2keep = 64'b0000000000000000000000000000000000000000000111111111111111111111;
-      7'd22:   count2keep = 64'b0000000000000000000000000000000000000000001111111111111111111111;
-      7'd23:   count2keep = 64'b0000000000000000000000000000000000000000011111111111111111111111;
-      7'd24:   count2keep = 64'b0000000000000000000000000000000000000000111111111111111111111111;
-      7'd25:   count2keep = 64'b0000000000000000000000000000000000000001111111111111111111111111;
-      7'd26:   count2keep = 64'b0000000000000000000000000000000000000011111111111111111111111111;
-      7'd27:   count2keep = 64'b0000000000000000000000000000000000000111111111111111111111111111;
-      7'd28:   count2keep = 64'b0000000000000000000000000000000000001111111111111111111111111111;
-      7'd29:   count2keep = 64'b0000000000000000000000000000000000011111111111111111111111111111;
-      7'd30:   count2keep = 64'b0000000000000000000000000000000000111111111111111111111111111111;
-      7'd31:   count2keep = 64'b0000000000000000000000000000000001111111111111111111111111111111;
-      7'd32:   count2keep = 64'b0000000000000000000000000000000011111111111111111111111111111111;
-      7'd33:   count2keep = 64'b0000000000000000000000000000000111111111111111111111111111111111;
-      7'd34:   count2keep = 64'b0000000000000000000000000000001111111111111111111111111111111111;
-      7'd35:   count2keep = 64'b0000000000000000000000000000011111111111111111111111111111111111;
-      7'd36:   count2keep = 64'b0000000000000000000000000000111111111111111111111111111111111111;
-      7'd37:   count2keep = 64'b0000000000000000000000000001111111111111111111111111111111111111;
-      7'd38:   count2keep = 64'b0000000000000000000000000011111111111111111111111111111111111111;
-      7'd39:   count2keep = 64'b0000000000000000000000000111111111111111111111111111111111111111;
-      7'd40:   count2keep = 64'b0000000000000000000000001111111111111111111111111111111111111111;
-      7'd41:   count2keep = 64'b0000000000000000000000011111111111111111111111111111111111111111;
-      7'd42:   count2keep = 64'b0000000000000000000000111111111111111111111111111111111111111111;
-      7'd43:   count2keep = 64'b0000000000000000000001111111111111111111111111111111111111111111;
-      7'd44:   count2keep = 64'b0000000000000000000011111111111111111111111111111111111111111111;
-      7'd45:   count2keep = 64'b0000000000000000000111111111111111111111111111111111111111111111;
-      7'd46:   count2keep = 64'b0000000000000000001111111111111111111111111111111111111111111111;
-      7'd47:   count2keep = 64'b0000000000000000011111111111111111111111111111111111111111111111;
-      7'd48:   count2keep = 64'b0000000000000000111111111111111111111111111111111111111111111111;
-      7'd49:   count2keep = 64'b0000000000000001111111111111111111111111111111111111111111111111;
-      7'd50:   count2keep = 64'b0000000000000011111111111111111111111111111111111111111111111111;
-      7'd51:   count2keep = 64'b0000000000000111111111111111111111111111111111111111111111111111;
-      7'd52:   count2keep = 64'b0000000000001111111111111111111111111111111111111111111111111111;
-      7'd53:   count2keep = 64'b0000000000011111111111111111111111111111111111111111111111111111;
-      7'd54:   count2keep = 64'b0000000000111111111111111111111111111111111111111111111111111111;
-      7'd55:   count2keep = 64'b0000000001111111111111111111111111111111111111111111111111111111;
-      7'd56:   count2keep = 64'b0000000011111111111111111111111111111111111111111111111111111111;
-      7'd57:   count2keep = 64'b0000000111111111111111111111111111111111111111111111111111111111;
-      7'd58:   count2keep = 64'b0000001111111111111111111111111111111111111111111111111111111111;
-      7'd59:   count2keep = 64'b0000011111111111111111111111111111111111111111111111111111111111;
-      7'd60:   count2keep = 64'b0000111111111111111111111111111111111111111111111111111111111111;
-      7'd61:   count2keep = 64'b0001111111111111111111111111111111111111111111111111111111111111;
-      7'd62:   count2keep = 64'b0011111111111111111111111111111111111111111111111111111111111111;
-      7'd63:   count2keep = 64'b0111111111111111111111111111111111111111111111111111111111111111;
-      7'd64:   count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
-      default: count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
-    endcase
-  endfunction
-
 
   /*
    * Generate payolad data
    */
+  axis_data_generator #(
+  .DATA_WIDTH(512)
+  ) axis_data_generator_instance (
+    .clk(clk),
+    .rst(rst),
+    .start(start_transfer_wire),
+    .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)),
+    .m_axis_tdata (s_payload_axis_tdata),
+    .m_axis_tkeep (s_payload_axis_tkeep),
+    .m_axis_tvalid(s_payload_axis_tvalid),
+    .m_axis_tready(s_payload_axis_tready),
+    .m_axis_tlast (s_payload_axis_tlast),
+    .m_axis_tuser (s_payload_axis_tuser),
+    .length(qp_init_dma_transfer_length)
+  );
 
   always @(posedge clk) begin
-    if (rst) begin
-      word_counter      <= {64{1'b1}} - 64;
-      dma_length_reg    <= 32'd0;
-      remaining_words   <= 64'd0;
-      stop_transfer_reg <= 1'b0;
-    end else begin
-      start_1 <= start_transfer_wire;
-      start_2 <= start_1;
-      if ((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)) begin
-        stop_transfer_reg <= 1'b1;
-        if (s_payload_axis_tvalid && s_payload_axis_tready) begin
-          word_counter <= dma_length_reg;
-          remaining_words <= 64'd0;
-        end else begin
-          word_counter <= dma_length_reg - 64;
-          remaining_words <= 64'd64;
-        end
-      end else if (s_payload_axis_tvalid && s_payload_axis_tready) begin
-        if ((word_counter <= qp_init_dma_transfer_length)) begin
-          word_counter <= word_counter + 64;
-        end
-        remaining_words <= dma_length_reg - word_counter - 64'd64;
-      end else if (~start_1 && start_transfer_wire) begin
-        stop_transfer_reg <= 1'b0;
-        dma_length_reg <= qp_init_dma_transfer_length;
-        word_counter <= {64{1'b1}} - 64;
-        remaining_words <= qp_init_dma_transfer_length;
-      end else if (~start_2 && start_1) begin
-        stop_transfer_reg <= 1'b0;
-        word_counter <= 0;
-        remaining_words <= dma_length_reg;
-      end
-    end
+    start_1 <= start_transfer_wire;
+    start_2 <= start_1;
   end
 
-  assign s_payload_axis_tdata[31:0] = word_counter[31:0];
-  assign s_payload_axis_tdata[63:32] = ~word_counter[31:0];
-  assign s_payload_axis_tdata[511:64] = {14{32'hDEADBEEF}};
-  assign s_payload_axis_tkeep = s_payload_axis_tlast ? ((count2keep(
-    remaining_words
-  ) == 7'd0) ? {64{1'b1}} : count2keep(
-    remaining_words
-  )) : {64{1'b1}};
-  assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
-  assign s_payload_axis_tlast = ((word_counter + 64 >= dma_length_reg) ? 1'b1 : 1'b0);
-  assign s_payload_axis_tuser = 1'b0 | stop_transfer_reg;
 
   always @(posedge clk) begin
     if (rst) begin
@@ -1387,7 +1229,9 @@ module RoCE_minimal_stack_512 #(
     end
   endgenerate
 
-  RoCE_udp_tx_512 RoCE_udp_tx_512_instance (
+  RoCE_udp_tx_test #(
+  .DATA_WIDTH(512)
+  ) RoCE_udp_tx_512_instance (
     .clk                            (clk),
     .rst                            (rst),
     .s_roce_bth_valid               (roce_bth_valid),
@@ -1463,7 +1307,8 @@ module RoCE_minimal_stack_512 #(
     .RoCE_udp_port(RoCE_udp_port)
   );
 
-  RoCE_udp_rx_512 #(
+  RoCE_udp_rx_test #(
+  .DATA_WIDTH(512),
   .ENABLE_ICRC_CHECK(1'b0)
   ) RoCE_udp_rx_512_instance (
     .clk(clk),
@@ -1533,7 +1378,8 @@ module RoCE_minimal_stack_512 #(
 
 
 
-  udp_RoCE_connection_manager_512 #(
+  udp_RoCE_connection_manager_test #(
+  .DATA_WIDTH(512),
   .LISTEN_UDP_PORT(16'h4321)
   ) udp_RoCE_connection_manager_512_instance (
     .clk(clk),
@@ -1741,10 +1587,11 @@ module RoCE_minimal_stack_512 #(
     end
 
 
+
     if (stop_transfer) begin
       new_transfer  <= 1'b0;
       sent_messages <= {32{1'b1}};
-    end else if (m_roce_to_retrans_payload_axis_tvalid && m_roce_to_retrans_payload_axis_tready && m_roce_to_retrans_payload_axis_tlast & bth_op_code_reg[7:2] == 6'b000010) begin // LAST, LAST-IMMD, ONLY, ONLY-IMMD
+    end else if (m_roce_to_retrans_payload_axis_tvalid && m_roce_to_retrans_payload_axis_tready && m_roce_to_retrans_payload_axis_tlast & is_last_packet) begin // LAST, LAST-IMMD, ONLY, ONLY-IMMD
       sent_messages <= sent_messages + 32'd1;
       if (sent_messages < n_transfers - 32'd1) begin
         new_transfer <= 1'b1;
@@ -1776,6 +1623,10 @@ module RoCE_minimal_stack_512 #(
       s_dma_meta_valid_reg <= s_dma_meta_valid_next;
     end
   end
+
+  assign is_last_packet = (bth_op_code_reg == RC_SEND_LAST) || (bth_op_code_reg == RC_SEND_LAST_IMD) || (bth_op_code_reg == RC_SEND_ONLY) || (bth_op_code_reg == RC_SEND_ONLY_IMD) ||
+  (bth_op_code_reg == RC_RDMA_WRITE_LAST) || (bth_op_code_reg == RC_RDMA_WRITE_LAST_IMD) || (bth_op_code_reg == RC_RDMA_WRITE_ONLY) || (bth_op_code_reg == RC_RDMA_WRITE_ONLY_IMD);
+
 
   assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
   assign qp_curr_r_key               = qp_update_r_key_reg;

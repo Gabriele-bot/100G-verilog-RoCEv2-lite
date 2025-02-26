@@ -23,83 +23,51 @@ module axis_data_generator #(
     input wire [31:0] length
 );
 
-    function [63:0] count2keep;
-        input [6:0] k;
-        case (k)
-            7'd0:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000000;
-            7'd1:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000001;
-            7'd2:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000011;
-            7'd3:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000000111;
-            7'd4:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000001111;
-            7'd5:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000011111;
-            7'd6:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000000111111;
-            7'd7:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000001111111;
-            7'd8:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000011111111;
-            7'd9:    count2keep = 64'b0000000000000000000000000000000000000000000000000000000111111111;
-            7'd10:   count2keep = 64'b0000000000000000000000000000000000000000000000000000001111111111;
-            7'd11:   count2keep = 64'b0000000000000000000000000000000000000000000000000000011111111111;
-            7'd12:   count2keep = 64'b0000000000000000000000000000000000000000000000000000111111111111;
-            7'd13:   count2keep = 64'b0000000000000000000000000000000000000000000000000001111111111111;
-            7'd14:   count2keep = 64'b0000000000000000000000000000000000000000000000000011111111111111;
-            7'd15:   count2keep = 64'b0000000000000000000000000000000000000000000000000111111111111111;
-            7'd16:   count2keep = 64'b0000000000000000000000000000000000000000000000001111111111111111;
-            7'd17:   count2keep = 64'b0000000000000000000000000000000000000000000000011111111111111111;
-            7'd18:   count2keep = 64'b0000000000000000000000000000000000000000000000111111111111111111;
-            7'd19:   count2keep = 64'b0000000000000000000000000000000000000000000001111111111111111111;
-            7'd20:   count2keep = 64'b0000000000000000000000000000000000000000000011111111111111111111;
-            7'd21:   count2keep = 64'b0000000000000000000000000000000000000000000111111111111111111111;
-            7'd22:   count2keep = 64'b0000000000000000000000000000000000000000001111111111111111111111;
-            7'd23:   count2keep = 64'b0000000000000000000000000000000000000000011111111111111111111111;
-            7'd24:   count2keep = 64'b0000000000000000000000000000000000000000111111111111111111111111;
-            7'd25:   count2keep = 64'b0000000000000000000000000000000000000001111111111111111111111111;
-            7'd26:   count2keep = 64'b0000000000000000000000000000000000000011111111111111111111111111;
-            7'd27:   count2keep = 64'b0000000000000000000000000000000000000111111111111111111111111111;
-            7'd28:   count2keep = 64'b0000000000000000000000000000000000001111111111111111111111111111;
-            7'd29:   count2keep = 64'b0000000000000000000000000000000000011111111111111111111111111111;
-            7'd30:   count2keep = 64'b0000000000000000000000000000000000111111111111111111111111111111;
-            7'd31:   count2keep = 64'b0000000000000000000000000000000001111111111111111111111111111111;
-            7'd32:   count2keep = 64'b0000000000000000000000000000000011111111111111111111111111111111;
-            7'd33:   count2keep = 64'b0000000000000000000000000000000111111111111111111111111111111111;
-            7'd34:   count2keep = 64'b0000000000000000000000000000001111111111111111111111111111111111;
-            7'd35:   count2keep = 64'b0000000000000000000000000000011111111111111111111111111111111111;
-            7'd36:   count2keep = 64'b0000000000000000000000000000111111111111111111111111111111111111;
-            7'd37:   count2keep = 64'b0000000000000000000000000001111111111111111111111111111111111111;
-            7'd38:   count2keep = 64'b0000000000000000000000000011111111111111111111111111111111111111;
-            7'd39:   count2keep = 64'b0000000000000000000000000111111111111111111111111111111111111111;
-            7'd40:   count2keep = 64'b0000000000000000000000001111111111111111111111111111111111111111;
-            7'd41:   count2keep = 64'b0000000000000000000000011111111111111111111111111111111111111111;
-            7'd42:   count2keep = 64'b0000000000000000000000111111111111111111111111111111111111111111;
-            7'd43:   count2keep = 64'b0000000000000000000001111111111111111111111111111111111111111111;
-            7'd44:   count2keep = 64'b0000000000000000000011111111111111111111111111111111111111111111;
-            7'd45:   count2keep = 64'b0000000000000000000111111111111111111111111111111111111111111111;
-            7'd46:   count2keep = 64'b0000000000000000001111111111111111111111111111111111111111111111;
-            7'd47:   count2keep = 64'b0000000000000000011111111111111111111111111111111111111111111111;
-            7'd48:   count2keep = 64'b0000000000000000111111111111111111111111111111111111111111111111;
-            7'd49:   count2keep = 64'b0000000000000001111111111111111111111111111111111111111111111111;
-            7'd50:   count2keep = 64'b0000000000000011111111111111111111111111111111111111111111111111;
-            7'd51:   count2keep = 64'b0000000000000111111111111111111111111111111111111111111111111111;
-            7'd52:   count2keep = 64'b0000000000001111111111111111111111111111111111111111111111111111;
-            7'd53:   count2keep = 64'b0000000000011111111111111111111111111111111111111111111111111111;
-            7'd54:   count2keep = 64'b0000000000111111111111111111111111111111111111111111111111111111;
-            7'd55:   count2keep = 64'b0000000001111111111111111111111111111111111111111111111111111111;
-            7'd56:   count2keep = 64'b0000000011111111111111111111111111111111111111111111111111111111;
-            7'd57:   count2keep = 64'b0000000111111111111111111111111111111111111111111111111111111111;
-            7'd58:   count2keep = 64'b0000001111111111111111111111111111111111111111111111111111111111;
-            7'd59:   count2keep = 64'b0000011111111111111111111111111111111111111111111111111111111111;
-            7'd60:   count2keep = 64'b0000111111111111111111111111111111111111111111111111111111111111;
-            7'd61:   count2keep = 64'b0001111111111111111111111111111111111111111111111111111111111111;
-            7'd62:   count2keep = 64'b0011111111111111111111111111111111111111111111111111111111111111;
-            7'd63:   count2keep = 64'b0111111111111111111111111111111111111111111111111111111111111111;
-            7'd64:   count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
-            default: count2keep = 64'b1111111111111111111111111111111111111111111111111111111111111111;
-        endcase
+    integer i;
+    reg [DATA_WIDTH/8 - 1:0] count2keep_reg [DATA_WIDTH/8 - 1:0];
+    
+    //initial begin
+    //    for (i = 0; i <= DATA_WIDTH/8 - 1; i = i + 1) begin
+    //        count2keep_reg[i] = 0;
+    //    end
+    //end
+
+    generate
+        for (genvar j = 0; j <= DATA_WIDTH/8 - 1; j = j + 1) begin
+            if (j == 0) begin
+                initial count2keep_reg[j] = 0;
+            end else begin
+                initial count2keep_reg[j] = {(j){1'b1}};
+            end
+        end
+    endgenerate
+
+    function [$clog2(DATA_WIDTH/8):0] keep2count;
+        input [DATA_WIDTH/8 - 1:0] k;
+        for (i = DATA_WIDTH/8 - 1; i >= 0; i = i - 1) begin
+            if (i == DATA_WIDTH/8 - 1) begin
+                if (k[DATA_WIDTH/8 -1]) keep2count = DATA_WIDTH/8;
+            end else begin
+                if (k[i +: 2] == 2'b01) keep2count = i+1;
+                else if (k[i +: 2] == 2'b00) keep2count = 0;
+            end
+        end
     endfunction
+
+    function [DATA_WIDTH/8 - 1:0] count2keep;
+        input [$clog2(DATA_WIDTH/8):0] k;
+        if (k < DATA_WIDTH/8) count2keep = count2keep_reg[k];
+        else count2keep = {DATA_WIDTH/8{1'b1}};
+    endfunction
+
+    parameter SLICES_32BIT = DATA_WIDTH/32;
+    parameter WORD_WIDTH   = DATA_WIDTH/8;
 
     reg [31:0] length_reg = 32'd0;
     reg start_1;
     reg start_2;
 
-    reg [63:0] word_counter = {64{1'b1}} - 64;
+    reg [31:0] word_counter = {32{1'b1}} - WORD_WIDTH;
     reg [63:0] remaining_words;
 
     reg  stop_transfer_reg;
@@ -110,7 +78,7 @@ module axis_data_generator #(
 
     always @(posedge clk) begin
         if (rst) begin
-            word_counter      <= {64{1'b1}} - 64;
+            word_counter      <= {32{1'b1}} - WORD_WIDTH;
             length_reg        <= 32'd0;
             remaining_words   <= 64'd0;
             stop_transfer_reg <= 1'b0;
@@ -123,18 +91,18 @@ module axis_data_generator #(
                     word_counter <= length_reg;
                     remaining_words <= 64'd0;
                 end else begin
-                    word_counter <= length_reg - 64;
-                    remaining_words <= 64'd64;
+                    word_counter <= length_reg - WORD_WIDTH;
+                    remaining_words <= WORD_WIDTH;
                 end
             end else if (m_axis_tvalid && m_axis_tready) begin
                 if ((word_counter <= length)) begin
-                    word_counter <= word_counter + 64;
+                    word_counter <= word_counter + WORD_WIDTH;
                 end
-                remaining_words <= length_reg - word_counter - 64'd64;
+                remaining_words <= length_reg - word_counter - WORD_WIDTH;
             end else if (~start_1 && start) begin
                 stop_transfer_reg <= 1'b0;
                 length_reg <= length;
-                word_counter <= {64{1'b1}} - 64;
+                word_counter <= {32{1'b1}} - WORD_WIDTH;
                 remaining_words <= length;
             end else if (~start_2 && start_1) begin
                 stop_transfer_reg <= 1'b0;
@@ -144,17 +112,22 @@ module axis_data_generator #(
         end
     end
 
+    // TDATA
+    generate
+        assign m_axis_tdata[31:0] = word_counter[31:0];
+        if (SLICES_32BIT >= 2) begin
+            assign m_axis_tdata[63:32] = ~word_counter[31:0];
+        end
+        if (SLICES_32BIT > 2) begin
+            assign m_axis_tdata[DATA_WIDTH-1:64] = {(SLICES_32BIT-2){32'hDEADBEEF}};
+        end
+    endgenerate
+    
+    // TKEEP
+    assign m_axis_tkeep = m_axis_tlast ? ((count2keep(remaining_words) == 0) ? {DATA_WIDTH/8{1'b1}} : count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
 
-    assign m_axis_tdata[31:0] = word_counter[31:0];
-    assign m_axis_tdata[63:32] = ~word_counter[31:0];
-    assign m_axis_tdata[511:64] = {14{32'hDEADBEEF}};
-    assign m_axis_tkeep = m_axis_tlast ? ((count2keep(
-        remaining_words
-    ) == 7'd0) ? {64{1'b1}} : count2keep(
-        remaining_words
-    )) : {64{1'b1}};
     assign m_axis_tvalid = ((word_counter < length_reg) ? 1'b1 : 1'b0);
-    assign m_axis_tlast = ((word_counter + 64 >= length_reg) ? 1'b1 : 1'b0);
+    assign m_axis_tlast = ((word_counter + WORD_WIDTH >= length_reg) ? 1'b1 : 1'b0);
     assign m_axis_tuser = 1'b0 | stop_transfer_reg;
 
 endmodule

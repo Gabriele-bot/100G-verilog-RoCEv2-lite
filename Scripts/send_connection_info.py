@@ -37,6 +37,7 @@ UDP_PORT = 0x4321
 def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", fpga_qpn=0x11, client_qpn=0x12, psn=0x0, r_key=0x0, rem_base_addr=0x0):
     
     REM_IP_ADDRESS = client_ip_addr
+    REM_IP_ADDRESS_INT = int(ip_address(client_ip_addr))
     R_KEY          = r_key
     FPGA_QPN       = fpga_qpn
     CLIENT_QPN     = client_qpn
@@ -45,19 +46,19 @@ def send_qp_info(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", fpga_
 
     MESSAGE = b''
 
-    MESSAGE += struct.pack(">B", 0x1)  #QP_info_valid
-    MESSAGE += struct.pack('>L', FPGA_QPN)[-3:]  # fpga_qpn
-    MESSAGE += struct.pack('>L', CLIENT_QPN)[-3:]  # client_qpn
-    MESSAGE += struct.pack('>L', PSN)[-3:]  # rem_psn
-    MESSAGE += struct.pack('>L', 0x0)[-3:]  # loc_psn
-    MESSAGE += struct.pack(">L", R_KEY)  #R key
-    MESSAGE += struct.pack(">Q", REM_BASE_ADDR) # Base Address
+    MESSAGE += struct.pack("<B", 0x1)  #QP_info_valid
+    MESSAGE += struct.pack('<L', FPGA_QPN)[:3]  # fpga_qpn
+    MESSAGE += struct.pack('<L', CLIENT_QPN)[:3]  # client_qpn
+    MESSAGE += struct.pack('<L', PSN)[:3]  # rem_psn
+    MESSAGE += struct.pack('<L', 0x0)[:3]  # loc_psn
+    MESSAGE += struct.pack("<L", R_KEY)  #R key
+    MESSAGE += struct.pack("<Q", REM_BASE_ADDR) # Base Address
+    MESSAGE += struct.pack("<L", REM_IP_ADDRESS_INT)  # Rem_ip_addr
 
-    MESSAGE += struct.pack(">B", 0x0)  #No transimt values
-    MESSAGE += struct.pack(">L", 0x0)  #TXmeta_rem_ip_addr
-    MESSAGE += struct.pack(">Q", 0x0)  #TXmeta_rem_addr
-    MESSAGE += struct.pack(">L", 0x0)  #DMA length
-    MESSAGE += struct.pack(">H", 0x0)  #UDP_PORT
+    MESSAGE += struct.pack("<B", 0x0)  #No transimt values
+    MESSAGE += struct.pack("<Q", 0x0)  #TXmeta_rem_addr
+    MESSAGE += struct.pack("<L", 0x0)  #DMA length
+    MESSAGE += struct.pack("<H", 0x0)  #UDP_PORT
     
     
 
@@ -81,19 +82,19 @@ def send_txmeta(client_ip_addr="22.1.212.11", fpga_ip_addr="22.1.212.10", rem_ad
 
     MESSAGE = b''
 
-    MESSAGE += struct.pack(">B", 0x0)  # QP_info_valid
-    MESSAGE += struct.pack('>L', 0x0)[-3:]  # rem_qpn
-    MESSAGE += struct.pack('>L', 0x0)[-3:]  # loc_qpn
-    MESSAGE += struct.pack('>L', 0x0)[-3:]  # rem_psn
-    MESSAGE += struct.pack('>L', 0x0)[-3:]  # loc_psn
-    MESSAGE += struct.pack(">L", 0x0)  # R key
-    MESSAGE += struct.pack(">Q", 0x0)  # Base Address
+    MESSAGE += struct.pack("<B", 0x0)  # QP_info_valid
+    MESSAGE += struct.pack('<L', 0x0)[:3]  # rem_qpn
+    MESSAGE += struct.pack('<L', 0x0)[:3]  # loc_qpn
+    MESSAGE += struct.pack('<L', 0x0)[:3]  # rem_psn
+    MESSAGE += struct.pack('<L', 0x0)[:3]  # loc_psn
+    MESSAGE += struct.pack("<L", 0x0)  # R key
+    MESSAGE += struct.pack("<Q", 0x0)  # Base Address
+    MESSAGE += struct.pack("<L", 0x0)  # Rem_ip_addr
 
-    MESSAGE += struct.pack(">B", txmeta_flags)  # TX meta flags, valid, start, is_immd, txtype
-    MESSAGE += struct.pack(">L", REM_IP_ADDRESS_INT)  # TXmeta_rem_ip_addr
-    MESSAGE += struct.pack(">Q", REM_ADDR_OFFSET)  # TXmeta_rem_addr_offset
-    MESSAGE += struct.pack(">L", DMA_LENGTH)  # DMA length
-    MESSAGE += struct.pack(">H", 0x3412)  # UDP_PORT
+    MESSAGE += struct.pack("<B", txmeta_flags)  # TX meta flags: valid, start, is_immd, txtype
+    MESSAGE += struct.pack("<Q", REM_ADDR_OFFSET)  # TXmeta_rem_addr_offset
+    MESSAGE += struct.pack("<L", DMA_LENGTH)  # DMA length
+    MESSAGE += struct.pack("<H", 0x3412)  # UDP_PORT
 
     print("UDP target IP:", fpga_ip_addr)
     print("UDP target port:", UDP_PORT)

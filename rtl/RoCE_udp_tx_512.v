@@ -1357,7 +1357,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       roce_bth_psn_reg     <= s_roce_bth_psn;
       roce_bth_dest_qp_reg <= s_roce_bth_dest_qp;
       roce_bth_ack_req_reg <= s_roce_bth_ack_req;
-      if (s_roce_bth_op_code == RC_SEND_FIRST || s_roce_bth_op_code == RC_SEND_MIDDLE || s_roce_bth_op_code == RC_SEND_LAST || s_roce_bth_op_code == RC_SEND_LAST_IMD || s_roce_bth_op_code == RC_SEND_ONLY || s_roce_bth_op_code == RC_SEND_ONLY_IMD) begin
+      if (s_roce_bth_op_code == RC_SEND_LAST || s_roce_bth_op_code == RC_SEND_LAST_IMD || s_roce_bth_op_code == RC_SEND_ONLY || s_roce_bth_op_code == RC_SEND_ONLY_IMD) begin
         // SEND operation
         solicited_event_reg  <= 1'b1;
       end else if (s_roce_bth_op_code == RC_RDMA_WRITE_LAST_IMD || s_roce_bth_op_code == RC_RDMA_WRITE_ONLY_IMD) begin

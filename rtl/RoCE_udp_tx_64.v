@@ -30,97 +30,97 @@ THE SOFTWARE.
  * IP ethernet frame transmitter (IP frame in, Ethernet frame out, 64 bit datapath)
  */
 module RoCE_udp_tx_64 (
-    input wire clk,
-    input wire rst,
+  input wire clk,
+  input wire rst,
 
-    /*
-     * RoCE frame input
-     */
-    // BTH
-    input  wire        s_roce_bth_valid,
-    output wire        s_roce_bth_ready,
-    input  wire [ 7:0] s_roce_bth_op_code,
-    input  wire [15:0] s_roce_bth_p_key,
-    input  wire [23:0] s_roce_bth_psn,
-    input  wire [23:0] s_roce_bth_dest_qp,
-    input  wire        s_roce_bth_ack_req,
-    // RETH
-    input  wire        s_roce_reth_valid,
-    output wire        s_roce_reth_ready,
-    input  wire [63:0] s_roce_reth_v_addr,
-    input  wire [31:0] s_roce_reth_r_key,
-    input  wire [31:0] s_roce_reth_length,
-    // IMMD
-    input  wire        s_roce_immdh_valid,
-    output wire        s_roce_immdh_ready,
-    input  wire [31:0] s_roce_immdh_data,
-    // udp, ip, eth
-    input  wire [47:0] s_eth_dest_mac,
-    input  wire [47:0] s_eth_src_mac,
-    input  wire [15:0] s_eth_type,
-    input  wire [ 3:0] s_ip_version,
-    input  wire [ 3:0] s_ip_ihl,
-    input  wire [ 5:0] s_ip_dscp,
-    input  wire [ 1:0] s_ip_ecn,
-    input  wire [15:0] s_ip_identification,
-    input  wire [ 2:0] s_ip_flags,
-    input  wire [12:0] s_ip_fragment_offset,
-    input  wire [ 7:0] s_ip_ttl,
-    input  wire [ 7:0] s_ip_protocol,
-    input  wire [15:0] s_ip_header_checksum,
-    input  wire [31:0] s_ip_source_ip,
-    input  wire [31:0] s_ip_dest_ip,
-    input  wire [15:0] s_udp_source_port,
-    input  wire [15:0] s_udp_dest_port,
-    input  wire [15:0] s_udp_length,
-    input  wire [15:0] s_udp_checksum,
-    // payload
-    input  wire [63:0] s_roce_payload_axis_tdata,
-    input  wire [ 7:0] s_roce_payload_axis_tkeep,
-    input  wire        s_roce_payload_axis_tvalid,
-    output wire        s_roce_payload_axis_tready,
-    input  wire        s_roce_payload_axis_tlast,
-    input  wire        s_roce_payload_axis_tuser,
-    /*
-     * UDP frame output
-     */
-    output wire        m_udp_hdr_valid,
-    input  wire        m_udp_hdr_ready,
-    output wire [47:0] m_eth_dest_mac,
-    output wire [47:0] m_eth_src_mac,
-    output wire [15:0] m_eth_type,
-    output wire [ 3:0] m_ip_version,
-    output wire [ 3:0] m_ip_ihl,
-    output wire [ 5:0] m_ip_dscp,
-    output wire [ 1:0] m_ip_ecn,
-    output wire [15:0] m_ip_length,
-    output wire [15:0] m_ip_identification,
-    output wire [ 2:0] m_ip_flags,
-    output wire [12:0] m_ip_fragment_offset,
-    output wire [ 7:0] m_ip_ttl,
-    output wire [ 7:0] m_ip_protocol,
-    output wire [15:0] m_ip_header_checksum,
-    output wire [31:0] m_ip_source_ip,
-    output wire [31:0] m_ip_dest_ip,
-    output wire [15:0] m_udp_source_port,
-    output wire [15:0] m_udp_dest_port,
-    output wire [15:0] m_udp_length,
-    output wire [15:0] m_udp_checksum,
-    output wire [63:0] m_udp_payload_axis_tdata,
-    output wire [ 7:0] m_udp_payload_axis_tkeep,
-    output wire        m_udp_payload_axis_tvalid,
-    input  wire        m_udp_payload_axis_tready,
-    output wire        m_udp_payload_axis_tlast,
-    output wire        m_udp_payload_axis_tuser,
-    /*
-     * Status signals
-     */
-    output wire        busy,
-    output wire        error_payload_early_termination,
-    /*
-     * Config
-     */
-     input  wire [              15:0] RoCE_udp_port
+  /*
+   * RoCE frame input
+   */
+  // BTH
+  input  wire        s_roce_bth_valid,
+  output wire        s_roce_bth_ready,
+  input  wire [ 7:0] s_roce_bth_op_code,
+  input  wire [15:0] s_roce_bth_p_key,
+  input  wire [23:0] s_roce_bth_psn,
+  input  wire [23:0] s_roce_bth_dest_qp,
+  input  wire        s_roce_bth_ack_req,
+  // RETH
+  input  wire        s_roce_reth_valid,
+  output wire        s_roce_reth_ready,
+  input  wire [63:0] s_roce_reth_v_addr,
+  input  wire [31:0] s_roce_reth_r_key,
+  input  wire [31:0] s_roce_reth_length,
+  // IMMD
+  input  wire        s_roce_immdh_valid,
+  output wire        s_roce_immdh_ready,
+  input  wire [31:0] s_roce_immdh_data,
+  // udp, ip, eth
+  input  wire [47:0] s_eth_dest_mac,
+  input  wire [47:0] s_eth_src_mac,
+  input  wire [15:0] s_eth_type,
+  input  wire [ 3:0] s_ip_version,
+  input  wire [ 3:0] s_ip_ihl,
+  input  wire [ 5:0] s_ip_dscp,
+  input  wire [ 1:0] s_ip_ecn,
+  input  wire [15:0] s_ip_identification,
+  input  wire [ 2:0] s_ip_flags,
+  input  wire [12:0] s_ip_fragment_offset,
+  input  wire [ 7:0] s_ip_ttl,
+  input  wire [ 7:0] s_ip_protocol,
+  input  wire [15:0] s_ip_header_checksum,
+  input  wire [31:0] s_ip_source_ip,
+  input  wire [31:0] s_ip_dest_ip,
+  input  wire [15:0] s_udp_source_port,
+  input  wire [15:0] s_udp_dest_port,
+  input  wire [15:0] s_udp_length,
+  input  wire [15:0] s_udp_checksum,
+  // payload
+  input  wire [63:0] s_roce_payload_axis_tdata,
+  input  wire [ 7:0] s_roce_payload_axis_tkeep,
+  input  wire        s_roce_payload_axis_tvalid,
+  output wire        s_roce_payload_axis_tready,
+  input  wire        s_roce_payload_axis_tlast,
+  input  wire        s_roce_payload_axis_tuser,
+  /*
+   * UDP frame output
+   */
+  output wire        m_udp_hdr_valid,
+  input  wire        m_udp_hdr_ready,
+  output wire [47:0] m_eth_dest_mac,
+  output wire [47:0] m_eth_src_mac,
+  output wire [15:0] m_eth_type,
+  output wire [ 3:0] m_ip_version,
+  output wire [ 3:0] m_ip_ihl,
+  output wire [ 5:0] m_ip_dscp,
+  output wire [ 1:0] m_ip_ecn,
+  output wire [15:0] m_ip_length,
+  output wire [15:0] m_ip_identification,
+  output wire [ 2:0] m_ip_flags,
+  output wire [12:0] m_ip_fragment_offset,
+  output wire [ 7:0] m_ip_ttl,
+  output wire [ 7:0] m_ip_protocol,
+  output wire [15:0] m_ip_header_checksum,
+  output wire [31:0] m_ip_source_ip,
+  output wire [31:0] m_ip_dest_ip,
+  output wire [15:0] m_udp_source_port,
+  output wire [15:0] m_udp_dest_port,
+  output wire [15:0] m_udp_length,
+  output wire [15:0] m_udp_checksum,
+  output wire [63:0] m_udp_payload_axis_tdata,
+  output wire [ 7:0] m_udp_payload_axis_tkeep,
+  output wire        m_udp_payload_axis_tvalid,
+  input  wire        m_udp_payload_axis_tready,
+  output wire        m_udp_payload_axis_tlast,
+  output wire        m_udp_payload_axis_tuser,
+  /*
+   * Status signals
+   */
+  output wire        busy,
+  output wire        error_payload_early_termination,
+  /*
+   * Config
+   */
+  input  wire [              15:0] RoCE_udp_port
 );
 
   /*
@@ -184,16 +184,33 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
 */
 
+  localparam [7:0]
+  RC_SEND_FIRST         = 8'h00,
+  RC_SEND_MIDDLE        = 8'h01,
+  RC_SEND_LAST          = 8'h02,
+  RC_SEND_LAST_IMD      = 8'h03,
+  RC_SEND_ONLY          = 8'h04,
+  RC_SEND_ONLY_IMD      = 8'h05,
+  RC_RDMA_WRITE_FIRST   = 8'h06,
+  RC_RDMA_WRITE_MIDDLE  = 8'h07,
+  RC_RDMA_WRITE_LAST    = 8'h08,
+  RC_RDMA_WRITE_LAST_IMD= 8'h09,
+  RC_RDMA_WRITE_ONLY    = 8'h0A,
+  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
+  RC_RDMA_ACK           = 8'h11;
+
   localparam [2:0]
-    STATE_IDLE = 3'd0,
-    STATE_WRITE_HEADER = 3'd1,
-    STATE_WRITE_HEADER_LAST = 3'd2,
-    STATE_WRITE_PAYLOAD = 3'd3,
-    STATE_WRITE_PAYLOAD_LAST = 3'd4,
-    STATE_WAIT_LAST = 3'd5;
+  STATE_IDLE = 3'd0,
+  STATE_WRITE_HEADER = 3'd1,
+  STATE_WRITE_HEADER_LAST = 3'd2,
+  STATE_WRITE_PAYLOAD = 3'd3,
+  STATE_WRITE_PAYLOAD_LAST = 3'd4,
+  STATE_WAIT_LAST = 3'd5;
 
 
   reg [2:0] state_reg = STATE_IDLE, state_next;
+
+  reg solicited_event_reg, solicited_event_next;
 
   localparam [1:0] HEADER_BTH = 2'd0, HEADER_BTH_RETH = 2'd1, HEADER_BTH_IMMDH = 2'd2, HEADER_BTH_RETH_IMMDH = 2'd3;
 
@@ -401,6 +418,21 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
     header_type_next                     = header_type_reg;
 
+    if (s_roce_bth_ready && s_roce_bth_valid) begin
+      if (s_roce_bth_op_code == RC_SEND_LAST || s_roce_bth_op_code == RC_SEND_LAST_IMD || s_roce_bth_op_code == RC_SEND_ONLY || s_roce_bth_op_code == RC_SEND_ONLY_IMD) begin
+        // SEND operation
+        solicited_event_next  = 1'b1;
+      end else if (s_roce_bth_op_code == RC_RDMA_WRITE_LAST_IMD || s_roce_bth_op_code == RC_RDMA_WRITE_ONLY_IMD) begin
+        // WRITE with IMMD
+        solicited_event_next  = 1'b1;
+      end else begin
+        // WRITE operation
+        solicited_event_next  = 1'b0;
+      end
+    end else begin
+      solicited_event_next = solicited_event_reg;
+    end
+
     error_payload_early_termination_next = 1'b0;
 
     m_udp_payload_axis_tdata_int         = 64'd0;
@@ -450,15 +482,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           if (m_udp_payload_axis_tready_int_reg) begin
             m_udp_payload_axis_tvalid_int = 1'b1;
             m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8]     = (
-                  header_type_next == HEADER_BTH_IMMDH | header_type_next == HEADER_BTH_RETH_IMMDH
-              ) ?   1'b1 : 1'b0;  // Solicited Even
-            m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
             m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
             m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
+            m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
             m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
             m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
             m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
@@ -483,13 +510,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           if (m_udp_payload_axis_tready_int_reg) begin
             m_udp_payload_axis_tvalid_int       = 1'b1;
             m_udp_payload_axis_tdata_int[7:0]   = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[8]     = 1'b0;  // Solicited Event
-            m_udp_payload_axis_tdata_int[9]     = 1'b0;  // Mig request
-            m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-            m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
             m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
             m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
-            m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
+            m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
             m_udp_payload_axis_tdata_int[47:40] = s_roce_bth_dest_qp[23:16];
             m_udp_payload_axis_tdata_int[55:48] = s_roce_bth_dest_qp[15:8];
             m_udp_payload_axis_tdata_int[63:56] = s_roce_bth_dest_qp[7:0];
@@ -527,15 +551,10 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           case (hdr_ptr_reg)
             6'h00: begin
               m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-              m_udp_payload_axis_tdata_int[8]     = (
-                  header_type_reg == HEADER_BTH_IMMDH |  header_type_reg == HEADER_BTH_RETH_IMMDH
-              ) ?   1'b1 : 1'b0;  // Solicited Event
-              m_udp_payload_axis_tdata_int[9] = 1'b0;  // Mig request
-              m_udp_payload_axis_tdata_int[11:10] = 2'b0;  // Pad count
-              m_udp_payload_axis_tdata_int[15:12] = 4'b0;  // Header version
+              m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_reg, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
               m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
               m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
-              m_udp_payload_axis_tdata_int[39:32] = 8'b0;  // Reserved
+              m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
               m_udp_payload_axis_tdata_int[47:40] = roce_bth_dest_qp_reg[23:16];
               m_udp_payload_axis_tdata_int[55:48] = roce_bth_dest_qp_reg[15:8];
               m_udp_payload_axis_tdata_int[63:56] = roce_bth_dest_qp_reg[7:0];
@@ -547,7 +566,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             end
             6'h08: begin
               if (header_type_reg != HEADER_BTH_IMMDH) begin
-                m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
+                m_udp_payload_axis_tdata_int[6:0]   = 7'b0; //reserved
                 m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
                 m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
                 m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
@@ -558,7 +577,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
                 m_udp_payload_axis_tdata_int[63:56] = roce_reth_v_addr_reg[39:32];
                 m_udp_payload_axis_tkeep_int        = 8'hff;
               end else begin
-                m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
+                m_udp_payload_axis_tdata_int[6:0]   = 7'b0; //reserved
                 m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
                 m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
                 m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
@@ -574,8 +593,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
               //s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
             end
             6'h10: begin
-              m_udp_payload_axis_tdata_int[7:0] = roce_reth_v_addr_reg[31:24];
-              m_udp_payload_axis_tdata_int[15:8] = roce_reth_v_addr_reg[23:16];
+              m_udp_payload_axis_tdata_int[7:0]   = roce_reth_v_addr_reg[31:24];
+              m_udp_payload_axis_tdata_int[15:8]  = roce_reth_v_addr_reg[23:16];
               m_udp_payload_axis_tdata_int[23:16] = roce_reth_v_addr_reg[15:8];
               m_udp_payload_axis_tdata_int[31:24] = roce_reth_v_addr_reg[7:0];
               m_udp_payload_axis_tdata_int[39:32] = roce_reth_r_key_reg[31:24];
@@ -589,8 +608,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
               end
             end
             6'h18: begin
-              m_udp_payload_axis_tdata_int[7:0] = roce_reth_length_reg[31:24];
-              m_udp_payload_axis_tdata_int[15:8] = roce_reth_length_reg[23:16];
+              m_udp_payload_axis_tdata_int[7:0]   = roce_reth_length_reg[31:24];
+              m_udp_payload_axis_tdata_int[15:8]  = roce_reth_length_reg[23:16];
               m_udp_payload_axis_tdata_int[23:16] = roce_reth_length_reg[15:8];
               m_udp_payload_axis_tdata_int[31:24] = roce_reth_length_reg[7:0];
               m_udp_payload_axis_tdata_int[39:32] = roce_immdh_data_reg[31:24];
@@ -623,7 +642,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           m_udp_payload_axis_tvalid_int = 1'b1;
           transfer_in_save = 1'b1;
           if (header_type_reg == HEADER_BTH) begin
-            m_udp_payload_axis_tdata_int[6:0]   = 7'b0;  //reserved
+            m_udp_payload_axis_tdata_int[6:0]   = 7'b0; //reserved
             m_udp_payload_axis_tdata_int[7]     = roce_bth_ack_req_reg;
             m_udp_payload_axis_tdata_int[15:8]  = roce_bth_psn_reg[23:16];
             m_udp_payload_axis_tdata_int[23:16] = roce_bth_psn_reg[15:8];
@@ -806,6 +825,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       shift_roce_payload_extra_cycle_reg <= 1'b0;
       busy_reg <= 1'b0;
 
+      solicited_event_reg <= 1'b0;
+
       header_type_reg <= 2'b00;
 
       error_payload_early_termination_reg <= 1'b0;
@@ -819,6 +840,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
       s_roce_payload_axis_tready_reg <= s_roce_payload_axis_tready_next;
 
       m_udp_hdr_valid_reg <= m_udp_hdr_valid_next;
+
+      solicited_event_reg <= solicited_event_next;
 
       header_type_reg <= header_type_next;
 
@@ -841,7 +864,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
     hdr_sum_reg <= hdr_sum_next;
 
     // datapath
-    if (store_roce_bth) begin  // bth should always be present
+    if (store_roce_bth) begin // bth should always be present
       m_eth_dest_mac_reg <= s_eth_dest_mac;
       m_eth_src_mac_reg <= s_eth_src_mac;
       m_eth_type_reg <= s_eth_type;

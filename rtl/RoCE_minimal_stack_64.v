@@ -422,6 +422,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire        qp_curr_tx_type;
   wire start_transfer_wire;
   wire metadata_valid;
+  wire qp_context_valid;
 
   reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
   wire s_dma_meta_valid;
@@ -506,6 +507,31 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
    * Generate payolad data
    */
 
+    /*
+   * Generate payolad data
+   */
+  axis_data_generator #(
+    .DATA_WIDTH(64)
+    ) axis_data_generator_instance (
+      .clk(clk),
+      .rst(rst),
+      .start(start_transfer_wire),
+      .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)),
+      .m_axis_tdata (s_payload_axis_tdata),
+      .m_axis_tkeep (s_payload_axis_tkeep),
+      .m_axis_tvalid(s_payload_axis_tvalid),
+      .m_axis_tready(s_payload_axis_tready),
+      .m_axis_tlast (s_payload_axis_tlast),
+      .m_axis_tuser (s_payload_axis_tuser),
+      .length(qp_init_dma_transfer_length)
+    );
+    
+    always @(posedge clk) begin
+      start_1 <= start_transfer_wire;
+      start_2 <= start_1;
+    end
+
+  /* 
   always @(posedge clk) begin
     if (rst) begin
       word_counter   <= {32{1'b1}} - 8;
@@ -536,6 +562,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
   assign s_payload_axis_tlast = (word_counter + 8 >= dma_length_reg) ? 1'b1 : 1'b0;
   assign s_payload_axis_tuser = 1'b0;
+  */
 
   always @(posedge clk) begin
     if (rst) begin
@@ -1452,6 +1479,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .tx_type(qp_tx_type),
     .start_transfer(start_transfer),
     .metadata_valid(metadata_valid),
+    .qp_context_valid(qp_context_valid),
     .busy()
   );
 
@@ -1513,6 +1541,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .clk                    (clk),
     .rst                    (rst),
     .rst_qp                 (start_transfer),
+    .qp_context_valid       (qp_context_valid),
     .qp_init_dma_transfer   (qp_init_dma_transfer_length),
     .qp_init_r_key          (qp_init_r_key),
     .qp_init_rem_qpn        (qp_init_rem_qpn),

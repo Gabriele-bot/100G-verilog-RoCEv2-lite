@@ -36,6 +36,16 @@ module top (
     input  wire [ 7:0] xgmii_rxc
 );
 
+  parameter DATA_WIDTH = 1024;
+  parameter KEEP_WIDTH = DATA_WIDTH/8;
+  
+  initial begin
+    if (DATA_WIDTH % 64 != 0) begin
+        $error("Error: DATA_WIDTH must be mutiple of 64 (instance %m)");
+        $finish;
+    end
+  end
+
 
   wire [ 63:0]                                               rx_axis_tdata;
   wire [  7:0]                                               rx_axis_tkeep;
@@ -58,26 +68,26 @@ module top (
   wire                                                       tx_to_pad_axis_tlast;
   wire                                                       tx_to_pad_axis_tuser;
 
-  wire [511:0]                                               rx_512_axis_tdata;
-  wire [ 63:0]                                               rx_512_axis_tkeep;
-  wire                                                       rx_512_axis_tvalid;
-  wire                                                       rx_512_axis_tready;
-  wire                                                       rx_512_axis_tlast;
-  wire                                                       rx_512_axis_tuser;
+  wire [DATA_WIDTH-1:0]                                      rx_generic_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_generic_axis_tkeep;
+  wire                                                       rx_generic_axis_tvalid;
+  wire                                                       rx_generic_axis_tready;
+  wire                                                       rx_generic_axis_tlast;
+  wire                                                       rx_generic_axis_tuser;
 
-  wire [511:0]                                               tx_512_axis_tdata;
-  wire [ 63:0]                                               tx_512_axis_tkeep;
-  wire                                                       tx_512_axis_tvalid;
-  wire                                                       tx_512_axis_tready;
-  wire                                                       tx_512_axis_tlast;
-  wire                                                       tx_512_axis_tuser;
+  wire [DATA_WIDTH-1:0]                                      tx_generic_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_generic_axis_tkeep;
+  wire                                                       tx_generic_axis_tvalid;
+  wire                                                       tx_generic_axis_tready;
+  wire                                                       tx_generic_axis_tlast;
+  wire                                                       tx_generic_axis_tuser;
 
-  wire [511:0]                                               tx_512_fifo_axis_tdata;
-  wire [ 63:0]                                               tx_512_fifo_axis_tkeep;
-  wire                                                       tx_512_fifo_axis_tvalid;
-  wire                                                       tx_512_fifo_axis_tready;
-  wire                                                       tx_512_fifo_axis_tlast;
-  wire                                                       tx_512_fifo_axis_tuser;
+  wire [DATA_WIDTH-1:0]                                      tx_generic_fifo_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_generic_fifo_axis_tkeep;
+  wire                                                       tx_generic_fifo_axis_tvalid;
+  wire                                                       tx_generic_fifo_axis_tready;
+  wire                                                       tx_generic_fifo_axis_tlast;
+  wire                                                       tx_generic_fifo_axis_tuser;
 
   // Ethernet frame between Ethernet modules and UDP stack
   wire                                                       rx_eth_hdr_ready;
@@ -85,8 +95,8 @@ module top (
   wire [ 47:0]                                               rx_eth_dest_mac;
   wire [ 47:0]                                               rx_eth_src_mac;
   wire [ 15:0]                                               rx_eth_type;
-  wire [511:0]                                               rx_eth_payload_axis_tdata;
-  wire [ 63:0]                                               rx_eth_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      rx_eth_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_eth_payload_axis_tkeep;
   wire                                                       rx_eth_payload_axis_tvalid;
   wire                                                       rx_eth_payload_axis_tready;
   wire                                                       rx_eth_payload_axis_tlast;
@@ -97,8 +107,8 @@ module top (
   wire [ 47:0]                                               tx_eth_dest_mac;
   wire [ 47:0]                                               tx_eth_src_mac;
   wire [ 15:0]                                               tx_eth_type;
-  wire [511:0]                                               tx_eth_payload_axis_tdata;
-  wire [ 63:0]                                               tx_eth_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      tx_eth_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_eth_payload_axis_tkeep;
   wire                                                       tx_eth_payload_axis_tvalid;
   wire                                                       tx_eth_payload_axis_tready;
   wire                                                       tx_eth_payload_axis_tlast;
@@ -123,8 +133,8 @@ module top (
   wire [ 15:0]                                               rx_ip_header_checksum;
   wire [ 31:0]                                               rx_ip_source_ip;
   wire [ 31:0]                                               rx_ip_dest_ip;
-  wire [511:0]                                               rx_ip_payload_axis_tdata;
-  wire [ 63:0]                                               rx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      rx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_ip_payload_axis_tkeep;
   wire                                                       rx_ip_payload_axis_tvalid;
   wire                                                       rx_ip_payload_axis_tready;
   wire                                                       rx_ip_payload_axis_tlast;
@@ -139,8 +149,8 @@ module top (
   wire [  7:0]                                               tx_ip_protocol;
   wire [ 31:0]                                               tx_ip_source_ip;
   wire [ 31:0]                                               tx_ip_dest_ip;
-  wire [511:0]                                               tx_ip_payload_axis_tdata;
-  wire [ 63:0]                                               tx_ip_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      tx_ip_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_ip_payload_axis_tkeep;
   wire                                                       tx_ip_payload_axis_tvalid;
   wire                                                       tx_ip_payload_axis_tready;
   wire                                                       tx_ip_payload_axis_tlast;
@@ -169,8 +179,8 @@ module top (
   wire [ 15:0]                                               rx_udp_dest_port;
   wire [ 15:0]                                               rx_udp_length;
   wire [ 15:0]                                               rx_udp_checksum;
-  wire [511:0]                                               rx_udp_payload_axis_tdata;
-  wire [ 63:0]                                               rx_udp_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      rx_udp_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_udp_payload_axis_tkeep;
   wire                                                       rx_udp_payload_axis_tvalid;
   wire                                                       rx_udp_payload_axis_tready;
   wire                                                       rx_udp_payload_axis_tlast;
@@ -188,29 +198,29 @@ module top (
   wire [ 15:0]                                               tx_udp_dest_port;
   wire [ 15:0]                                               tx_udp_length;
   wire [ 15:0]                                               tx_udp_checksum;
-  wire [511:0]                                               tx_udp_payload_axis_tdata;
-  wire [ 63:0]                                               tx_udp_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      tx_udp_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_udp_payload_axis_tkeep;
   wire                                                       tx_udp_payload_axis_tvalid;
   wire                                                       tx_udp_payload_axis_tready;
   wire                                                       tx_udp_payload_axis_tlast;
   wire                                                       tx_udp_payload_axis_tuser;
 
-  wire [511:0]                                               rx_fifo_udp_payload_axis_tdata;
-  wire [ 63:0]                                               rx_fifo_udp_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      rx_fifo_udp_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_fifo_udp_payload_axis_tkeep;
   wire                                                       rx_fifo_udp_payload_axis_tvalid;
   wire                                                       rx_fifo_udp_payload_axis_tready;
   wire                                                       rx_fifo_udp_payload_axis_tlast;
   wire                                                       rx_fifo_udp_payload_axis_tuser;
 
-  wire [511:0]                                               tx_fifo_udp_payload_axis_tdata;
-  wire [ 63:0]                                               tx_fifo_udp_payload_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      tx_fifo_udp_payload_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      tx_fifo_udp_payload_axis_tkeep;
   wire                                                       tx_fifo_udp_payload_axis_tvalid;
   wire                                                       tx_fifo_udp_payload_axis_tready;
   wire                                                       tx_fifo_udp_payload_axis_tlast;
   wire                                                       tx_fifo_udp_payload_axis_tuser;
 
-  wire [511:0]                                               rx_delay_axis_tdata;
-  wire [ 63:0]                                               rx_delay_axis_tkeep;
+  wire [DATA_WIDTH-1:0]                                      rx_delay_axis_tdata;
+  wire [KEEP_WIDTH-1:0]                                      rx_delay_axis_tkeep;
   wire                                                       rx_delay_axis_tvalid;
   wire                                                       rx_delay_axis_tready;
   wire                                                       rx_delay_axis_tlast;
@@ -371,12 +381,11 @@ module top (
   
   axis_async_fifo_adapter #(
       .DEPTH(5000),
-      .S_DATA_WIDTH(512),
+      .S_DATA_WIDTH(DATA_WIDTH),
       .S_KEEP_ENABLE(1),
-      .S_KEEP_WIDTH(64),
+      .S_KEEP_WIDTH(KEEP_WIDTH),
       .M_DATA_WIDTH(64),
       .M_KEEP_ENABLE(1),
-      .M_KEEP_WIDTH(8),
       .ID_ENABLE(0),
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
@@ -387,14 +396,14 @@ module top (
       .s_rst(rst),
 
       // AXI input
-      .s_axis_tdata(tx_512_axis_tdata),
-      .s_axis_tkeep(tx_512_axis_tkeep),
-      .s_axis_tvalid(tx_512_axis_tvalid),
-      .s_axis_tready(tx_512_axis_tready),
-      .s_axis_tlast(tx_512_axis_tlast),
+      .s_axis_tdata(tx_generic_axis_tdata),
+      .s_axis_tkeep(tx_generic_axis_tkeep),
+      .s_axis_tvalid(tx_generic_axis_tvalid),
+      .s_axis_tready(tx_generic_axis_tready),
+      .s_axis_tlast(tx_generic_axis_tlast),
       .s_axis_tid(0),
       .s_axis_tdest(0),
-      .s_axis_tuser(tx_512_axis_tuser),
+      .s_axis_tuser(tx_generic_axis_tuser),
       
       .m_clk(clk_x8),
       .m_rst(rst),
@@ -417,9 +426,9 @@ module top (
       .S_DATA_WIDTH(64),
       .S_KEEP_ENABLE(1),
       .S_KEEP_WIDTH(8),
-      .M_DATA_WIDTH(512),
+      .M_DATA_WIDTH(DATA_WIDTH),
       .M_KEEP_ENABLE(1),
-      .M_KEEP_WIDTH(64),
+      .M_KEEP_WIDTH(KEEP_WIDTH),
       .ID_ENABLE(0),
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
@@ -443,14 +452,14 @@ module top (
       .m_rst(rst),
 
       // AXI output
-      .m_axis_tdata (rx_512_axis_tdata),
-      .m_axis_tkeep (rx_512_axis_tkeep),
-      .m_axis_tvalid(rx_512_axis_tvalid),
-      .m_axis_tready(rx_512_axis_tready),
-      .m_axis_tlast (rx_512_axis_tlast),
+      .m_axis_tdata (rx_generic_axis_tdata),
+      .m_axis_tkeep (rx_generic_axis_tkeep),
+      .m_axis_tvalid(rx_generic_axis_tvalid),
+      .m_axis_tready(rx_generic_axis_tready),
+      .m_axis_tlast (rx_generic_axis_tlast),
       .m_axis_tid(),
       .m_axis_tdest(),
-      .m_axis_tuser (rx_512_axis_tuser)
+      .m_axis_tuser (rx_generic_axis_tuser)
   );
 
 
@@ -458,17 +467,17 @@ module top (
 
 
   eth_axis_rx #(
-      .DATA_WIDTH(512)
+      .DATA_WIDTH(DATA_WIDTH)
   ) eth_axis_rx_inst (
       .clk(clk_x1),
       .rst(rst),
       // AXI input
-      .s_axis_tdata(rx_512_axis_tdata),
-      .s_axis_tkeep(rx_512_axis_tkeep),
-      .s_axis_tvalid(rx_512_axis_tvalid),
-      .s_axis_tready(rx_512_axis_tready),
-      .s_axis_tlast(rx_512_axis_tlast),
-      .s_axis_tuser(rx_512_axis_tuser),
+      .s_axis_tdata(rx_generic_axis_tdata),
+      .s_axis_tkeep(rx_generic_axis_tkeep),
+      .s_axis_tvalid(rx_generic_axis_tvalid),
+      .s_axis_tready(rx_generic_axis_tready),
+      .s_axis_tlast(rx_generic_axis_tlast),
+      .s_axis_tuser(rx_generic_axis_tuser),
       // Ethernet frame output
       .m_eth_hdr_valid(rx_eth_hdr_valid),
       .m_eth_hdr_ready(rx_eth_hdr_ready),
@@ -487,7 +496,7 @@ module top (
   );
 
   eth_axis_tx #(
-      .DATA_WIDTH(512)
+      .DATA_WIDTH(DATA_WIDTH)
   ) eth_axis_tx_inst (
       .clk                      (clk_x1),
       .rst                      (rst),
@@ -504,18 +513,18 @@ module top (
       .s_eth_payload_axis_tlast (tx_eth_payload_axis_tlast),
       .s_eth_payload_axis_tuser (tx_eth_payload_axis_tuser),
       // AXI output
-      .m_axis_tdata             (tx_512_axis_tdata),
-      .m_axis_tkeep             (tx_512_axis_tkeep),
-      .m_axis_tvalid            (tx_512_axis_tvalid),
-      .m_axis_tready            (tx_512_axis_tready),
-      .m_axis_tlast             (tx_512_axis_tlast),
-      .m_axis_tuser             (tx_512_axis_tuser),
+      .m_axis_tdata             (tx_generic_axis_tdata),
+      .m_axis_tkeep             (tx_generic_axis_tkeep),
+      .m_axis_tvalid            (tx_generic_axis_tvalid),
+      .m_axis_tready            (tx_generic_axis_tready),
+      .m_axis_tlast             (tx_generic_axis_tlast),
+      .m_axis_tuser             (tx_generic_axis_tuser),
       // Status signals
       .busy                     ()
   );
   
   udp_complete_test #(
-      .DATA_WIDTH(512),
+      .DATA_WIDTH(DATA_WIDTH),
       .UDP_CHECKSUM_GEN_ENABLE(0),
       .ROCE_ICRC_INSERTER(1)
   ) udp_complete_inst (
@@ -660,13 +669,13 @@ module top (
 
   // ROCE TX inst
   RoCE_minimal_stack #(
-      .DATA_WIDTH(512),
+      .DATA_WIDTH(DATA_WIDTH),
       .DEBUG(0),
       .RETRANSMISSION(0),
       .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
       .ENABLE_SIM_PACKET_DROP_TX(0),
       .ENABLE_SIM_PACKET_DROP_RX(0)
-  ) RoCE_minimal_stack_512_instance (
+  ) RoCE_minimal_stack_instance (
       .clk(clk_x1),
       .rst(rst),
       .s_udp_hdr_valid(rx_udp_hdr_valid),

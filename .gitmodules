@@ -1,7 +1,9 @@
 [submodule "lib/FAST_CRC32"]
 	path = lib/FAST_CRC32
 	url = https://github.com/Gabriele-bot/FAST_CRC32
+[submodule "lib/Tbps_CRC"]
+	path = lib/Tbps_CRC
+	url = https://github.com/UofT-HPRC/Tbps_CRC
 [submodule "lib/eth"]
 	path = lib/eth
-	url = https://github.com/Gabriele-bot/verilog-ethernet
-	branch = Clean-UP
+	url = https://github.com/Gabriele-bot/verilog-ethernet/tree/Clean-UP

@@ -36,10 +36,10 @@ module axis_mask_fields_icrc #(
 );
 
 
-    localparam [511:0] MASK_FIELDS = {
-    {248{1'b0}}, 264'hff00000000ffff0000000000000000000000000000ffff00ff000000000000ff00
+    localparam [1023:0] MASK_FIELDS = {
+    {760{1'b0}}, 264'hff00000000ffff0000000000000000000000000000ffff00ff000000000000ff00
     };
-    localparam [6:0] STEPS = 512 / DATA_WIDTH;
+    localparam [6:0] STEPS = 1024 / DATA_WIDTH;
 
 
     reg [6:0] steps_reg, steps_next;
@@ -74,7 +74,7 @@ module axis_mask_fields_icrc #(
         if (s_axis_tvalid && s_axis_tready && s_axis_tlast) begin
             steps_next = 7'b0;
         end else if (s_axis_tvalid && s_axis_tready) begin
-            if (STEPS >= steps_reg) begin
+            if (steps_reg <= STEPS) begin
                 steps_next = steps_reg + 1;
             end
         end

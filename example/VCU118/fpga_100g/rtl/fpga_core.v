@@ -514,8 +514,10 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
   assign qsfp2_tx_axis_tuser  = 1'b0;
   assign qsfp2_tx_axis_tlast  = 1'b0;
 
-  udp_complete_512 #(
-      .UDP_CHECKSUM_GEN_ENABLE(0)
+  udp_complete_test #(
+      .DATA_WIDTH(512),
+      .UDP_CHECKSUM_GEN_ENABLE(0),
+      .ROCE_ICRC_INSERTER(1)
   ) udp_complete_inst (
       .clk(clk),
       .rst(rst),
@@ -657,9 +659,15 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
   assign rx_fifo_udp_payload_axis_tready = 1'b1;
 
   // ROCE TX inst
-  RoCE_minimal_stack_512 #(
+  // 10G  64b@156MHz   --> 2**18 * 8 bits / 10Gbps  = 210 us of buffering (best case scenario, every frame is full)
+  // 125G 642b@390MHz  --> 2**20 * 8 bits / 25Gbps  = 168 us of buffering (best case scenario, every frame is full)
+  // 100G 512b@322MHz  --> 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
+  // 200G 512b@400MHz  --> 2**22 * 8 bits / 200Gbps = 168 us of buffering (best case scenario, every frame is full)
+  // 400G 1024b@400MHz --> 2**24 * 8 bits / 400Gbps = 168 us of buffering (best case scenario, every frame is full)
+  
+  RoCE_minimal_stack #(
+      .DATA_WIDTH(512),
       .DEBUG(1),
-      .RETRANSMISSION(1),
       .RETRANSMISSION_ADDR_BUFFER_WIDTH(21) // 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
   ) RoCE_minimal_stack_512_instance (
       .clk(clk),

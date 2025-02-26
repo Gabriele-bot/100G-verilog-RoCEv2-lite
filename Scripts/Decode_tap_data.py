@@ -18,6 +18,8 @@ parser.add_argument('-is', '--sim_ip_addr', metavar='N', type=str, default="22.1
 
 args = parser.parse_args()
 
+TIMEOUT_VALUE = 100 # in secods
+
 class bcolors:
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
@@ -347,7 +349,7 @@ class RoCEFrame(object):
             value = struct.unpack('<L', roce_frame_temp[(i * 4):(i * 4 + 4)])[0]
             crc_temp = compute_crc(value, 0x04c11db7, crc_temp)
             #print("Hex data value %d" % i,  hex(value))
-            #if i % 2 == 1:
+            #if i % 32 == 15:
             #    print(i, hex(crc_temp))
 
         crc_temp = ~np.uint32(crc_temp)
@@ -367,7 +369,7 @@ class RoCEStream(object):
         self.measured_data_legth = 0
         self.sim_data_legth = 0
         self.received_r_key = 0
-        
+
     def check_if_last(self):
         is_last = False
         for data in self.data_stream:
@@ -384,7 +386,7 @@ class RoCEStream(object):
                         RoCE_frame_data.decode_BTH()
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST_IMD:
                             is_last = True
-                        	
+
         return is_last
 
     def decode_Roce_stream(self, DEBUG_OUT = False, set_dma_length=0x0, set_r_key=0x0, starting_psn=0x0, set_qpn=0x0):
@@ -439,7 +441,7 @@ class RoCEStream(object):
                             self.measured_data_legth = self.measured_data_legth + RoCE_frame_data.frame_length - 12 - 4 - 4
                         SW_icrc = RoCE_frame_data.compute_sw_icrc()
                         if RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_LAST_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_RDMA_WRITE_ONLY_IMD or  RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_ONLY_IMD or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST or RoCE_frame_data.roce_bth_opcode == RoCE_frame_data.RC_SEND_LAST_IMD:
-                        	is_last = True
+                            is_last = True
                         if DEBUG_OUT:
                             print('RoCE packet recieved!')
                             print('OP CODE = ', RoCE_frame_data.OP_codes[RoCE_frame_data.roce_bth_opcode])
@@ -490,49 +492,58 @@ ETH_P_ALL = 3  # not defined in socket module, sadly...
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
 s.bind(("tap0", 0))
 
+iterations = 2000
+
 try:
-	for i in range(17):
-		data_stream = []
+    for i in range(iterations):
+        data_stream = []
 
-		dma_length_set  = 4096*40 + i*4
-		r_key_set        = 0x5514
-		starting_psn_set = 1
-		rem_qpn_set = 0x00b8
-		base_addr = 0x7ff1c2377000
+        dma_length_set  = 4096*np.random.randint(1, high=20, size=None, dtype=int) + np.random.randint(0, high=31, size=None, dtype=int)*4 #integer number of pmtu + an integer value of 4 bytes
+        r_key_set        = np.random.randint(1, high=2**32-1, size=None, dtype=np.uint32)
+        starting_psn_set = np.random.randint(1, high=2**24-1, size=None, dtype=np.uint32)
+        rem_qpn_set      = np.random.randint(1, high=2**24-1, size=None, dtype=np.uint32)
+        base_addr        = np.random.randint(1, high=2**64-1, size=None, dtype=np.uint64)
 
-		#time.sleep(0.5)
-		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-		send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+        #time.sleep(0.5)
+        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
 
-		send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
-		
-		data_temp = []
-		while True:
-			data = s.recv(4200)
-			data_temp.append(data)
-			RoCE_packet_recieved = RoCEStream(data_temp)
-			is_last_packet = RoCE_packet_recieved.check_if_last()
-			data_temp = []
-			data_stream.append(data)
-			if is_last_packet:
-			    break
-			#print('------------------------START OF PACKET---------------------')
-			#print('------------------------END OF PACKET-----------------------')
+        send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
 
-			
+        data_temp = []
 
-		#print(data_stream)
+        timeout = time.time() + TIMEOUT_VALUE
+        while True:
+            data = s.recv(4200)
+            data_temp.append(data)
+            RoCE_packet_recieved = RoCEStream(data_temp)
+            is_last_packet = RoCE_packet_recieved.check_if_last()
+            data_temp = []
+            data_stream.append(data)
+            if is_last_packet or time.time() > timeout:
+                if time.time() > timeout:
+                    print("TIMEOUT REACHED")
+                    i = iterations
+                    break
 
-		RoCE_stream_recieved = RoCEStream(data_stream)
-		icrc_errors, psn_errors, length_error, _ = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
-		if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
-		    print(bcolors.OKGREEN + 'No errors observed!' + bcolors.ENDC)
-		else:
-		    print(bcolors.FAIL + 'Errors observed!' + bcolors.ENDC)
-		    break
-	   
+                break
+            #print('------------------------START OF PACKET---------------------')
+            #print('------------------------END OF PACKET-----------------------')
+
+
+
+        #print(data_stream)
+
+        RoCE_stream_recieved = RoCEStream(data_stream)
+        icrc_errors, psn_errors, length_error, _ = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
+        if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
+            print(bcolors.OKGREEN + 'No errors observed!' + bcolors.ENDC)
+        else:
+            print(bcolors.FAIL + 'Errors observed!' + bcolors.ENDC)
+            break
+
 except KeyboardInterrupt:
-	print('Exiting!')
+    print('Exiting!')
 
 
 #data = 0xFEEDBEEFDEADBEEF

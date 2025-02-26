@@ -455,9 +455,101 @@ module top (
       // Status signals
       .busy()
   );
+  
+  wire [63:0]                                               axis_up_tdata;
+  wire [ 7:0]                                               axis_up_tkeep;
+  wire                                                      axis_up_tvalid;
+  wire                                                      axis_up_tready;
+  wire                                                      axis_up_tlast;
+  wire                                                      axis_up_tuser;
+  
+  wire [47:0]                                               axis_down_tdata;
+  wire [ 5:0]                                               axis_down_tkeep;
+  wire                                                      axis_down_tvalid;
+  wire                                                      axis_down_tready;
+  wire                                                      axis_down_tlast;
+  wire                                                      axis_down_tuser;
+  
+  wire [47:0]                                               axis_down_fifo_tdata;
+  wire [ 5:0]                                               axis_down_fifo_tkeep;
+  wire                                                      axis_down_fifo_tvalid;
+  wire                                                      axis_down_fifo_tready;
+  wire                                                      axis_down_fifo_tlast;
+  wire                                                      axis_down_fifo_tuser;
+  
+  axis_adapter #(
+      .S_DATA_WIDTH(64),
+      .M_DATA_WIDTH(48)
+  ) adapter_test_down (
+  
+      .clk(clk_x1),
+      .rst(rst),
+  
+      .s_axis_tdata (tx_axis_tdata),
+      .s_axis_tkeep (tx_axis_tkeep),
+      .s_axis_tvalid(tx_axis_tvalid & tx_axis_tready),
+      .s_axis_tready(),
+      .s_axis_tlast (tx_axis_tlast),
+      .s_axis_tuser (tx_axis_tuser),
+      
+      .m_axis_tdata (axis_down_tdata),
+      .m_axis_tkeep (axis_down_tkeep),
+      .m_axis_tvalid(axis_down_tvalid),
+      .m_axis_tready(axis_down_tready),
+      .m_axis_tlast (axis_down_tlast),
+      .m_axis_tuser (axis_down_tuser)
+  );
+  
+  axis_fifo  #(
+     .DEPTH(512),
+     .DATA_WIDTH(48)
+) adapter_test_fifo (
+
+      .clk(clk_x1),
+      .rst(rst),
+  
+      .s_axis_tdata (axis_down_tdata),
+      .s_axis_tkeep (axis_down_tkeep),
+      .s_axis_tvalid(axis_down_tvalid),
+      .s_axis_tready(axis_down_tready),
+      .s_axis_tlast (axis_down_tlast),
+      .s_axis_tuser (axis_down_tuser),
+      
+      .m_axis_tdata (axis_down_fifo_tdata),
+      .m_axis_tkeep (axis_down_fifo_tkeep),
+      .m_axis_tvalid(axis_down_fifo_tvalid),
+      .m_axis_tready(axis_down_fifo_tready),
+      .m_axis_tlast (axis_down_fifo_tlast),
+      .m_axis_tuser (axis_down_fifo_tuser)   
+
+);
+  
+  axis_adapter #(
+      .S_DATA_WIDTH(48),
+      .M_DATA_WIDTH(64)
+  ) adapter_test_up (
+
+      .clk(clk_x1),
+      .rst(rst),
+  
+      .s_axis_tdata (axis_down_fifo_tdata),
+      .s_axis_tkeep (axis_down_fifo_tkeep),
+      .s_axis_tvalid(axis_down_fifo_tvalid),
+      .s_axis_tready(axis_down_fifo_tready),
+      .s_axis_tlast (axis_down_fifo_tlast),
+      .s_axis_tuser (axis_down_fifo_tuser),
+      
+      .m_axis_tdata (axis_up_tdata),
+      .m_axis_tkeep (axis_up_tkeep),
+      .m_axis_tvalid(axis_up_tvalid),
+      .m_axis_tready(1'b1),
+      .m_axis_tlast (axis_up_tlast),
+      .m_axis_tuser (axis_up_tuser)
+  );
 
   udp_complete_64 #(
-      .UDP_CHECKSUM_GEN_ENABLE(0)
+      .UDP_CHECKSUM_GEN_ENABLE(0),
+      .ROCE_ICRC_INSERTER(1)
   ) udp_complete_inst (
       .clk(clk_x1),
       .rst(rst),
