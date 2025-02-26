@@ -41,7 +41,7 @@ package CRC32_pkg is
     function gen_matrix_array(matrix : in matrix_32x32_t; n : integer)
     return gen_matrix_array_t;
 
-    function keep2blocknumber_64(keep_value : in std_logic_vector(63 downto 0))
+    function keep2blocknumber(keep_value : in std_logic_vector(127 downto 0))
     return integer;
 
     function keep2blocknumber_8(keep_value : in std_logic_vector(7 downto 0))
@@ -170,32 +170,47 @@ package body CRC32_pkg is
         return matrix_array_result;
     end function gen_matrix_array;
 
-    function keep2blocknumber_64(keep_value : in std_logic_vector(63 downto 0))
+    function keep2blocknumber(keep_value : in std_logic_vector(127 downto 0))
     return integer is
         variable index : integer := 0;
     begin
         case keep_value is
-            
-            when X"000000000000000F" => index := 1;
-            when X"00000000000000FF" => index := 2;
-            when X"0000000000000FFF" => index := 3;
-            when X"000000000000FFFF" => index := 4;
-            when X"00000000000FFFFF" => index := 5;
-            when X"0000000000FFFFFF" => index := 6;
-            when X"000000000FFFFFFF" => index := 7;
-            when X"00000000FFFFFFFF" => index := 8;
-            when X"0000000FFFFFFFFF" => index := 9;
-            when X"000000FFFFFFFFFF" => index := 10;
-            when X"00000FFFFFFFFFFF" => index := 11;
-            when X"0000FFFFFFFFFFFF" => index := 12;
-            when X"000FFFFFFFFFFFFF" => index := 13;
-            when X"00FFFFFFFFFFFFFF" => index := 14;
-            when X"0FFFFFFFFFFFFFFF" => index := 15;
-            when X"FFFFFFFFFFFFFFFF" => index := 16;
+            when X"0000000000000000000000000000000F" => index := 1;
+            when X"000000000000000000000000000000FF" => index := 2;
+            when X"00000000000000000000000000000FFF" => index := 3;
+            when X"0000000000000000000000000000FFFF" => index := 4;
+            when X"000000000000000000000000000FFFFF" => index := 5;
+            when X"00000000000000000000000000FFFFFF" => index := 6;
+            when X"0000000000000000000000000FFFFFFF" => index := 7;
+            when X"000000000000000000000000FFFFFFFF" => index := 8;
+            when X"00000000000000000000000FFFFFFFFF" => index := 9;
+            when X"0000000000000000000000FFFFFFFFFF" => index := 10;
+            when X"000000000000000000000FFFFFFFFFFF" => index := 11;
+            when X"00000000000000000000FFFFFFFFFFFF" => index := 12;
+            when X"0000000000000000000FFFFFFFFFFFFF" => index := 13;
+            when X"000000000000000000FFFFFFFFFFFFFF" => index := 14;
+            when X"00000000000000000FFFFFFFFFFFFFFF" => index := 15;
+            when X"0000000000000000FFFFFFFFFFFFFFFF" => index := 16;
+            when X"000000000000000FFFFFFFFFFFFFFFFF" => index := 17;
+            when X"00000000000000FFFFFFFFFFFFFFFFFF" => index := 18;
+            when X"0000000000000FFFFFFFFFFFFFFFFFFF" => index := 19;
+            when X"000000000000FFFFFFFFFFFFFFFFFFFF" => index := 20;
+            when X"00000000000FFFFFFFFFFFFFFFFFFFFF" => index := 21;
+            when X"0000000000FFFFFFFFFFFFFFFFFFFFFF" => index := 22;
+            when X"000000000FFFFFFFFFFFFFFFFFFFFFFF" => index := 23;
+            when X"00000000FFFFFFFFFFFFFFFFFFFFFFFF" => index := 24;
+            when X"0000000FFFFFFFFFFFFFFFFFFFFFFFFF" => index := 25;
+            when X"000000FFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 26;
+            when X"00000FFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 27;
+            when X"0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 28;
+            when X"000FFFFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 29;
+            when X"00FFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 30;
+            when X"0FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 31;
+            when X"FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF" => index := 32;
             when others              => index := 1;
         end case;
         return index;
-    end function keep2blocknumber_64;
+    end function keep2blocknumber;
 
     function keep2blocknumber_8(keep_value : in std_logic_vector(7 downto 0))
     return integer is

@@ -7,6 +7,7 @@ use work.CRC32_pkg.all;
 entity CRC32_matrix_pipeline is
     generic(
         DATA_WIDTH     : integer                       := 512;
+        KEEP_WIDTH     : integer                       := DATA_WIDTH/8;
         CRC_POLY       : std_logic_vector(31 downto 0) := CRC32_POLY;
         CRC_INIT       : std_logic_vector(31 downto 0) := X"FFFFFFFF";
         REVERSE_INPUT  : boolean                       := FALSE;
@@ -16,10 +17,10 @@ entity CRC32_matrix_pipeline is
     port(
         clk           : in  std_logic;
         rst           : in  std_logic;
-        rst_crc       : in  std_logic;
         data_in       : in  std_logic_vector(DATA_WIDTH - 1 downto 0);
-        keep_in       : in  std_logic_vector(DATA_WIDTH / 8 - 1 downto 0);
+        keep_in       : in  std_logic_vector(KEEP_WIDTH - 1 downto 0);
         valid_in      : in  std_logic;
+        last_in       : in  std_logic;
         crcOut        : out std_logic_vector(31 downto 0);
         valid_crc_out : out std_logic
     );
@@ -27,35 +28,38 @@ end entity CRC32_matrix_pipeline;
 
 architecture RTL of CRC32_matrix_pipeline is
 
-    constant LATENCY : natural := DATA_WIDTH / 32;
+    constant STEPS : natural := DATA_WIDTH / 32;
 
     --constant CRC32_POLY_MATRIX  : matrix_32x64_t := get_poly_matrix(CRC_POLY);
     --constant CRC32_GEN_MATRIX   : matrix_32x64_t := get_generator_matrix(CRC_POLY);
     constant CRC32_CHECK_MATRIX : matrix_32x32_t := get_check_matrix(CRC_POLY);
 
-    constant MATRIX_ARRAY : gen_matrix_array_t := gen_matrix_array(CRC32_CHECK_MATRIX, 16);
+    constant MATRIX_ARRAY : gen_matrix_array_t := gen_matrix_array(CRC32_CHECK_MATRIX, STEPS);
 
     --signal out_partial_crc : crc32_word_t;
     signal out_crc : crc32_word_t;
 
-    signal valid_shreg : std_logic_vector(LATENCY downto 0) := (others => '0');
+    signal rst_crc : std_logic;
 
-    type keep_pipeline_stage_t is array (LATENCY downto 0) of std_logic_vector(DATA_WIDTH / 8 - 1 downto 0);
+    signal valid_shreg : std_logic_vector(STEPS downto 0) := (others => '0');
+    signal last_shreg  : std_logic_vector(STEPS downto 0) := (others => '0');
+
+    type keep_pipeline_stage_t is array (STEPS downto 0) of std_logic_vector(KEEP_WIDTH - 1 downto 0);
     signal keep_shreg : keep_pipeline_stage_t := (others => (others => '0'));
 
     signal data : std_logic_vector(DATA_WIDTH - 1 downto 0);
 
-    type partial_crc_t is array (LATENCY downto 0) of crc32_word_t;
+    type partial_crc_t is array (STEPS downto 0) of crc32_word_t;
     --signal partial_crc_data      : partial_crc_t;
     signal partial_crc_init_seed : partial_crc_t := (others => CRC_INIT);
     signal partial_crc_last_seed : partial_crc_t := (others => CRC_INIT);
     signal crc_seed              : crc32_word_t;
     signal computation_ongoing   : std_logic     := '0';
 
-    type crc_pipeline_stage_t is array (LATENCY downto 0) of crc32_word_t;
+    type crc_pipeline_stage_t is array (STEPS downto 0) of crc32_word_t;
     signal crc_stage : crc_pipeline_stage_t := (others => X"DEADBEEF");
 
-    type data_pipeline_stage_t is array (LATENCY downto 0) of std_logic_vector(DATA_WIDTH - 1 downto 0);
+    type data_pipeline_stage_t is array (STEPS downto 0) of std_logic_vector(DATA_WIDTH - 1 downto 0);
     signal data_stage : data_pipeline_stage_t := (others => (others => '0'));
 
     --signal test_in_value : std_logic_vector(31 downto 0);
@@ -64,26 +68,24 @@ architecture RTL of CRC32_matrix_pipeline is
 
 begin
 
-    gen_keep_to_block : if DATA_WIDTH = 512 generate
+    gen_keep_to_block : if DATA_WIDTH = 64 generate
         process(clk) is
         begin
             if rising_edge(clk) then
-                if valid_shreg(LATENCY - 2) then
-                    keep_block_number <= keep2blocknumber_64(keep_shreg(LATENCY - 2));
+                if valid_shreg(STEPS - 2) then
+                    keep_block_number <= keep2blocknumber_8(keep_shreg(STEPS - 2));
                 end if;
             end if;
         end process;
-    elsif DATA_WIDTH = 64 generate
+    else  generate
         process(clk) is
         begin
             if rising_edge(clk) then
-                if valid_shreg(LATENCY - 2) then
-                    keep_block_number <= keep2blocknumber_8(keep_shreg(LATENCY - 2));
+                if valid_shreg(STEPS - 2) then
+                    keep_block_number <= keep2blocknumber((KEEP_WIDTH-1 downto 0 => keep_shreg(STEPS - 2), others => '0'));
                 end if;
             end if;
         end process;
-    else generate
-        keep_block_number <= 0;
     end generate;
 
     --TODO REVERSE also keep!!!
@@ -104,10 +106,12 @@ begin
     end process;
 
     valid_shreg(0) <= valid_in;
+    last_shreg(0)  <= last_in;
     process(clk)
     begin
         if rising_edge(clk) then
             valid_shreg(valid_shreg'high downto 1) <= valid_shreg(valid_shreg'high - 1 downto 0);
+            last_shreg(last_shreg'high downto 1) <= last_shreg(last_shreg'high - 1 downto 0);
         end if;
     end process;
 
@@ -118,6 +122,8 @@ begin
             keep_shreg(keep_shreg'high downto 1) <= keep_shreg(keep_shreg'high - 1 downto 0);
         end if;
     end process;
+
+    rst_crc <= last_shreg(last_shreg'high);
 
     process(clk)
     begin
@@ -134,7 +140,7 @@ begin
 
     -- this is not clocked !!!
     -- compute every stage of the init crc out
-    gen_crc_seed_matrix_vector_mul_g : for i in 0 to LATENCY - 1 generate
+    gen_crc_seed_matrix_vector_mul_g : for i in 0 to STEPS - 1 generate
         partial_crc_init_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), CRC_INIT);
         partial_crc_last_seed(i) <= matrix_vector_mul(MATRIX_ARRAY(i), out_crc);
     end generate;
@@ -165,8 +171,8 @@ begin
         end if;
     end process;
 
-    gen_mid_block : if LATENCY >= 3 generate
-        gen_crc_stage_g : for i in 1 to LATENCY - 2 generate
+    gen_mid_block : if STEPS >= 3 generate
+        gen_crc_stage_g : for i in 1 to STEPS - 2 generate
             process(clk)
                 variable data_xor_crc : crc32_word_t;
             begin
@@ -190,30 +196,30 @@ begin
         end generate;
     end generate;
 
-    gen_last_block : if LATENCY >= 2 generate
+    gen_last_block : if STEPS >= 2 generate
         crc_stage_last : process(clk)
             variable data_xor_crc : crc32_word_t;
         begin
             if rising_edge(clk) then
                 if rst then
-                    crc_stage(LATENCY - 1) <= CRC_INIT;
+                    crc_stage(STEPS - 1) <= CRC_INIT;
                 else
-                    if valid_shreg(LATENCY - 1) then
-                        if keep_shreg(LATENCY - 1)(LATENCY * 4 - 1 downto (LATENCY - 1) * 4) = X"F" then
-                            data_xor_crc           := data_stage(LATENCY - 1)((LATENCY) * 32 - 1 downto (LATENCY - 1) * 32) xor crc_stage(LATENCY - 2);
-                            crc_stage(LATENCY - 1) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc) xor crc_seed;
+                    if valid_shreg(STEPS - 1) then
+                        if keep_shreg(STEPS - 1)(STEPS * 4 - 1 downto (STEPS - 1) * 4) = X"F" then
+                            data_xor_crc           := data_stage(STEPS - 1)((STEPS) * 32 - 1 downto (STEPS - 1) * 32) xor crc_stage(STEPS - 2);
+                            crc_stage(STEPS - 1) <= matrix_vector_mul(MATRIX_ARRAY(0), data_xor_crc) xor crc_seed;
                         else            --this should never happen
-                            crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 2) xor crc_seed;
+                            crc_stage(STEPS - 1) <= crc_stage(STEPS - 2) xor crc_seed;
                         end if;
                     else
-                        crc_stage(LATENCY - 1) <= crc_stage(LATENCY - 1);
+                        crc_stage(STEPS - 1) <= crc_stage(STEPS - 1);
                     end if;
                 end if;
             end if;
         end process;
     end generate;
 
-    out_crc <= crc_stage(LATENCY - 1);
+    out_crc <= crc_stage(STEPS - 1);
 
     --process(clk) is
     --begin
@@ -234,6 +240,6 @@ begin
         crcOut <= out_crc xor FINXOR;
     end generate;
 
-    valid_crc_out <= valid_shreg(valid_shreg'high);
+    valid_crc_out <= valid_shreg(valid_shreg'high) and last_shreg(last_shreg'high);
 
 end architecture RTL;
