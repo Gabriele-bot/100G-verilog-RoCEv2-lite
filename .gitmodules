@@ -6,4 +6,5 @@
 	url = https://github.com/UofT-HPRC/Tbps_CRC
 [submodule "lib/eth"]
 	path = lib/eth
-	url = https://github.com/Gabriele-bot/verilog-ethernet/tree/Clean-UP
+	url = https://github.com/Gabriele-bot/verilog-ethernet
+	brach = Clean-UP
