@@ -45,6 +45,7 @@ SYN_FILES += lib/eth/rtl/udp_ip_rx_64.v
 SYN_FILES += lib/eth/rtl/udp_ip_tx_64.v
 SYN_FILES += lib/eth/rtl/ip_complete_64.v
 SYN_FILES += lib/eth/rtl/ip_64.v
+SYN_FILES += lib/eth/rtl/ip_test.v
 SYN_FILES += lib/eth/rtl/ip_eth_rx_64.v
 SYN_FILES += lib/eth/rtl/ip_eth_tx_64.v
 SYN_FILES += lib/eth/rtl/ip_arb_mux.v

@@ -455,7 +455,7 @@ module udp_complete_test #(
 
 
       // Insert ICRC
-      axis_RoCE_icrc_insert_test #(
+      axis_RoCE_icrc_insert #(
       .DATA_WIDTH(DATA_WIDTH) 
       ) axis_RoCE_icrc_insert_instance (
         .clk                      (clk),

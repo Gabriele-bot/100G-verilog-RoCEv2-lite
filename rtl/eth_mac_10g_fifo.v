@@ -181,7 +181,15 @@ reg [0:0] tx_sync_reg_2 = 1'b0;
 reg [0:0] tx_sync_reg_3 = 1'b0;
 reg [0:0] tx_sync_reg_4 = 1'b0;
 
+reg [7:0] eth_tx_pfc_req_sync_reg_1 = 8'd0;
+reg [7:0] eth_tx_pfc_req_sync_reg_2 = 8'd0;
+reg [7:0] eth_tx_pfc_req_sync_reg_3 = 8'd0;
+
+wire [7:0] eth_tx_pfc_req;
+wire [7:0] eth_tx_pfc_ack;
+
 assign tx_error_underflow = tx_sync_reg_3[0] ^ tx_sync_reg_4[0];
+
 
 always @(posedge tx_clk or posedge tx_rst) begin
     if (tx_rst) begin
@@ -213,6 +221,49 @@ reg [1:0] rx_sync_reg_4 = 2'd0;
 
 wire [7:0] eth_rx_lfc_req;
 wire [7:0] eth_rx_pfc_req;
+
+
+reg [7:0] eth_rx_pfc_ack_sync_reg_1 = 8'd0;
+reg [7:0] eth_rx_pfc_ack_sync_reg_2 = 8'd0;
+reg [7:0] eth_rx_pfc_ack_sync_reg_3 = 8'd0;
+
+// sync rx pfc req with tx clock
+always @(posedge rx_clk or posedge rx_rst) begin
+    if (rx_rst) begin
+        eth_tx_pfc_req_sync_reg_1 <= 8'd0;
+    end else begin
+        eth_tx_pfc_req_sync_reg_1 <= eth_rx_pfc_req;
+    end
+end
+
+always @(posedge tx_clk or posedge tx_rst) begin
+    if (tx_rst) begin
+        eth_tx_pfc_req_sync_reg_2 <= 8'd0;
+        eth_tx_pfc_req_sync_reg_3 <= 8'd0;
+    end else begin
+        eth_tx_pfc_req_sync_reg_2 <= eth_tx_pfc_req_sync_reg_1;
+        eth_tx_pfc_req_sync_reg_3 <= eth_tx_pfc_req_sync_reg_2;
+    end
+end
+
+// sync tx ack with rx clock
+always @(posedge tx_clk or posedge tx_rst) begin
+    if (tx_rst) begin
+        eth_rx_pfc_ack_sync_reg_1 <= 8'd0;
+    end else begin
+        eth_rx_pfc_ack_sync_reg_1 <= eth_tx_pfc_ack;
+    end
+end
+
+always @(posedge rx_clk or posedge rx_rst) begin
+    if (rx_rst) begin
+        eth_rx_pfc_ack_sync_reg_2 <= 8'd0;
+        eth_rx_pfc_ack_sync_reg_3 <= 8'd0;
+    end else begin
+        eth_rx_pfc_ack_sync_reg_2 <= eth_rx_pfc_ack_sync_reg_1;
+        eth_rx_pfc_ack_sync_reg_3 <= eth_rx_pfc_ack_sync_reg_2;
+    end
+end
 
 assign rx_error_bad_frame = rx_sync_reg_3[0] ^ rx_sync_reg_4[0];
 assign rx_error_bad_fcs = rx_sync_reg_3[1] ^ rx_sync_reg_4[1];
@@ -407,7 +458,7 @@ eth_mac_10g_inst (
     .tx_pfc_resend(1'b0),
     .rx_pfc_en(PFC_ENABLE),
     .rx_pfc_req(eth_rx_pfc_req),
-    .rx_pfc_ack(1'b0),
+    .rx_pfc_ack(eth_rx_pfc_ack_sync_reg_3),
     
     /*
      * Pause interface
@@ -460,6 +511,9 @@ eth_mac_10g_inst (
     .cfg_rx_pfc_en(PFC_ENABLE)
 );
 
+assign eth_tx_pfc_req = eth_tx_pfc_req_sync_reg_3;
+assign eth_tx_pfc_ack[7:1] = 7'd0;
+
 axis_async_fifo_adapter #(
     .DEPTH(TX_FIFO_DEPTH),
     .S_DATA_WIDTH(AXIS_DATA_WIDTH),
@@ -503,6 +557,11 @@ tx_fifo (
     .m_axis_tid(),
     .m_axis_tdest(),
     .m_axis_tuser(tx_fifo_axis_tuser),
+    // Pause
+    .s_pause_req(1'b0),
+    .s_pause_ack(),
+    .m_pause_req(eth_tx_pfc_req[0]),
+    .m_pause_ack(eth_tx_pfc_ack[0]),
     // Status
     .s_status_overflow(tx_fifo_overflow),
     .s_status_bad_frame(tx_fifo_bad_frame),
@@ -511,6 +570,7 @@ tx_fifo (
     .m_status_bad_frame(),
     .m_status_good_frame()
 );
+
 
 axis_async_fifo_adapter #(
     .DEPTH(RX_FIFO_DEPTH),

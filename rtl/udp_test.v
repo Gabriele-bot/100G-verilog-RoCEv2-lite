@@ -180,6 +180,14 @@ module udp_test #(
     input wire [15:0] RoCE_udp_port
 );
 
+  function integer max;
+    input integer a, b;
+    begin
+        if (a > b) max = a;
+        else max = b;
+    end
+  endfunction
+
   wire        tx_udp_hdr_valid;
   wire        tx_udp_hdr_ready;
   wire [47:0] tx_udp_eth_dest_mac;
@@ -344,7 +352,7 @@ module udp_test #(
 
         udp_checksum_gen_test #(
             .DATA_WIDTH(DATA_WIDTH),
-            .ADDER_STEPS(2**$clog2((DATA_WIDTH/64))),
+            .ADDER_STEPS(max(4, (2**$clog2(DATA_WIDTH/64)))),
             .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
             .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
         ) udp_checksum_gen_inst (
