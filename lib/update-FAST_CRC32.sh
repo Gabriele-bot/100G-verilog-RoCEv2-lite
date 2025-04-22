@@ -18,7 +18,7 @@ remote="FAST_CRC32"
 #subdir="FAST_CRC32"
 rel_subdir="FAST_CRC32"
 # Remote branch
-branch="Clean-UP"
+branch="main"
 # Backport branch name (only used for pushing)
 backportbranch="${remote}backport"
 # Add commit message
