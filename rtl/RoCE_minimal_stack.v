@@ -5,7 +5,7 @@
 module RoCE_minimal_stack #(
     parameter DATA_WIDTH      = 256,
     parameter MAX_QUEUE_PAIRS = 4,
-    parameter CLOCK_PERIOD  = 6.4,  // in ns
+    parameter CLOCK_PERIOD  = 6.4, // in ns
     parameter DEBUG           = 0,
     parameter RETRANSMISSION  = 1,
     parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 24,
@@ -160,7 +160,7 @@ module RoCE_minimal_stack #(
     wire                        rx_udp_cm_payload_axis_tlast;
     wire                        rx_udp_cm_payload_axis_tuser;
 
-    // UDP frame connectionsto RoCE RX
+    // UDP frame connections to RoCE RX
     wire rx_udp_RoCE_hdr_valid;
     wire rx_udp_RoCE_hdr_ready;
     wire [47:0] rx_udp_RoCE_eth_dest_mac;
@@ -502,6 +502,9 @@ module RoCE_minimal_stack #(
     wire                                        m_axi_rlast;
     wire                                        m_axi_rvalid;
     wire                                        m_axi_rready;
+
+    wire         qp_close_params_valid;
+    wire [127:0] qp_close_params;
 
     wire is_last_packet;
 
@@ -912,6 +915,9 @@ module RoCE_minimal_stack #(
                 .m_axi_rvalid (m_axi_rvalid),
                 .m_axi_rready (m_axi_rready),
                 //
+                .m_qp_close_params_valid(qp_close_params_valid),
+                .m_qp_close_params(qp_close_params),
+                //
                 .stop_transfer(stop_transfer),
                 .last_buffered_psn(last_buffered_psn),
                 .last_acked_psn(),
@@ -1118,6 +1124,9 @@ module RoCE_minimal_stack #(
             assign m_roce_to_retrans_payload_axis_tready = m_roce_payload_axis_tready;
             assign m_roce_payload_axis_tlast = m_roce_to_retrans_payload_axis_tlast;
             assign m_roce_payload_axis_tuser = m_roce_to_retrans_payload_axis_tuser;
+
+            assign qp_close_params_valid = 1'b0;
+            assign qp_close_params = 128'd0;
 
             assign stop_transfer = stop_transfer_nack;
 
@@ -1567,6 +1576,7 @@ module RoCE_minimal_stack #(
         .clk                    (clk),
         .rst                    (rst),
         .rst_qp                 (start_transfer),
+        // open qp
         .qp_context_valid       (qp_context_valid),
         .qp_init_open_qp        (qp_init_open_qp),
         .qp_init_r_key          (qp_init_r_key),
@@ -1576,7 +1586,10 @@ module RoCE_minimal_stack #(
         .qp_init_loc_psn        (qp_init_loc_psn),
         .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
         .qp_init_rem_addr       (qp_init_rem_addr),
-
+        // close qp if transfer did not succed
+        .qp_close_valid(qp_close_params_valid),
+        .qp_close_loc_qpn(qp_close_params[79 :56 ]), // loc_qpn
+        // QP request
         .qp_context_req         (m_qp_context_req),
         .qp_local_qpn_req       (m_qp_local_qpn_req),
         .qp_req_context_valid   (s_qp_req_context_valid),
@@ -1610,7 +1623,7 @@ module RoCE_minimal_stack #(
         .stop_transfer          (stop_transfer_nack),
         .pmtu(pmtu)
     );
-    
+
 
     reg [23:0] wr_req_loc_qp;
     reg [31:0] wr_req_dma_length;

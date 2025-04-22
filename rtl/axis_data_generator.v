@@ -25,7 +25,7 @@ module axis_data_generator #(
 
     integer i;
     reg [DATA_WIDTH/8 - 1:0] count2keep_reg [DATA_WIDTH/8 - 1:0];
-    
+
     //initial begin
     //    for (i = 0; i <= DATA_WIDTH/8 - 1; i = i + 1) begin
     //        count2keep_reg[i] = 0;
@@ -87,7 +87,10 @@ module axis_data_generator #(
             start_2 <= start_1;
             if (stop) begin
                 stop_transfer_reg <= 1'b1;
-                if (m_axis_tvalid && m_axis_tready) begin
+                if (length_reg == 0) begin // no transfer on going
+                    word_counter <= {32{1 'b1}} - WORD_WIDTH;
+                    remaining_words <= 64'd0;
+                end else if (m_axis_tvalid && m_axis_tready) begin // trasnfer on going
                     word_counter <= length_reg;
                     remaining_words <= 64'd0;
                 end else begin
@@ -99,6 +102,12 @@ module axis_data_generator #(
                     word_counter <= word_counter + WORD_WIDTH;
                 end
                 remaining_words <= length_reg - word_counter - WORD_WIDTH;
+                if (m_axis_tlast) begin
+                    word_counter      <= {32{1'b1}} - WORD_WIDTH;
+                    length_reg        <= 32'd0;
+                    remaining_words   <= 64'd0;
+                    stop_transfer_reg <= 1'b0;
+                end
             end else if (~start_1 && start) begin
                 stop_transfer_reg <= 1'b0;
                 length_reg <= length;
@@ -108,6 +117,9 @@ module axis_data_generator #(
                 stop_transfer_reg <= 1'b0;
                 word_counter <= 0;
                 remaining_words <= length_reg;
+            end
+            if (m_axis_tvalid && m_axis_tready && m_axis_tlast) begin
+                stop_transfer_reg <= 1'b0;
             end
         end
     end
@@ -122,13 +134,13 @@ module axis_data_generator #(
             assign m_axis_tdata[DATA_WIDTH-1:64] = {(SLICES_32BIT-2){32'hDEADBEEF}};
         end
     endgenerate
-    
+
     // TKEEP
     assign m_axis_tkeep = m_axis_tlast ? ((count2keep(remaining_words) == 0) ? {DATA_WIDTH/8{1'b1}} : count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
 
     assign m_axis_tvalid = ((word_counter < length_reg) ? 1'b1 : 1'b0);
     assign m_axis_tlast = ((word_counter + WORD_WIDTH >= length_reg) ? 1'b1 : 1'b0);
-    assign m_axis_tuser = 1'b0 | stop_transfer_reg;
+    assign m_axis_tuser = stop_transfer_reg & m_axis_tvalid;
 
 endmodule
 

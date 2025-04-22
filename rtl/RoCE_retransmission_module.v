@@ -164,6 +164,11 @@ module RoCE_retransmission_module #(
     output wire                         m_axi_rready,
 
     /*
+    Close QP in case failed transfer (e.g. rnr retry count reached, retry count reached, irreversible error)
+    */
+    output  wire          m_qp_close_params_valid,
+    output  wire [127:0]  m_qp_close_params,
+    /*
     Status ?
     */
     output wire                          stop_transfer,
@@ -403,6 +408,9 @@ module RoCE_retransmission_module #(
 
     reg [31:0] rnr_timer_values [31:0];
 
+    reg [127:0] m_qp_close_params_reg;
+    reg         m_qp_close_params_valid_reg;
+
     // Infiniband specification Vol 1 realeas 1.4 page 354
     initial begin
         rnr_timer_values[0 ] = time2clk(655.36, CLOCK_PERIOD);
@@ -475,6 +483,20 @@ module RoCE_retransmission_module #(
             curr_p_key_reg       <= s_qp_params[127:112];
         end
     end
+
+    always @(posedge clk) begin
+        if (stop_transfer) begin
+            m_qp_close_params_reg[31 :0  ] <= curr_rem_ip_addr_reg;
+            m_qp_close_params_reg[55 :32 ] <= curr_rem_qpn_reg    ;
+            m_qp_close_params_reg[79 :56 ] <= curr_loc_qpn_reg    ;
+            m_qp_close_params_reg[111:80 ] <= curr_r_key_reg      ;
+            m_qp_close_params_reg[127:112] <= curr_p_key_reg      ;
+        end
+        m_qp_close_params_valid_reg <= stop_transfer;
+    end
+
+    assign m_qp_close_params = m_qp_close_params_reg;
+    assign m_qp_close_params_valid = m_qp_close_params_valid_reg;
 
     always @(posedge clk) begin
         memory_steps <= 4'd8 + pmtu;
@@ -917,7 +939,7 @@ Simple DMA write logic
                             nak_detected       <= 1'b0;
                         end
                         2'b01:begin // RNR NAK
-                            // load appropriate timer value
+                        // load appropriate timer value
                             rnr_timeout_counter <= rnr_timer_values[s_roce_rx_aeth_syndrome[4:0]];
                             nak_psn_reg         <= s_roce_rx_bth_psn;
                             timeout_counter     <= timeout_period;
@@ -970,7 +992,7 @@ Simple DMA write logic
                 end
             end
 
-            
+
         end
 
     end
@@ -1064,7 +1086,7 @@ Simple DMA write logic
 
         if (rst_retry_cntr) begin
             retry_counter_reg     <= 4'd0;
-            rnr_retry_counter_reg <= 4'd0; 
+            rnr_retry_counter_reg <= 4'd0;
             n_retransmit_triggers_reg     <= 32'd0;
             n_rnr_retransmit_triggers_reg <= 32'd0;
         end else begin

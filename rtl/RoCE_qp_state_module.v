@@ -22,6 +22,10 @@ module RoCE_qp_state_module #(
   input wire [31:0] qp_init_rem_ip_addr,
   input wire [63:0] qp_init_rem_addr,
 
+  // Close qp
+  input wire        qp_close_valid,
+  input wire [23:0] qp_close_loc_qpn,
+
   // Output QP contetext
   input wire         qp_context_req,
   input wire [23:0]  qp_local_qpn_req,
@@ -35,6 +39,21 @@ module RoCE_qp_state_module #(
   output wire [23:0] qp_req_loc_psn,
   output wire [31:0] qp_req_rem_ip_addr,
   output wire [63:0] qp_req_rem_addr,
+
+  // SPY QP state
+  input wire         qp_context_spy,
+  input wire [23:0]  qp_local_qpn_spy,
+
+  output wire        qp_spy_context_valid,
+  output wire [2 :0] qp_spy_state,
+  output wire [31:0] qp_spy_r_key,
+  output wire [23:0] qp_spy_rem_qpn,
+  output wire [23:0] qp_spy_loc_qpn,
+  output wire [23:0] qp_spy_rem_psn,
+  output wire [23:0] qp_spy_loc_psn,
+  output wire [31:0] qp_spy_rem_ip_addr,
+  output wire [63:0] qp_spy_rem_addr,
+  output wire [7 :0] qp_spy_syndrome,
 
   input wire        s_dma_meta_valid ,
   input wire [31:0] s_meta_dma_length,
@@ -178,11 +197,15 @@ module RoCE_qp_state_module #(
 
   reg [7:0] qp_aeth_syndrome_reg, qp_aeth_syndrome_next;
   reg [23:0] qp_update_rem_psn_reg = 0, qp_update_rem_psn_next;
+  reg [23:0] qp_close_rem_psn_reg = 0, qp_close_rem_psn_next;
 
   reg [REM_ADDR_WIDTH-1:0] rem_addr_offset_reg;
 
   reg [QP_CONTEXT_LENGTH*8-1 :0] qp_req_context, qp_req_context_pipe;
   reg [1:0] qp_req_context_valid_pipes;
+
+  reg [QP_CONTEXT_LENGTH*8-1 :0] qp_spy_context, qp_spy_context_pipe;
+  reg [1:0] qp_spy_context_valid_pipes;
 
   reg [23:0] last_psn;
   reg [23:0] last_acked_psn_reg;
@@ -193,6 +216,7 @@ module RoCE_qp_state_module #(
 
   reg error_qp_already_open;
   reg error_invalid_qp_req;
+  reg error_invalid_qp_spy;
 
   reg [3:0] pmtu_shift;
   reg [11:0] length_pmtu_mask;
@@ -248,7 +272,11 @@ module RoCE_qp_state_module #(
 
     case (state_reg)
       STATE_IDLE: begin
-        if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
+        if (qp_close_valid && (qp_close_loc_qpn[23:8] == 16'd1 && qp_close_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+          qp_aeth_syndrome_next = {1'b1, 2'b00, 5'b11111};
+          qp_close_ptr_next = qp_close_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+          state_next = STATE_CLOSE_QP;
+        end else if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
           
           // local qp must be between 256 and 256+MAX_QP
           if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
@@ -298,8 +326,10 @@ module RoCE_qp_state_module #(
 
   always @(posedge clk) begin
 
-    // Read
+    // Read request, spy port has low priority
     if (qp_context_req) begin
+      qp_spy_context_valid_pipes[0] <= 1'b0;
+      error_invalid_qp_spy          <= 1'b0;
       if (qp_local_qpn_req[23:8] == 16'd1 && qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
         qp_req_context <= qp_contex[qp_local_qpn_req[MAX_QUEUE_PAIRS_WIDTH-1:0]];
         qp_req_context_valid_pipes[0] <= 1'b1;
@@ -308,12 +338,32 @@ module RoCE_qp_state_module #(
         qp_req_context_valid_pipes[0] <= 1'b0;
         error_invalid_qp_req          <= 1'b1;
       end
+    end else if (qp_context_spy) begin
+      qp_req_context_valid_pipes[0] <= 1'b0;
+      error_invalid_qp_req          <= 1'b0;
+      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_spy_context <= qp_contex[qp_local_qpn_spy[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+        qp_spy_context_valid_pipes[0] <= 1'b1;
+        error_invalid_qp_spy          <= 1'b0;
+      end else begin
+        qp_spy_context_valid_pipes[0] <= 1'b0;
+        error_invalid_qp_spy          <= 1'b1;
+      end
     end else begin
       qp_req_context_valid_pipes[0] <= 1'b0;
       error_invalid_qp_req          <= 1'b0;
+
+      qp_spy_context_valid_pipes[0] <= 1'b0;
+      error_invalid_qp_spy          <= 1'b0;
     end
+
     qp_req_context_pipe <= qp_req_context;
     qp_req_context_valid_pipes[1] <= qp_req_context_valid_pipes[0];
+
+    qp_spy_context_pipe <= qp_spy_context;
+    qp_spy_context_valid_pipes[1] <= qp_spy_context_valid_pipes[0];
+
+
 
     // Write
     if (state_reg == STATE_OPEN_QP) begin
@@ -349,13 +399,13 @@ module RoCE_qp_state_module #(
       error_qp_already_open <= 1'b0;
     end else if (state_reg == STATE_CLOSE_QP) begin
       qp_contex[qp_close_ptr_reg][QP_STATE_OFFSET   +: 3]  <= QP_STATE_ERROR;
-      qp_contex[qp_close_ptr_reg][REM_IPADDR_OFFSET +: 32] <= 0;
-      qp_contex[qp_close_ptr_reg][REM_QPN_OFFSET    +: 24] <= 0;
-      qp_contex[qp_close_ptr_reg][LOC_QPN_OFFSET    +: 24] <= 0;
-      qp_contex[qp_close_ptr_reg][REM_PSN_OFFSET    +: 24] <= 0;
-      qp_contex[qp_close_ptr_reg][LOC_PSN_OFFSET    +: 24] <= 0;
-      qp_contex[qp_close_ptr_reg][VADDR_OFFSET      +: 64] <= 0;
-      qp_contex[qp_close_ptr_reg][RKEY_OFFSET       +: 32] <= 0;
+      qp_contex[qp_close_ptr_reg][REM_IPADDR_OFFSET +: 32] <= qp_contex[qp_close_ptr_reg][REM_IPADDR_OFFSET +: 32];
+      qp_contex[qp_close_ptr_reg][REM_QPN_OFFSET    +: 24] <= qp_contex[qp_close_ptr_reg][REM_QPN_OFFSET    +: 32];
+      qp_contex[qp_close_ptr_reg][LOC_QPN_OFFSET    +: 24] <= qp_contex[qp_close_ptr_reg][LOC_QPN_OFFSET    +: 32];
+      qp_contex[qp_close_ptr_reg][REM_PSN_OFFSET    +: 24] <= qp_close_rem_psn_reg;
+      qp_contex[qp_close_ptr_reg][LOC_PSN_OFFSET    +: 24] <= qp_contex[qp_close_ptr_reg][LOC_PSN_OFFSET    +: 32];
+      qp_contex[qp_close_ptr_reg][VADDR_OFFSET      +: 64] <= qp_contex[qp_close_ptr_reg][VADDR_OFFSET      +: 32];
+      qp_contex[qp_close_ptr_reg][RKEY_OFFSET       +: 32] <= qp_contex[qp_close_ptr_reg][RKEY_OFFSET       +: 32];
       qp_contex[qp_close_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= qp_aeth_syndrome_reg;
 
       error_qp_already_open <= 1'b0;
@@ -423,6 +473,17 @@ module RoCE_qp_state_module #(
   assign qp_req_loc_psn     = qp_req_context_pipe[LOC_PSN_OFFSET    +: 24];
   assign qp_req_rem_addr    = qp_req_context_pipe[VADDR_OFFSET      +: 64];
   assign qp_req_r_key       = qp_req_context_pipe[RKEY_OFFSET       +: 32];
+
+  assign qp_spy_context_valid = qp_spy_context_valid_pipes[1];
+  assign qp_spy_state       = qp_spy_context_pipe[QP_STATE_OFFSET   +: 3 ];
+  assign qp_spy_rem_ip_addr = qp_spy_context_pipe[REM_IPADDR_OFFSET +: 32];
+  assign qp_spy_rem_qpn     = qp_spy_context_pipe[REM_QPN_OFFSET    +: 24];
+  assign qp_spy_loc_qpn     = qp_spy_context_pipe[LOC_QPN_OFFSET    +: 24];
+  assign qp_spy_rem_psn     = qp_spy_context_pipe[REM_PSN_OFFSET    +: 24];
+  assign qp_spy_loc_psn     = qp_spy_context_pipe[LOC_PSN_OFFSET    +: 24];
+  assign qp_spy_rem_addr    = qp_spy_context_pipe[VADDR_OFFSET      +: 64];
+  assign qp_spy_r_key       = qp_spy_context_pipe[RKEY_OFFSET       +: 32];
+  assign qp_spy_syndrome    = qp_spy_context_pipe[SYNDROME_OFFSET   +: 32];
 
   assign s_roce_rx_bth_ready = 1'b1;
   assign s_roce_rx_aeth_ready = 1'b1;
