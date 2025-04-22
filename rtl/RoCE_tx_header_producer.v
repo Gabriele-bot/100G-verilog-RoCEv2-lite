@@ -15,6 +15,7 @@ module RoCE_tx_header_producer #(
     output wire       s_dma_meta_ready,
     input wire [31:0] s_dma_length,
     input wire [23:0] s_rem_qpn,
+    input wire [23:0] s_loc_qpn,
     input wire [23:0] s_rem_psn,
     input wire [31:0] s_r_key,
     input wire [31:0] s_rem_ip_addr,
@@ -43,6 +44,7 @@ module RoCE_tx_header_producer #(
     output wire [              15:0] m_roce_bth_p_key,
     output wire [              23:0] m_roce_bth_psn,
     output wire [              23:0] m_roce_bth_dest_qp,
+    output wire [              23:0] m_roce_bth_src_qp,
     output wire                      m_roce_bth_ack_req,
     // RETH              
     output wire                      m_roce_reth_valid,
@@ -82,7 +84,7 @@ module RoCE_tx_header_producer #(
     output wire                      m_roce_payload_axis_tlast,
     output wire                      m_roce_payload_axis_tuser,
     // config
-    input  wire [              12:0] pmtu,
+    input  wire [               2:0] pmtu,
     input  wire [              15:0] RoCE_udp_port,
     input  wire [              31:0] loc_ip_addr
 
@@ -156,6 +158,7 @@ module RoCE_tx_header_producer #(
     reg [15:0] roce_bth_p_key_next, roce_bth_p_key_reg;
     reg [23:0] roce_bth_psn_next, roce_bth_psn_reg;
     reg [23:0] roce_bth_dest_qp_next, roce_bth_dest_qp_reg;
+    reg [23:0] roce_bth_src_qp_next, roce_bth_src_qp_reg;
     reg roce_bth_ack_req_next, roce_bth_ack_req_reg;
 
     reg [63:0] roce_reth_v_addr_next, roce_reth_v_addr_reg;
@@ -233,12 +236,18 @@ module RoCE_tx_header_producer #(
     reg                       s_axis_tready_next;
     reg                       s_axis_tready_reg;
 
+    reg [12:0] pmtu_val;
+
     // datapath control signals
     reg store_last_word;
     reg store_parameters;
 
     assign s_dma_meta_ready   = s_dma_meta_ready_reg;
     assign s_axis_tready      = s_axis_tready_reg;
+
+    always @(posedge clk) begin
+        pmtu_val     <= 13'd1 << ( pmtu + 13'd8);
+    end
 
     always @* begin
 
@@ -286,6 +295,7 @@ module RoCE_tx_header_producer #(
         roce_bth_p_key_next           = roce_bth_p_key_reg;
         roce_bth_psn_next             = roce_bth_psn_reg;
         roce_bth_dest_qp_next         = roce_bth_dest_qp_reg;
+        roce_bth_src_qp_next          = roce_bth_src_qp_reg;
         roce_bth_ack_req_next         = roce_bth_ack_req_reg;
         roce_reth_v_addr_next         = roce_reth_v_addr_reg;
         roce_reth_r_key_next          = roce_reth_r_key_reg;
@@ -303,7 +313,8 @@ module RoCE_tx_header_producer #(
 
         case (state_reg)
             STATE_IDLE: begin
-                s_dma_meta_ready_next               = !roce_bth_valid_next;
+                //s_dma_meta_ready_next               = !roce_bth_valid_next;
+                s_dma_meta_ready_next               = 1'b1;
                 if (s_dma_meta_ready && s_dma_meta_valid) begin
                     store_parameters = 1'b1;
                     s_dma_meta_ready_next = 1'b0;
@@ -320,7 +331,7 @@ module RoCE_tx_header_producer #(
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
                 m_axis_tvalid_int = s_axis_tvalid;
-                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu_val | s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tready && s_axis_tvalid) begin
@@ -333,7 +344,7 @@ module RoCE_tx_header_producer #(
                     total_packet_inst_length_next = 32'd0;
                 end
 
-                if (tx_metadata[31:0] <= pmtu) begin
+                if (tx_metadata[31:0] <= pmtu_val) begin
                     state_next            = STATE_ONLY;
                     s_dma_meta_ready_next = 1'b0;
                     roce_bth_valid_next   = 1'b1;
@@ -390,9 +401,9 @@ module RoCE_tx_header_producer #(
                     udp_source_port_next  = LOC_UDP_PORT;
                     udp_dest_port_next    = RoCE_udp_port;
                     if (trasfer_type_reg) begin
-                        udp_length_next       = pmtu + 12 + 16 + 8;
+                        udp_length_next       = pmtu_val + 12 + 16 + 8;
                     end else begin
-                        udp_length_next       = pmtu + 12 + 8; // for SEND  
+                        udp_length_next       = pmtu_val + 12 + 8; // for SEND  
                     end
                     // PMTU + BTH + RETH + UDP HEADER
 
@@ -418,7 +429,7 @@ module RoCE_tx_header_producer #(
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
                 m_axis_tvalid_int = s_axis_tvalid;
-                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu_val | s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tuser) begin
@@ -433,7 +444,7 @@ module RoCE_tx_header_producer #(
                         packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
                         total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
                         //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
-                        if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 <= pmtu) begin
+                        if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8 <= pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             state_next = STATE_LAST;
                             roce_bth_valid_next = 1'b1;
@@ -460,14 +471,14 @@ module RoCE_tx_header_producer #(
                             psn_next              = psn_reg + 1;
 
                             //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
-                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
+                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8 > pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             state_next              = STATE_MIDDLE;
                             roce_bth_valid_next     = 1'b1;
                             roce_reth_valid_next    = 1'b0;
                             roce_immdh_valid_next   = 1'b0;
 
-                            udp_length_next         = pmtu + 12 + 8; //no RETH
+                            udp_length_next         = pmtu_val + 12 + 8; //no RETH
                             // PMTU + BTH + UDP HEADER
 
                             roce_bth_op_code_next   = trasfer_type_reg ? RC_RDMA_WRITE_MIDDLE : RC_SEND_MIDDLE;
@@ -486,7 +497,7 @@ module RoCE_tx_header_producer #(
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
                 m_axis_tvalid_int = s_axis_tvalid;
-                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu_val | s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tuser) begin
@@ -502,7 +513,7 @@ module RoCE_tx_header_producer #(
                         packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
                         total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
                         //if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 <= PMTU) begin
-                        if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 <= pmtu) begin
+                        if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8 <= pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             state_next = STATE_LAST;
                             roce_bth_valid_next = 1'b1;
@@ -529,14 +540,14 @@ module RoCE_tx_header_producer #(
                             psn_next              = psn_reg + 1;
 
                             //end else if (packet_inst_length + DATA_WIDTH / 8 >= PMTU && remaining_length - DATA_WIDTH / 8 > PMTU) begin
-                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
+                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8 > pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             state_next              = STATE_MIDDLE;
                             roce_bth_valid_next     = 1'b1;
                             roce_reth_valid_next    = 1'b0;
                             roce_immdh_valid_next   = 1'b0;
 
-                            udp_length_next         = pmtu + 12 + 8; //no RETH
+                            udp_length_next         = pmtu_val + 12 + 8; //no RETH
                             // PMTU + BTH + UDP HEADER
 
                             roce_bth_op_code_next   = trasfer_type_reg ? RC_RDMA_WRITE_MIDDLE : RC_SEND_MIDDLE;
@@ -555,7 +566,7 @@ module RoCE_tx_header_producer #(
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
                 m_axis_tvalid_int = s_axis_tvalid;
-                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu_val | s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tuser) begin
@@ -583,7 +594,7 @@ module RoCE_tx_header_producer #(
                                 m_axis_tvalid_int = 1'b0;
                                 state_next = STATE_WRITE_PAYLOAD_LAST;
                             end
-                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8> pmtu) begin
+                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8> pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             total_packet_inst_length_next = 32'd0;
                             state_next = STATE_ERROR;
@@ -612,7 +623,7 @@ module RoCE_tx_header_producer #(
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
                 m_axis_tvalid_int = s_axis_tvalid;
-                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu | s_axis_tlast;
+                m_axis_tlast_int  = packet_inst_length_reg + DATA_WIDTH / 8 == pmtu_val | s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
 
                 if (s_axis_tuser) begin
@@ -640,7 +651,7 @@ module RoCE_tx_header_producer #(
                                 m_axis_tvalid_int = 1'b0;
                                 state_next = STATE_WRITE_PAYLOAD_LAST;
                             end
-                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu && remaining_length_reg - DATA_WIDTH / 8 > pmtu) begin
+                        end else if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val && remaining_length_reg - DATA_WIDTH / 8 > pmtu_val) begin
                             packet_inst_length_next = 14'd0;
                             total_packet_inst_length_next = 32'd0;
                             state_next = STATE_ERROR;
@@ -717,35 +728,7 @@ module RoCE_tx_header_producer #(
 
     assign first_axi_frame = 1'b0;
     assign last_axi_frame  = 1'b0;
-    /*
-  always @(posedge clk) begin
-    first_axi_frame <= (packet_inst_length < DATA_WIDTH / 8) ? 1'b1 : 1'b0;
-    last_axi_frame  <= (packet_inst_length + DATA_WIDTH / 8 == PMTU) ? 1'b1 : 1'b0;
-  end
-  
-  always @(posedge clk) begin
-    if (rst) begin
-      packet_inst_length <= 14'd0;
-      total_packet_inst_length <= 14'd0;
-    end else begin
-      if (s_axis_tvalid && s_axis_tready) begin
-        if (packet_inst_length + DATA_WIDTH / 8 == PMTU) begin
-          packet_inst_length <= 14'd0;
-          total_packet_inst_length <= total_packet_inst_length + DATA_WIDTH / 8;
-        end else if (packet_inst_length + DATA_WIDTH / 8 != PMTU && s_axis_tlast) begin
-          packet_inst_length <= 14'd0;
-          total_packet_inst_length <= 14'd0;
-        end else begin
-          packet_inst_length <= packet_inst_length + DATA_WIDTH / 8;
-          total_packet_inst_length <= total_packet_inst_length + DATA_WIDTH / 8;
-        end
-      end
-    end
-  end
 
-  assign remaining_length = s_dma_length - total_packet_inst_length - DATA_WIDTH / 8;
-
-*/
     always @(posedge clk) begin
 
         if (rst) begin
@@ -783,6 +766,7 @@ module RoCE_tx_header_producer #(
             roce_bth_p_key_reg           <= 16'd0;
             roce_bth_psn_reg             <= 24'd0;
             roce_bth_dest_qp_reg         <= 24'd0;
+            roce_bth_src_qp_reg          <= 24'd0;
             roce_bth_ack_req_reg         <= 1'b0;
             roce_reth_v_addr_reg         <= 48'd0;
             roce_reth_r_key_reg          <= 32'd0;
@@ -838,6 +822,7 @@ module RoCE_tx_header_producer #(
             roce_bth_p_key_reg   <= roce_bth_p_key_next;
             roce_bth_psn_reg     <= roce_bth_psn_next;
             roce_bth_dest_qp_reg <= roce_bth_dest_qp_next;
+            roce_bth_src_qp_reg  <= roce_bth_src_qp_next;
             roce_bth_ack_req_reg <= roce_bth_ack_req_next;
 
             roce_reth_v_addr_reg <= roce_reth_v_addr_next;
@@ -862,6 +847,8 @@ module RoCE_tx_header_producer #(
 
     end
 
+    assign s_dma_meta_ready = s_dma_meta_ready_reg;
+
     assign m_roce_bth_valid     = roce_bth_valid_reg;
     assign m_roce_reth_valid    = roce_reth_valid_reg;
     assign m_roce_immdh_valid   = roce_immdh_valid_reg;
@@ -870,6 +857,7 @@ module RoCE_tx_header_producer #(
     assign m_roce_bth_p_key     = roce_bth_p_key_reg;
     assign m_roce_bth_psn       = roce_bth_psn_reg;
     assign m_roce_bth_dest_qp   = roce_bth_dest_qp_reg;
+    assign m_roce_bth_src_qp    = roce_bth_src_qp_reg;
     assign m_roce_bth_ack_req   = roce_bth_ack_req_reg;
 
     assign m_roce_reth_v_addr   = roce_reth_v_addr_reg;

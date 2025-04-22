@@ -12,6 +12,7 @@ module RoCE_qp_state_module #(
   input wire rst_qp,
 
   input wire        qp_context_valid,
+  input wire        qp_init_open_qp,
   input wire [31:0] qp_init_dma_transfer,
   input wire [31:0] qp_init_r_key,
   input wire [23:0] qp_init_rem_qpn,
@@ -26,6 +27,7 @@ module RoCE_qp_state_module #(
   input wire [23:0]  qp_local_qpn_req,
 
   output wire        qp_req_context_valid,
+  output wire [2 :0] qp_req_state,
   output wire [31:0] qp_req_r_key,
   output wire [23:0] qp_req_rem_qpn,
   output wire [23:0] qp_req_loc_qpn,
@@ -34,31 +36,11 @@ module RoCE_qp_state_module #(
   output wire [31:0] qp_req_rem_ip_addr,
   output wire [63:0] qp_req_rem_addr,
 
-  // Work request
-  input  wire         s_wr_valid,
-  output wire         s_wr_ready,  
-
-  input  wire         s_tx_type, // 0 WRITE, 1 SEND
-  input  wire         s_is_immediate,
-  input  wire [23:0]  s_loc_qpn,
-  input  wire [63:0]  s_rem_addr_offset,
-  input  wire [31:0]  s_dma_length, // for each transfer
-  input  wire [31:0]  s_n_transfers,
-
-  // TX BTH
-  input  wire        s_roce_tx_bth_valid,
-  output wire        s_roce_tx_bth_ready,
-  input  wire [ 7:0] s_roce_tx_bth_op_code,
-  input  wire [15:0] s_roce_tx_bth_p_key,
-  input  wire [23:0] s_roce_tx_bth_psn,
-  input  wire [23:0] s_roce_tx_bth_dest_qp,
-  input  wire        s_roce_tx_bth_ack_req,
-  // TX RETH
-  // RETH           
-  input  wire        s_roce_tx_reth_valid,
-  input  wire [63:0] s_roce_tx_reth_v_addr,
-  input  wire [31:0] s_roce_tx_reth_r_key,
-  input  wire [31:0] s_roce_tx_reth_length,
+  input wire        s_dma_meta_valid ,
+  input wire [31:0] s_meta_dma_length,
+  input wire [23:0] s_meta_rem_qpn   ,
+  input wire [23:0] s_meta_loc_qpn   ,
+  input wire [23:0] s_meta_rem_psn   ,
 
   // RX BTH
   input  wire        s_roce_rx_bth_valid,
@@ -140,7 +122,8 @@ module RoCE_qp_state_module #(
   localparam LOC_PSN_OFFSET     = 112;
   localparam VADDR_OFFSET       = 136;
   localparam RKEY_OFFSET        = 200;
-  localparam RESERVED_OFFSET    = 232;
+  localparam SYNDROME_OFFSET    = 232;
+  localparam RESERVED_OFFSET    = 240;
 
   localparam [7:0]
   RC_SEND_FIRST         = 8'h00,
@@ -192,13 +175,9 @@ module RoCE_qp_state_module #(
   reg [31:0] qp_init_rem_ip_addr_reg;
   reg [63:0] qp_init_rem_addr_reg;
 
-  reg [31:0] qp_update_r_key_reg;
-  reg [23:0] qp_update_rem_qpn_reg;
-  reg [23:0] qp_update_loc_qpn_reg;
-  reg [23:0] qp_update_rem_psn_reg;
-  reg [23:0] qp_update_loc_psn_reg;
-  reg [31:0] qp_update_rem_ip_addr_reg;
-  reg [63:0] qp_update_rem_addr_reg;
+
+  reg [7:0] qp_aeth_syndrome_reg, qp_aeth_syndrome_next;
+  reg [23:0] qp_update_rem_psn_reg = 0, qp_update_rem_psn_next;
 
   reg [REM_ADDR_WIDTH-1:0] rem_addr_offset_reg;
 
@@ -251,7 +230,7 @@ module RoCE_qp_state_module #(
       end
     endcase
   end
-  
+
 
 
   // QP state
@@ -260,27 +239,49 @@ module RoCE_qp_state_module #(
     state_next                     = STATE_IDLE;
 
     qp_init_ptr_next   = qp_init_ptr_reg;
+    qp_update_ptr_next = qp_update_ptr_reg;
+    qp_close_ptr_next  = qp_close_ptr_reg;
+
+    qp_aeth_syndrome_next = qp_aeth_syndrome_reg;
 
     store_qp_info = 1'b0;
 
     case (state_reg)
       STATE_IDLE: begin
-        if (s_roce_rx_aeth_valid) begin
-          if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
-            // local qp must be between 256 and 256+MAX_QP
-            if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+        if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
+          
+          // local qp must be between 256 and 256+MAX_QP
+          if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+            // Close QP if NA received and NAK code not PSN seq error
+            if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b11 && s_roce_rx_aeth_syndrome[4:0] != 5'b00000) begin 
+              qp_aeth_syndrome_next = s_roce_rx_aeth_syndrome;
+              qp_close_ptr_next = s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS_WIDTH-1:0];
               state_next = STATE_CLOSE_QP;
             end
-          end else begin
-            // local qp must be between 256 and 256+MAX_QP
-            if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-              state_next = STATE_UPDATE_QP;
+          end 
+        end else if (s_dma_meta_valid) begin
+          if (s_meta_loc_qpn[23:8] == 16'd1 && s_meta_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+            if (|(s_meta_dma_length[11:0] & length_pmtu_mask) == 1'b0) begin
+              qp_update_rem_psn_next = s_meta_rem_psn + (s_meta_dma_length >> pmtu_shift);
+            end else begin
+              qp_update_rem_psn_next = s_meta_rem_psn + (s_meta_dma_length >> pmtu_shift) + 1;
             end
+            qp_update_ptr_next = s_meta_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+            state_next = STATE_UPDATE_QP;
           end
         end else if (qp_context_valid) begin
-          qp_init_ptr_next = qp_init_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
           store_qp_info = 1'b1;
-          state_next = STATE_OPEN_QP;
+          // local qp must be between 256 and 256+MAX_QP
+          if (qp_init_loc_qpn[23:8] == 16'd1 && qp_init_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+            if (qp_init_open_qp) begin
+              qp_init_ptr_next = qp_init_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+              state_next = STATE_OPEN_QP;
+            end else begin
+              qp_aeth_syndrome_next = 8'd0;
+              qp_close_ptr_next = qp_init_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+              state_next = STATE_CLOSE_QP;
+            end
+          end
         end
       end
       STATE_OPEN_QP : begin
@@ -327,7 +328,8 @@ module RoCE_qp_state_module #(
         qp_contex[qp_init_ptr_reg][LOC_PSN_OFFSET    +: 24] <= qp_init_loc_psn_reg;
         qp_contex[qp_init_ptr_reg][VADDR_OFFSET      +: 64] <= qp_init_rem_addr_reg;
         qp_contex[qp_init_ptr_reg][RKEY_OFFSET       +: 32] <= qp_init_r_key_reg;
-        qp_contex[qp_init_ptr_reg][RESERVED_OFFSET   +: 24] <= 24'd0;
+        qp_contex[qp_init_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= 8'd0;
+        qp_contex[qp_init_ptr_reg][RESERVED_OFFSET   +: 16] <= 16'd0;
 
         error_qp_already_open <= 1'b0;
       end else begin
@@ -342,6 +344,7 @@ module RoCE_qp_state_module #(
       qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24];
       qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64] <= qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64];
       qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32] <= qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32];
+      qp_contex[qp_update_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= 8'd0;
 
       error_qp_already_open <= 1'b0;
     end else if (state_reg == STATE_CLOSE_QP) begin
@@ -353,6 +356,7 @@ module RoCE_qp_state_module #(
       qp_contex[qp_close_ptr_reg][LOC_PSN_OFFSET    +: 24] <= 0;
       qp_contex[qp_close_ptr_reg][VADDR_OFFSET      +: 64] <= 0;
       qp_contex[qp_close_ptr_reg][RKEY_OFFSET       +: 32] <= 0;
+      qp_contex[qp_close_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= qp_aeth_syndrome_reg;
 
       error_qp_already_open <= 1'b0;
     end else begin
@@ -363,7 +367,13 @@ module RoCE_qp_state_module #(
   always @(posedge clk) begin
 
     state_reg       <= state_next;
-    qp_init_ptr_reg <= qp_init_ptr_next;
+
+    qp_init_ptr_reg   <= qp_init_ptr_next;
+    qp_update_ptr_reg <= qp_update_ptr_next;
+    qp_close_ptr_reg  <= qp_close_ptr_next;
+    
+    qp_aeth_syndrome_reg <= qp_aeth_syndrome_next;
+    qp_update_rem_psn_reg <= qp_update_rem_psn_next;
 
     if (store_qp_info) begin
       qp_init_rem_ip_addr_reg  <= qp_init_rem_ip_addr;
@@ -374,50 +384,7 @@ module RoCE_qp_state_module #(
       qp_init_rem_addr_reg     <= qp_init_rem_addr;
       qp_init_r_key_reg        <= qp_init_r_key;
     end
-
-    if (s_roce_rx_bth_valid) begin
-      qp_update_rem_psn_reg      <= s_roce_rx_bth_psn;
-    end
-  end
-
-  // TX side 
-  always @(posedge clk) begin
-    if (rst_qp) begin
-      dma_transfer_reg    <= qp_init_dma_transfer;
-      r_key_reg           <= qp_init_r_key;
-      rem_qpn_reg         <= qp_init_rem_qpn;
-      rem_psn_reg         <= qp_init_rem_psn;
-      rem_ip_addr_reg     <= qp_init_rem_ip_addr;
-      rem_addr_reg        <= qp_init_rem_addr;
-      rem_addr_offset_reg <= {REM_ADDR_WIDTH{1'b0}};
-      last_psn            <= 24'd0;
-    end else begin
-
-      /*
-      if (s_roce_tx_reth_valid && s_roce_rx_bth_valid && s_roce_tx_bth_dest_qp == rem_qpn_reg) begin
-        rem_addr_reg <= s_roce_tx_reth_v_addr;
-        rem_addr_offset_reg <= s_roce_tx_reth_length;
-      end
-      */
-
-      if (s_roce_tx_bth_valid && s_roce_tx_bth_dest_qp == rem_qpn_reg) begin
-        rem_psn_reg <= s_roce_tx_bth_psn;
-        if (s_roce_tx_reth_valid) begin
-          rem_addr_offset_reg <= dma_transfer_reg[REM_ADDR_WIDTH-1:0];
-        end
-        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY ||
-        s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD
-        ) begin
-          last_psn <= s_roce_tx_bth_psn;
-          rem_addr_offset_reg <= dma_transfer_reg[REM_ADDR_WIDTH-1:0];
-          rem_addr_reg[REM_ADDR_WIDTH-1:0] <= rem_addr_reg[REM_ADDR_WIDTH-1:0] + rem_addr_offset_reg[REM_ADDR_WIDTH-1:0];
-          rem_addr_reg[63:REM_ADDR_WIDTH] <= rem_addr_reg[63:REM_ADDR_WIDTH];
-          udapte_qp_state_reg <= 1'b1;
-        end
-      end else begin
-        udapte_qp_state_reg <= 1'b0;
-      end
-    end
+    
   end
 
   // RX side 
@@ -448,6 +415,7 @@ module RoCE_qp_state_module #(
   end
 
   assign qp_req_context_valid = qp_req_context_valid_pipes[1];
+  assign qp_req_state       = qp_req_context_pipe[QP_STATE_OFFSET   +: 3 ];
   assign qp_req_rem_ip_addr = qp_req_context_pipe[REM_IPADDR_OFFSET +: 32];
   assign qp_req_rem_qpn     = qp_req_context_pipe[REM_QPN_OFFSET    +: 24];
   assign qp_req_loc_qpn     = qp_req_context_pipe[LOC_QPN_OFFSET    +: 24];
@@ -456,7 +424,6 @@ module RoCE_qp_state_module #(
   assign qp_req_rem_addr    = qp_req_context_pipe[VADDR_OFFSET      +: 64];
   assign qp_req_r_key       = qp_req_context_pipe[RKEY_OFFSET       +: 32];
 
-  assign s_roce_tx_bth_ready = 1'b1;
   assign s_roce_rx_bth_ready = 1'b1;
   assign s_roce_rx_aeth_ready = 1'b1;
 
@@ -465,7 +432,7 @@ module RoCE_qp_state_module #(
   assign last_nacked_psn = last_nacked_psn_reg;
   assign stop_transfer   = stop_transfer_reg;
 
-  
+
 
 endmodule
 

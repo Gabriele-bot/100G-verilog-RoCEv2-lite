@@ -17,6 +17,7 @@ module RoCE_packet_dropper #(
     input  wire [ 15:0] s_roce_bth_p_key,
     input  wire [ 23:0] s_roce_bth_psn,
     input  wire [ 23:0] s_roce_bth_dest_qp,
+    input  wire [ 23:0] s_roce_bth_src_qp,
     input  wire         s_roce_bth_ack_req,
     // RETH
     input  wire         s_roce_reth_valid,
@@ -66,6 +67,7 @@ module RoCE_packet_dropper #(
     output  wire [ 15:0] m_roce_bth_p_key,
     output  wire [ 23:0] m_roce_bth_psn,
     output  wire [ 23:0] m_roce_bth_dest_qp,
+    output  wire [ 23:0] m_roce_bth_src_qp,
     output  wire         m_roce_bth_ack_req,
     // RETH
     output  wire         m_roce_reth_valid,
@@ -127,6 +129,7 @@ module RoCE_packet_dropper #(
     assign m_roce_bth_p_key   = s_roce_bth_p_key;
     assign m_roce_bth_psn     = s_roce_bth_psn;
     assign m_roce_bth_dest_qp = s_roce_bth_dest_qp;
+    assign m_roce_bth_src_qp  = s_roce_bth_src_qp;
     assign m_roce_bth_ack_req = s_roce_bth_ack_req;
     assign m_roce_reth_valid  = s_roce_reth_valid;
     assign s_roce_reth_ready  = m_roce_reth_ready;

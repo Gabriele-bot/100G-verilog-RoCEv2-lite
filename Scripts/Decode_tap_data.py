@@ -492,7 +492,7 @@ ETH_P_ALL = 3  # not defined in socket module, sadly...
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
 s.bind(("tap0", 0))
 
-iterations = 2000
+iterations = 10
 
 try:
     for i in range(iterations):
@@ -501,14 +501,16 @@ try:
         dma_length_set  = 4096*np.random.randint(1, high=20, size=None, dtype=int) + np.random.randint(0, high=31, size=None, dtype=int)*4 #integer number of pmtu + an integer value of 4 bytes
         r_key_set        = np.random.randint(1, high=2**32-1, size=None, dtype=np.uint32)
         starting_psn_set = np.random.randint(1, high=2**24-1, size=None, dtype=np.uint32)
-        rem_qpn_set      = np.random.randint(1, high=2**24-1, size=None, dtype=np.uint32)
+        rem_qpn_set      = np.random.randint(2**8, high=2**8+3, size=None, dtype=np.uint32)
+        loc_qpn_set      = np.random.randint(1, high=2 ** 14 -1, size=None, dtype=np.uint32)
         base_addr        = np.random.randint(1, high=2**64-1, size=None, dtype=np.uint64)
 
         #time.sleep(0.5)
-        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
-        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=0x12, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=loc_qpn_set, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
 
-        send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, rem_addr_offset=0, rdma_length=dma_length_set, start_flag=0x1)
+        send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, fpga_qpn=rem_qpn_set, rdma_length=dma_length_set, start_flag=0x1)
+
+        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=loc_qpn_set, fpga_qpn=rem_qpn_set, close_qp=True)
 
         data_temp = []
 
@@ -535,7 +537,7 @@ try:
         #print(data_stream)
 
         RoCE_stream_recieved = RoCEStream(data_stream)
-        icrc_errors, psn_errors, length_error, _ = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=rem_qpn_set)
+        icrc_errors, psn_errors, length_error, _ = RoCE_stream_recieved.decode_Roce_stream(True, set_dma_length=dma_length_set, set_r_key=r_key_set, starting_psn=starting_psn_set, set_qpn=loc_qpn_set)
         if icrc_errors == 0  and  psn_errors == 0 and length_error is False:
             print(bcolors.OKGREEN + 'No errors observed!' + bcolors.ENDC)
         else:
@@ -543,6 +545,7 @@ try:
             break
 
 except KeyboardInterrupt:
+
     print('Exiting!')
 
 

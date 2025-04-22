@@ -36,7 +36,7 @@ module top (
     input  wire [ 7:0] xgmii_rxc
 );
 
-  parameter DATA_WIDTH = 1024;
+  parameter DATA_WIDTH = 512;
   parameter KEEP_WIDTH = DATA_WIDTH/8;
   
   initial begin
@@ -228,7 +228,7 @@ module top (
 
   // Configuration
 
-  wire [ 12:0] pmtu = 13'd4096;
+  wire [ 2:0] pmtu = 3'd4;
   wire [ 15:0] RoCE_udp_port = 16'h12b7;
 
   wire [ 47:0] local_mac = 48'h02_00_00_00_00_00;
@@ -670,11 +670,12 @@ module top (
   // ROCE TX inst
   RoCE_minimal_stack #(
       .DATA_WIDTH(DATA_WIDTH),
+      .CLOCK_PERIOD(6.4),
       .DEBUG(0),
-      .RETRANSMISSION(0),
+      .RETRANSMISSION(1),
       .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
-      .ENABLE_SIM_PACKET_DROP_TX(0),
-      .ENABLE_SIM_PACKET_DROP_RX(0)
+      .ENABLE_SIM_PACKET_DROP_TX(1),
+      .ENABLE_SIM_PACKET_DROP_RX(1)
   ) RoCE_minimal_stack_instance (
       .clk(clk_x1),
       .rst(rst),
@@ -740,7 +741,8 @@ module top (
       .RoCE_udp_port(RoCE_udp_port),
       .loc_ip_addr(local_ip),
       .timeout_period(64'd4000),
-      .retry_count(4'd5)
+      .retry_count(4'd5),
+      .rnr_retry_count(4'd5)
   );
 
 endmodule

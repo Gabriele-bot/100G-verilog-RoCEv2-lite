@@ -62,14 +62,15 @@ SYN_FILES += ip/cmac_pad.v
 # RoCE Files
 SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.v
 SYN_FILES +=  lib/RoCE/rtl/axis_data_generator.v
-SYN_FILES +=  lib/RoCE/rtl/axis_RoCE_icrc_insert_test.v
+SYN_FILES +=  lib/RoCE/rtl/axis_RoCE_icrc_insert.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_tx_test.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_udp_rx_test.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_tx_header_producer.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_minimal_stack.v
-SYN_FILES +=  lib/RoCE/rtl/udp_RoCE_connection_manager_test.v
+SYN_FILES +=  lib/RoCE/rtl/udp_RoCE_connection_manager.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_latency_eval.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_qp_state_module.v
+SYN_FILES +=  lib/RoCE/rtl/RoCE_simple_work_queue.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_retransmission_module.v
 SYN_FILES +=  lib/RoCE/rtl/ram_block.v
 SYN_FILES +=  lib/RoCE/rtl/axis_handshake_monitor.vhd
@@ -82,7 +83,7 @@ SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_pkg.vhd
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_D512_matrix.vhd
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/Experimental/CRC32_matrix_pipeline.vhd
 SYN_FILES += lib/RoCE/lib/Tbps_CRC/core/src/crc.svh
-SYN_FILES += lib/RoCE/lib/Tbps+CRC/core_src/crc_byteEn.sv
+SYN_FILES += lib/RoCE/lib/Tbps_CRC/core_src/crc_byteEn.sv
 
 
 # XDC files

@@ -4,6 +4,7 @@
 module RoCE_retransmission_module #(
     parameter DATA_WIDTH = 64,
     parameter BUFFER_ADDR_WIDTH = 24,
+    parameter CLOCK_PERIOD = 6.4,
     parameter DEBUG = 0
 ) (
     input wire clk,
@@ -33,6 +34,7 @@ module RoCE_retransmission_module #(
     input  wire [ 15:0] s_roce_bth_p_key,
     input  wire [ 23:0] s_roce_bth_psn,
     input  wire [ 23:0] s_roce_bth_dest_qp,
+    input  wire [ 23:0] s_roce_bth_src_qp,
     input  wire         s_roce_bth_ack_req,
     // RETH
     input  wire         s_roce_reth_valid,
@@ -82,6 +84,7 @@ module RoCE_retransmission_module #(
     output  wire [ 15:0] m_roce_bth_p_key,
     output  wire [ 23:0] m_roce_bth_psn,
     output  wire [ 23:0] m_roce_bth_dest_qp,
+    output  wire [ 23:0] m_roce_bth_src_qp,
     output  wire         m_roce_bth_ack_req,
     // RETH
     output  wire         m_roce_reth_valid,
@@ -173,10 +176,17 @@ module RoCE_retransmission_module #(
     Configuration
     */
     input wire [63:0] timeout_period,
-    input wire [3 :0] retry_count,
-    input wire [12:0] pmtu,
+    input wire [2 :0] retry_count,
+    input wire [2 :0] rnr_retry_count,
+    input wire [2 :0] pmtu,
     input wire        en_retrans
 );
+
+    function [31:0] time2clk;
+        input real time_value; // in ms
+        input real clock_period; // in ns
+        time2clk = time_value*1e6/clock_period;
+    endfunction
 
     /*
     +--------------------------------------+
@@ -214,23 +224,28 @@ module RoCE_retransmission_module #(
     STATE_READ_RAM_HEADER = 5'd2,
     STATE_WAIT_RAM_OUTPUT = 5'd3,
     STATE_DMA_READ_INIT   = 5'd4,
-    STATE_DMA_READ        = 5'd5;
+    STATE_DMA_READ        = 5'd5,
+    STATE_RNR_WAIT        = 5'd6;
 
     reg [3:0] state_reg = STATE_IDLE, state_next;
 
     localparam AXI_MAX_BURST_LEN = 4096/(DATA_WIDTH/8) + 1;
 
     reg [3:0] memory_steps;
+    reg [12:0] pmtu_val;
 
     reg trigger_retransmit = 1'b0;
+    reg trigger_rnr_wait = 1'b0;
     reg nak_detected       = 1'b0;
     reg [23:0] nak_psn_reg        = 24'd0;
     reg [63:0] timeout_counter;
+    reg [63:0] rnr_timeout_counter;
     reg retransmit_started = 1'b0;
 
     reg reset_timeout_counter_next, reset_timeout_counter_reg;
 
-    reg [3:0 ] retry_counter_reg = 4'd0, retry_counter_next;
+    reg [2:0 ] retry_counter_reg = 3'd0, retry_counter_next;
+    reg [2:0 ] rnr_retry_counter_reg = 3'd0, rnr_retry_counter_next;
 
     reg [23:0] last_sent_psn_next , last_sent_psn_reg = 24'd0;
     reg [23:0] last_acked_psn_next , last_acked_psn_reg = 24'd0;
@@ -254,6 +269,7 @@ module RoCE_retransmission_module #(
     reg  [ 15:0] retrans_roce_bth_p_key_next, retrans_roce_bth_p_key_reg;
     reg  [ 23:0] retrans_roce_bth_psn_next, retrans_roce_bth_psn_reg;
     reg  [ 23:0] retrans_roce_bth_dest_qp_next, retrans_roce_bth_dest_qp_reg;
+    reg  [ 23:0] retrans_roce_bth_src_qp_next, retrans_roce_bth_src_qp_reg;
     reg          retrans_roce_bth_ack_req_next, retrans_roce_bth_ack_req_reg;
 
     reg          retrans_roce_reth_valid_next, retrans_roce_reth_valid_reg;
@@ -344,6 +360,7 @@ module RoCE_retransmission_module #(
     reg [23:0] psn_diff_next, psn_diff_reg = 24'd0;
 
     reg [31:0] n_retransmit_triggers_reg, n_retransmit_triggers_next;
+    reg [31:0] n_rnr_retransmit_triggers_reg, n_rnr_retransmit_triggers_next;
 
     wire axis_mux_select;
 
@@ -384,6 +401,46 @@ module RoCE_retransmission_module #(
     reg [BUFFER_ADDR_WIDTH-1:0] s_axis_dma_read_debug_addr;
     reg [AXI_DMA_LENGTH-1:0]    s_axis_dma_read_debug_len;
 
+    reg [31:0] rnr_timer_values [31:0];
+
+    // Infiniband specification Vol 1 realeas 1.4 page 354
+    initial begin
+        rnr_timer_values[0 ] = time2clk(655.36, CLOCK_PERIOD);
+        rnr_timer_values[1 ] = time2clk(0.01, CLOCK_PERIOD);
+        rnr_timer_values[2 ] = time2clk(0.02, CLOCK_PERIOD);
+        rnr_timer_values[3 ] = time2clk(0.03, CLOCK_PERIOD);
+        rnr_timer_values[4 ] = time2clk(0.04, CLOCK_PERIOD);
+        rnr_timer_values[5 ] = time2clk(0.06, CLOCK_PERIOD);
+        rnr_timer_values[6 ] = time2clk(0.08, CLOCK_PERIOD);
+        rnr_timer_values[7 ] = time2clk(0.12, CLOCK_PERIOD);
+        rnr_timer_values[8 ] = time2clk(0.16, CLOCK_PERIOD);
+        rnr_timer_values[9 ] = time2clk(0.24, CLOCK_PERIOD);
+        rnr_timer_values[10] = time2clk(0.32, CLOCK_PERIOD);
+        rnr_timer_values[11] = time2clk(0.48, CLOCK_PERIOD);
+        rnr_timer_values[12] = time2clk(0.64, CLOCK_PERIOD);
+        rnr_timer_values[13] = time2clk(0.96, CLOCK_PERIOD);
+        rnr_timer_values[14] = time2clk(1.28, CLOCK_PERIOD);
+        rnr_timer_values[15] = time2clk(1.92, CLOCK_PERIOD);
+        rnr_timer_values[16] = time2clk(2.56, CLOCK_PERIOD);
+        rnr_timer_values[17] = time2clk(3.84, CLOCK_PERIOD);
+        rnr_timer_values[18] = time2clk(5.12, CLOCK_PERIOD);
+        rnr_timer_values[19] = time2clk(7.68, CLOCK_PERIOD);
+        rnr_timer_values[20] = time2clk(10.24, CLOCK_PERIOD);
+        rnr_timer_values[21] = time2clk(15.36, CLOCK_PERIOD);
+        rnr_timer_values[22] = time2clk(20.48, CLOCK_PERIOD);
+        rnr_timer_values[23] = time2clk(30.72, CLOCK_PERIOD);
+        rnr_timer_values[24] = time2clk(40.98, CLOCK_PERIOD);
+        rnr_timer_values[25] = time2clk(61.44, CLOCK_PERIOD);
+        rnr_timer_values[26] = time2clk(81.92, CLOCK_PERIOD);
+        rnr_timer_values[27] = time2clk(122.88, CLOCK_PERIOD);
+        rnr_timer_values[28] = time2clk(163.84, CLOCK_PERIOD);
+        rnr_timer_values[29] = time2clk(245.76, CLOCK_PERIOD);
+        rnr_timer_values[30] = time2clk(327.68, CLOCK_PERIOD);
+        rnr_timer_values[31] = time2clk(491.52, CLOCK_PERIOD);
+    end
+
+
+
     // BTH fields
     assign hdr_data_in[RAM_OP_CODE_OFFSET+:8] = s_roce_bth_op_code;
     assign hdr_data_in[RAM_BTH_OFFSET]        = s_roce_bth_valid;
@@ -420,23 +477,8 @@ module RoCE_retransmission_module #(
     end
 
     always @(posedge clk) begin
-        case (pmtu)
-            13'd256: begin
-                memory_steps <= 4'd8;
-            end
-            13'd512: begin
-                memory_steps <= 4'd9;
-            end
-            13'd1024: begin
-                memory_steps <= 4'd10;
-            end
-            13'd2048: begin
-                memory_steps <= 4'd11;
-            end
-            13'd4096: begin
-                memory_steps <= 4'd12;
-            end
-        endcase
+        memory_steps <= 4'd8 + pmtu;
+        pmtu_val     <= 13'd1 << ( pmtu + 13'd8);
     end
 
     axi_dma #(
@@ -558,6 +600,7 @@ Simple DMA write logic
         retrans_roce_bth_p_key_next   = retrans_roce_bth_p_key_reg;
         retrans_roce_bth_psn_next     = retrans_roce_bth_psn_reg;
         retrans_roce_bth_dest_qp_next = retrans_roce_bth_dest_qp_reg;
+        retrans_roce_bth_src_qp_next  = retrans_roce_bth_src_qp_reg;
         retrans_roce_bth_ack_req_next = retrans_roce_bth_ack_req_reg;
         retrans_roce_reth_v_addr_next = retrans_roce_reth_v_addr_reg;
         retrans_roce_reth_r_key_next  = retrans_roce_reth_r_key_reg;
@@ -570,6 +613,7 @@ Simple DMA write logic
         retry_start_psn_next   = retry_start_psn_reg;
 
         retry_counter_next     = retry_counter_reg;
+        rnr_retry_counter_next = rnr_retry_counter_reg;
 
         stop_transfer_next     = 1'b0;
 
@@ -601,7 +645,8 @@ Simple DMA write logic
 
         psn_diff_next = last_buffered_psn_reg - last_acked_psn_reg;
 
-        n_retransmit_triggers_next = n_retransmit_triggers_reg;
+        n_retransmit_triggers_next     = n_retransmit_triggers_reg;
+        n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg;
 
         case (state_reg)
             STATE_IDLE: begin
@@ -613,7 +658,37 @@ Simple DMA write logic
 
                 s_axis_dma_read_desc_valid_next = 1'b0;
 
-                if (trigger_retransmit) begin
+                if (trigger_rnr_wait) begin // RNR
+
+                    state_next  = STATE_RNR_WAIT;
+
+                    s_axis_dma_write_desc_valid_next = 1'b0;
+
+                    m_roce_bth_valid_next   = 1'b0;
+                    m_roce_reth_valid_next  = 1'b0;
+                    m_roce_immdh_valid_next = 1'b0;
+
+                    s_roce_bth_psn_memory_next = nak_psn_reg;
+                    reset_timeout_counter_next = 1'b1;
+
+                    n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg + 32'd1;
+
+                    if (retry_start_psn_reg == (last_acked_psn_reg + 24'd1)) begin
+                        if (rnr_retry_count == 3'd7) begin // if rnr retry == 7, retry for ever
+                            rnr_retry_counter_next = rnr_retry_counter_reg;
+                        end else if (rnr_retry_counter_reg < rnr_retry_count) begin
+                            rnr_retry_counter_next = rnr_retry_counter_reg + 1;
+                        end else begin //stops retransmission
+                            last_sent_psn_next = last_acked_psn_reg;
+                            state_next  = STATE_IDLE;
+                            stop_transfer_next = 1'b1;
+                            n_rnr_retransmit_triggers_next = 32'd0;
+                        end
+                    end else begin
+                        rnr_retry_counter_next = 0;
+                    end
+                    retry_start_psn_next = (last_acked_psn_reg + 1);
+                end else if (trigger_retransmit) begin
 
                     state_next  = STATE_READ_RAM_HEADER;
 
@@ -641,8 +716,6 @@ Simple DMA write logic
                         retry_counter_next = 0;
                     end
                     retry_start_psn_next = (last_acked_psn_reg + 1);
-
-
 
                 end else begin
                     if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid && ~s_roce_immdh_valid) begin
@@ -767,6 +840,7 @@ Simple DMA write logic
                         retrans_roce_bth_psn_next      = s_roce_bth_psn_memory_reg;
                         //retrans_roce_bth_dest_qp_next  = hdr_data_out_reg[47:24];
                         retrans_roce_bth_dest_qp_next  = curr_rem_qpn_reg;
+                        retrans_roce_bth_src_qp_next   = curr_loc_qpn_reg;
                         retrans_roce_bth_ack_req_next  = 1'b1;
                         retrans_roce_reth_v_addr_next  = hdr_data_out_reg[RAM_VADDR_OFFSET+:64];
                         retrans_roce_reth_r_key_next   = curr_r_key_reg;
@@ -801,6 +875,14 @@ Simple DMA write logic
                     end
                 end
             end
+            STATE_RNR_WAIT: begin
+                retry_counter_next = 0; // reset retry counter to 0
+                if (rnr_timeout_counter == 32'd0) begin
+                    state_next = STATE_READ_RAM_HEADER;
+                end else begin
+                    state_next = STATE_RNR_WAIT;
+                end
+            end
         endcase
     end
 
@@ -808,41 +890,87 @@ Simple DMA write logic
     always @(posedge clk) begin
 
         if (rst | !en_retrans) begin
-            timeout_counter    <= 64'd0;
-            nak_psn_reg        <= 24'd0;
-            trigger_retransmit <= 1'b0;
-            nak_detected       <= 1'b0;
+            timeout_counter     <= 64'd0;
+            rnr_timeout_counter <= 64'd0;
+            nak_psn_reg         <= 24'd0;
+            trigger_retransmit  <= 1'b0;
+            trigger_rnr_wait    <= 1'b0;
+            nak_detected        <= 1'b0;
         end else begin
             if (en_retrans) begin
                 if (reset_timeout_counter_reg) begin
-                    timeout_counter    <= 64'd0;
+                    timeout_counter    <= timeout_period;
                     trigger_retransmit <= 1'b0;
-                end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00 && s_roce_rx_bth_dest_qp == curr_loc_qpn_reg && s_roce_aeth_valid) begin
-                    timeout_counter <= 64'd0;
-                    trigger_retransmit <= 1'b0;
-                    nak_detected       <= 1'b0;
-                end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] != 2'b00 && s_roce_rx_bth_dest_qp == curr_loc_qpn_reg && s_roce_aeth_valid) begin // NAK
-                    timeout_counter <= 64'd0;
+                    trigger_rnr_wait   <= 1'b0;
+                end else if (state_reg == STATE_RNR_WAIT) begin
+                    if (rnr_timeout_counter > 32'd0) begin
+                        rnr_timeout_counter <= rnr_timeout_counter - 64'd1;
+                    end
                     trigger_retransmit <= 1'b1;
-                    nak_psn_reg        <= s_roce_rx_bth_psn;
-                    nak_detected       <= 1'b1;
+                    trigger_rnr_wait   <= 1'b0;
+                end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_aeth_valid && s_roce_rx_bth_dest_qp == curr_loc_qpn_reg) begin
+                    case(s_roce_rx_aeth_syndrome[6:5])
+                        2'b00:begin // ACK
+                            timeout_counter    <= timeout_period;
+                            trigger_retransmit <= 1'b0;
+                            trigger_rnr_wait   <= 1'b0;
+                            nak_detected       <= 1'b0;
+                        end
+                        2'b01:begin // RNR NAK
+                            // load appropriate timer value
+                            rnr_timeout_counter <= rnr_timer_values[s_roce_rx_aeth_syndrome[4:0]];
+                            nak_psn_reg         <= s_roce_rx_bth_psn;
+                            timeout_counter     <= timeout_period;
+                            trigger_retransmit  <= 1'b0;
+                            trigger_rnr_wait    <= 1'b1;
+                        end
+                        2'b10:begin // reserved
+                            timeout_counter    <= timeout_counter - 64'd1;
+                            trigger_retransmit <= 1'b0;
+                            trigger_rnr_wait   <= 1'b0;
+                        end
+                        2'b11: begin // NAK
+                            if (s_roce_rx_aeth_syndrome[4:0] == 5'b00000) begin
+                                // PSN seq error 
+                                timeout_counter    <= timeout_period;
+                                trigger_retransmit <= 1'b1;
+                                trigger_rnr_wait   <= 1'b0;
+                            end else begin
+                                timeout_counter    <= 64'd0;
+                                trigger_retransmit <= 1'b0;
+                                trigger_rnr_wait   <= 1'b0;
+                            end
+                            nak_psn_reg        <= s_roce_rx_bth_psn;
+                            nak_detected       <= 1'b1;
+                        end
+                    endcase
                 end else if (retransmit_started || (last_sent_psn_reg == last_acked_psn_reg)) begin
-                    timeout_counter <= 64'd0;
+                    // Either retransmission on going or mem read pointer == write ponter
+                    timeout_counter <= timeout_period;
                     trigger_retransmit <= 1'b0;
-                end else if (timeout_counter >= timeout_period) begin
-                    timeout_counter <= timeout_counter;
+                    trigger_rnr_wait   <= 1'b0;
+                end else if (timeout_counter == 64'd0) begin
+                    // timeout reached, trigger retramsission 
+                    timeout_counter    <= 64'd0;
                     trigger_retransmit <= 1'b1;
+                    trigger_rnr_wait   <= 1'b0;
                 end else if (state_reg == STATE_DMA_READ_INIT | state_reg == STATE_READ_RAM_HEADER) begin
-                    timeout_counter <= timeout_counter + 64'd1;
+                    // Retransmission on going, !! retrasnmission can still be triggered !!
+                    timeout_counter <= timeout_counter - 64'd1;
                     nak_detected       <= 1'b0;
                 end else if (nak_detected) begin
                     timeout_counter <= timeout_counter;
                     trigger_retransmit <= 1'b1;
+                    trigger_rnr_wait   <= 1'b0;
                 end else begin
-                    timeout_counter <= timeout_counter + 64'd1;
+                    // reduce timeout cunter
+                    timeout_counter <= timeout_counter - 64'd1;
                     trigger_retransmit <= 1'b0;
+                    trigger_rnr_wait   <= 1'b0;
                 end
             end
+
+            
         end
 
     end
@@ -909,6 +1037,7 @@ Simple DMA write logic
         retrans_roce_bth_p_key_reg    <= retrans_roce_bth_p_key_next  ;
         retrans_roce_bth_psn_reg      <= retrans_roce_bth_psn_next    ;
         retrans_roce_bth_dest_qp_reg  <= retrans_roce_bth_dest_qp_next;
+        retrans_roce_bth_src_qp_reg   <= retrans_roce_bth_src_qp_next;
         retrans_roce_bth_ack_req_reg  <= retrans_roce_bth_ack_req_next;
         retrans_roce_reth_v_addr_reg  <= retrans_roce_reth_v_addr_next;
         retrans_roce_reth_r_key_reg   <= retrans_roce_reth_r_key_next ;
@@ -931,14 +1060,18 @@ Simple DMA write logic
         retry_start_psn_reg   <= retry_start_psn_next;
 
         psn_diff_reg <= psn_diff_next;
-        
+
 
         if (rst_retry_cntr) begin
-            retry_counter_reg <= 4'd0;
-            n_retransmit_triggers_reg <= 32'd0;
+            retry_counter_reg     <= 4'd0;
+            rnr_retry_counter_reg <= 4'd0; 
+            n_retransmit_triggers_reg     <= 32'd0;
+            n_rnr_retransmit_triggers_reg <= 32'd0;
         end else begin
-            retry_counter_reg <= retry_counter_next;
-            n_retransmit_triggers_reg <= n_retransmit_triggers_next;
+            retry_counter_reg     <= retry_counter_next;
+            rnr_retry_counter_reg <= rnr_retry_counter_next;
+            n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
+            n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
         end
 
         stop_transfer_reg <= stop_transfer_next;
@@ -966,6 +1099,7 @@ Simple DMA write logic
     assign m_roce_bth_p_key     = axis_mux_select ?  s_roce_bth_p_key   : retrans_roce_bth_p_key_reg  ;
     assign m_roce_bth_psn       = axis_mux_select ?  s_roce_bth_psn     : retrans_roce_bth_psn_reg    ;
     assign m_roce_bth_dest_qp   = axis_mux_select ?  s_roce_bth_dest_qp : retrans_roce_bth_dest_qp_reg;
+    assign m_roce_bth_src_qp    = axis_mux_select ?  s_roce_bth_src_qp  : retrans_roce_bth_src_qp_reg;
     assign m_roce_bth_ack_req   = axis_mux_select ?  s_roce_bth_ack_req : retrans_roce_bth_ack_req_reg;
 
     assign m_roce_reth_v_addr   = s_roce_reth_v_addr;
@@ -1066,7 +1200,7 @@ Simple DMA write logic
         .m_axis_tuser ({s_axis_dma_write_fifo_data_tuser, axis_bypass_tuser})
     );
 
-    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE & !trigger_retransmit);
+    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && !trigger_retransmit && trigger_rnr_wait == 0);
 
     axis_mux #(
         .S_COUNT(2),

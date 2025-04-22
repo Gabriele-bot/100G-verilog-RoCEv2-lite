@@ -3,6 +3,7 @@
 
 
 module RoCE_minimal_stack_64  #(
+  parameter MAX_QUEUE_PAIRS = 4,
   parameter DEBUG          = 0,
   parameter RETRANSMISSION = 1,
   parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 20,
@@ -97,14 +98,30 @@ module RoCE_minimal_stack_64  #(
   /*
    * Configuration
    */
-  input  wire [12:0] pmtu,
-  input  wire [15:0] RoCE_udp_port,
-  input  wire [31:0] loc_ip_addr,
-  input  wire [63:0] timeout_period,
-  input  wire [4 :0] retry_count
+  input  wire [  2:0] pmtu,
+  input  wire [ 15:0] RoCE_udp_port,
+  input  wire [ 31:0] loc_ip_addr,
+  input  wire [ 63:0] timeout_period,
+  input  wire [ 2 :0] retry_count,
+  input  wire [ 2 :0] rnr_retry_count
 );
 
-localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
+  localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
+
+  localparam [7:0]
+  RC_SEND_FIRST         = 8'h00,
+  RC_SEND_MIDDLE        = 8'h01,
+  RC_SEND_LAST          = 8'h02,
+  RC_SEND_LAST_IMD      = 8'h03,
+  RC_SEND_ONLY          = 8'h04,
+  RC_SEND_ONLY_IMD      = 8'h05,
+  RC_RDMA_WRITE_FIRST   = 8'h06,
+  RC_RDMA_WRITE_MIDDLE  = 8'h07,
+  RC_RDMA_WRITE_LAST    = 8'h08,
+  RC_RDMA_WRITE_LAST_IMD= 8'h09,
+  RC_RDMA_WRITE_ONLY    = 8'h0A,
+  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
+  RC_RDMA_ACK           = 8'h11;
 
   reg [31:0] dma_length_reg = 32'd0;
   reg start_1;
@@ -216,6 +233,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire [15:0] roce_bth_p_key;
   wire [23:0] roce_bth_psn;
   wire [23:0] roce_bth_dest_qp;
+  wire [23:0] roce_bth_src_qp;
   wire roce_bth_ack_req;
 
   wire [63:0] roce_reth_v_addr;
@@ -255,6 +273,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire [15:0] m_roce_to_retrans_bth_p_key;
   wire [23:0] m_roce_to_retrans_bth_psn;
   wire [23:0] m_roce_to_retrans_bth_dest_qp;
+  wire [23:0] m_roce_to_retrans_bth_src_qp;
   wire        m_roce_to_retrans_bth_ack_req;
 
   wire [63:0] m_roce_to_retrans_reth_v_addr;
@@ -300,6 +319,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire [15:0] m_roce_to_dropper_bth_p_key;
   wire [23:0] m_roce_to_dropper_bth_psn;
   wire [23:0] m_roce_to_dropper_bth_dest_qp;
+  wire [23:0] m_roce_to_dropper_bth_src_qp;
   wire        m_roce_to_dropper_bth_ack_req;
 
   wire [63:0] m_roce_to_dropper_reth_v_addr;
@@ -365,6 +385,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   reg s_select_udp_reg = 1'b0;
   reg s_select_roce_reg = 1'b0;
 
+  wire        qp_init_open_qp;
   wire [31:0] qp_init_dma_transfer_length;
   wire [23:0] qp_init_rem_qpn;
   wire [23:0] qp_init_loc_qpn;
@@ -376,15 +397,21 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire        qp_is_immediate;
   wire        qp_tx_type;
 
-  wire [31:0] qp_update_dma_transfer_length;
-  wire [23:0] qp_update_rem_qpn;
-  wire [23:0] qp_update_loc_qpn;
-  wire [23:0] qp_update_rem_psn;
-  wire [31:0] qp_update_r_key;
-  wire [63:0] qp_update_rem_addr;
-  wire [31:0] qp_update_rem_ip_addr;
+  wire        qp_context_req;
+  wire [23:0] qp_local_qpn_req;
+
+  wire        s_qp_req_context_valid;
+  wire [31:0] s_qp_req_dma_transfer_length;
+  wire [2 :0] s_qp_req_state;
+  wire [23:0] s_qp_req_rem_qpn;
+  wire [23:0] s_qp_req_loc_qpn;
+  wire [23:0] s_qp_req_rem_psn;
+  wire [23:0] s_qp_req_loc_psn;
+  wire [31:0] s_qp_req_r_key;
+  wire [63:0] s_qp_req_rem_addr;
+  wire [31:0] s_qp_req_rem_ip_addr;
+
   wire start_transfer;
-  wire update_qp_state;
 
   wire stop_transfer;
   reg  stop_transfer_reg;
@@ -425,8 +452,18 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire qp_context_valid;
 
   reg s_dma_meta_valid_reg, s_dma_meta_valid_next;
+
   wire s_dma_meta_valid;
   wire s_dma_meta_ready;
+  wire [31:0] s_dma_length;
+  wire [23:0] s_rem_qpn;
+  wire [23:0] s_loc_qpn;
+  wire [23:0] s_rem_psn;
+  wire [31:0] s_r_key;
+  wire [31:0] s_rem_ip_addr;
+  wire [63:0] s_rem_addr;
+  wire        s_is_immediate;
+  wire        s_trasfer_type;
 
   /*
   AXI RAM INTERFACE
@@ -467,9 +504,8 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   wire                                        m_axi_rvalid;
   wire                                        m_axi_rready;
 
-
-  assign s_dma_meta_valid = s_dma_meta_valid_reg;
-
+  wire        m_qp_context_req;
+  wire [23:0] m_qp_local_qpn_req;
 
   function [3:0] keep2count;
     input [7:0] k;
@@ -503,66 +539,59 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   endfunction
 
 
+  reg [3:0] pmtu_shift;
+  reg [11:0] length_pmtu_mask;
+  reg new_transfer = 1'b0;
+  reg [7:0] bth_op_code_reg = 8'h00;
+
+  always @(posedge clk) begin
+    case (pmtu)
+      13'd256: begin
+        pmtu_shift <= 4'd8;
+        length_pmtu_mask = {4'h0, {8{1'b1}}};
+      end
+      13'd512: begin
+        pmtu_shift <= 4'd9;
+        length_pmtu_mask = {3'h0, {9{1'b1}}};
+      end
+      13'd1024: begin
+        pmtu_shift <= 4'd10;
+        length_pmtu_mask = {2'h0, {10{1'b1}}};
+      end
+      13'd2048: begin
+        pmtu_shift <= 4'd11;
+        length_pmtu_mask = {1'h0, {11{1'b1}}};
+      end
+      13'd4096: begin
+        pmtu_shift <= 4'd12;
+        length_pmtu_mask = {12{1'b1}};
+      end
+    endcase
+  end
+
   /*
    * Generate payolad data
    */
-
-    /*
-   * Generate payolad data
-   */
   axis_data_generator #(
-    .DATA_WIDTH(64)
-    ) axis_data_generator_instance (
-      .clk(clk),
-      .rst(rst),
-      .start(start_transfer_wire),
-      .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)),
-      .m_axis_tdata (s_payload_axis_tdata),
-      .m_axis_tkeep (s_payload_axis_tkeep),
-      .m_axis_tvalid(s_payload_axis_tvalid),
-      .m_axis_tready(s_payload_axis_tready),
-      .m_axis_tlast (s_payload_axis_tlast),
-      .m_axis_tuser (s_payload_axis_tuser),
-      .length(qp_init_dma_transfer_length)
-    );
-    
-    always @(posedge clk) begin
-      start_1 <= start_transfer_wire;
-      start_2 <= start_1;
-    end
+  .DATA_WIDTH(64)
+  ) axis_data_generator_instance (
+    .clk(clk),
+    .rst(rst),
+    .start(s_dma_meta_valid && s_dma_meta_ready),
+    .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)),
+    .m_axis_tdata (s_payload_axis_tdata),
+    .m_axis_tkeep (s_payload_axis_tkeep),
+    .m_axis_tvalid(s_payload_axis_tvalid),
+    .m_axis_tready(s_payload_axis_tready),
+    .m_axis_tlast (s_payload_axis_tlast),
+    .m_axis_tuser (s_payload_axis_tuser),
+    .length(s_dma_length)
+  );
 
-  /* 
   always @(posedge clk) begin
-    if (rst) begin
-      word_counter   <= {32{1'b1}} - 8;
-      dma_length_reg <= 32'd0;
-    end else begin
-      start_1 <= start_transfer_wire;
-      start_2 <= start_1;
-      if (s_payload_axis_tvalid && s_payload_axis_tready) begin
-        if ((word_counter <= qp_init_dma_transfer_length)) begin
-          word_counter <= word_counter + 8;
-        end
-      end else if (~start_1 && start_transfer_wire) begin
-        dma_length_reg <= qp_init_dma_transfer_length;
-        word_counter   <= {32{1'b1}} - 8;
-      end else if (~start_2 && start_1) begin
-        word_counter <= 0;
-      end
-    end
+    start_1 <= start_transfer_wire;
+    start_2 <= start_1;
   end
-
-  assign s_payload_axis_tdata[31:0] = word_counter;
-  assign s_payload_axis_tdata[63:32] = ~(word_counter);
-  assign s_payload_axis_tkeep = s_payload_axis_tlast ? ((count2keep(
-    word_counter
-  ) == 4'd0) ? {8{1'b1}} : count2keep(
-    word_counter
-  )) : {8{1'b1}};
-  assign s_payload_axis_tvalid = ((word_counter < dma_length_reg) ? 1'b1 : 1'b0);
-  assign s_payload_axis_tlast = (word_counter + 8 >= dma_length_reg) ? 1'b1 : 1'b0;
-  assign s_payload_axis_tuser = 1'b0;
-  */
 
   always @(posedge clk) begin
     if (rst) begin
@@ -687,16 +716,30 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   ) Roce_tx_header_producer_instance (
     .clk                       (clk),
     .rst                       (rst),
+    /* 
+        .s_dma_meta_valid          (s_dma_meta_valid),
+        .s_dma_meta_ready          (s_dma_meta_ready),
+        .s_dma_length              (qp_curr_dma_transfer_length),
+        .s_rem_qpn                 (qp_curr_rem_qpn),
+        .s_loc_qpn                 (qp_curr_loc_qpn),
+        .s_rem_psn                 (qp_curr_rem_psn),
+        .s_r_key                   (qp_curr_r_key),
+        .s_rem_ip_addr             (qp_curr_rem_ip_addr),
+        .s_rem_addr                (qp_curr_rem_addr),
+        .s_is_immediate            (qp_curr_is_immediate),
+        .s_trasfer_type            (qp_curr_tx_type),
+        */
     .s_dma_meta_valid          (s_dma_meta_valid),
     .s_dma_meta_ready          (s_dma_meta_ready),
-    .s_dma_length              (qp_curr_dma_transfer_length),
-    .s_rem_qpn                 (qp_curr_rem_qpn),
-    .s_rem_psn                 (qp_curr_rem_psn),
-    .s_r_key                   (qp_curr_r_key),
-    .s_rem_ip_addr             (qp_curr_rem_ip_addr),
-    .s_rem_addr                (qp_curr_rem_addr),
-    .s_is_immediate            (qp_curr_is_immediate),
-    .s_trasfer_type            (qp_curr_tx_type),
+    .s_dma_length              (s_dma_length),
+    .s_rem_qpn                 (s_rem_qpn),
+    .s_loc_qpn                 (s_loc_qpn),
+    .s_rem_psn                 (s_rem_psn),
+    .s_r_key                   (s_r_key),
+    .s_rem_ip_addr             (s_rem_ip_addr),
+    .s_rem_addr                (s_rem_addr),
+    .s_is_immediate            (s_is_immediate),
+    .s_trasfer_type            (s_trasfer_type),
     .s_axis_tdata              (s_payload_fifo_axis_tdata),
     .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
     .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -709,6 +752,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .m_roce_bth_p_key          (m_roce_to_retrans_bth_p_key),
     .m_roce_bth_psn            (m_roce_to_retrans_bth_psn),
     .m_roce_bth_dest_qp        (m_roce_to_retrans_bth_dest_qp),
+    .m_roce_bth_src_qp         (m_roce_to_retrans_bth_src_qp),
     .m_roce_bth_ack_req        (m_roce_to_retrans_bth_ack_req),
     .m_roce_reth_valid         (m_roce_to_retrans_reth_valid),
     .m_roce_reth_ready         (m_roce_to_retrans_reth_ready),
@@ -752,12 +796,11 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     if (RETRANSMISSION) begin
 
       wire [127:0] s_qp_params;
-      assign s_qp_params[31:0] = qp_curr_rem_ip_addr;
-      assign s_qp_params[31 :0  ] = qp_curr_rem_ip_addr;
-      assign s_qp_params[55 :32 ] = qp_curr_rem_qpn;
-      assign s_qp_params[79 :56 ] = qp_curr_loc_qpn;
-      assign s_qp_params[111:80 ] = qp_curr_r_key;
-      assign s_qp_params[127:112] = 16'hffff; //p_key
+      assign s_qp_params[31 :0  ] = s_rem_ip_addr;
+      assign s_qp_params[55 :32 ] = s_rem_qpn;
+      assign s_qp_params[79 :56 ] = s_loc_qpn;
+      assign s_qp_params[111:80 ] = s_r_key;
+      assign s_qp_params[127:112] = 16'hffff;
 
       RoCE_retransmission_module #(
         .DATA_WIDTH(64),
@@ -773,6 +816,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .s_roce_rx_aeth_syndrome     (m_roce_aeth_syndrome),
         .s_roce_rx_bth_psn           (m_roce_bth_psn),
         .s_roce_rx_bth_op_code       (m_roce_bth_op_code),
+        .s_roce_rx_bth_dest_qp       (m_roce_bth_dest_qp),
         .s_roce_rx_last_not_acked_psn(0),
         .s_roce_bth_valid            (m_roce_to_retrans_bth_valid),
         .s_roce_bth_ready            (m_roce_to_retrans_bth_ready),
@@ -780,6 +824,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .s_roce_bth_p_key            (m_roce_to_retrans_bth_p_key),
         .s_roce_bth_psn              (m_roce_to_retrans_bth_psn),
         .s_roce_bth_dest_qp          (m_roce_to_retrans_bth_dest_qp),
+        .s_roce_bth_src_qp           (m_roce_to_retrans_bth_src_qp),
         .s_roce_bth_ack_req          (m_roce_to_retrans_bth_ack_req),
         .s_roce_reth_valid           (m_roce_to_retrans_reth_valid),
         .s_roce_reth_ready           (m_roce_to_retrans_reth_ready),
@@ -820,6 +865,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .m_roce_bth_p_key            (m_roce_to_dropper_bth_p_key),
         .m_roce_bth_psn              (m_roce_to_dropper_bth_psn),
         .m_roce_bth_dest_qp          (m_roce_to_dropper_bth_dest_qp),
+        .m_roce_bth_src_qp           (m_roce_to_dropper_bth_src_qp),
         .m_roce_bth_ack_req          (m_roce_to_dropper_bth_ack_req),
         .m_roce_reth_valid           (m_roce_to_dropper_reth_valid),
         .m_roce_reth_ready           (m_roce_to_dropper_reth_ready),
@@ -896,11 +942,9 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .psn_diff(psn_diff),
         .used_memory(used_memory),
         // Config
-        // 3.1 ns * 16000 clks = 49.6 us
-        // 49.6 us * 100 Gbps = 4.96 Mb
-        // Addr width (in byte) = log2(4.96 Mb / 8) = 19.24 --> 20 bits (8.3 Mb)
         .timeout_period(timeout_period),
         .retry_count(retry_count),
+        .rnr_retry_count(rnr_retry_count),
         .pmtu(pmtu),
         .en_retrans(en_retrans)
       );
@@ -1063,6 +1107,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
       assign roce_bth_p_key = m_roce_to_retrans_bth_p_key;
       assign roce_bth_psn = m_roce_to_retrans_bth_psn;
       assign roce_bth_dest_qp = m_roce_to_retrans_bth_dest_qp;
+      assign roce_bth_src_qp = m_roce_to_retrans_bth_src_qp;
       assign roce_bth_ack_req = m_roce_to_retrans_bth_ack_req;
       assign roce_reth_valid = m_roce_to_retrans_reth_valid;
       assign m_roce_to_retrans_reth_ready = roce_reth_ready;
@@ -1121,6 +1166,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .s_roce_bth_p_key          (m_roce_to_dropper_bth_p_key),
         .s_roce_bth_psn            (m_roce_to_dropper_bth_psn),
         .s_roce_bth_dest_qp        (m_roce_to_dropper_bth_dest_qp),
+        .s_roce_bth_src_qp         (m_roce_to_dropper_bth_src_qp),
         .s_roce_bth_ack_req        (m_roce_to_dropper_bth_ack_req),
         .s_roce_reth_valid         (m_roce_to_dropper_reth_valid),
         .s_roce_reth_ready         (m_roce_to_dropper_reth_ready),
@@ -1161,6 +1207,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
         .m_roce_bth_p_key          (roce_bth_p_key),
         .m_roce_bth_psn            (roce_bth_psn),
         .m_roce_bth_dest_qp        (roce_bth_dest_qp),
+        .m_roce_bth_src_qp         (roce_bth_src_qp),
         .m_roce_bth_ack_req        (roce_bth_ack_req),
         .m_roce_reth_valid         (roce_reth_valid),
         .m_roce_reth_ready         (roce_reth_ready),
@@ -1204,14 +1251,15 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
       assign roce_bth_p_key              = m_roce_to_dropper_bth_p_key;
       assign roce_bth_psn                = m_roce_to_dropper_bth_psn;
       assign roce_bth_dest_qp            = m_roce_to_dropper_bth_dest_qp;
+      assign roce_bth_src_qp             = m_roce_to_dropper_bth_src_qp;
       assign roce_bth_ack_req            = m_roce_to_dropper_bth_ack_req;
       assign roce_reth_valid             = m_roce_to_dropper_reth_valid;
-      assign roce_reth_ready             = m_roce_to_dropper_reth_ready;
+      assign m_roce_to_dropper_reth_ready = roce_reth_ready;
       assign roce_reth_v_addr            = m_roce_to_dropper_reth_v_addr;
       assign roce_reth_r_key             = m_roce_to_dropper_reth_r_key;
       assign roce_reth_length            = m_roce_to_dropper_reth_length;
       assign roce_immdh_valid            = m_roce_to_dropper_immdh_valid;
-      assign roce_immdh_ready            = m_roce_to_dropper_immdh_ready;
+      assign m_roce_to_dropper_immdh_ready = roce_immdh_ready;
       assign roce_immdh_data             = m_roce_to_dropper_immdh_data;
       assign eth_dest_mac                = m_roce_to_dropper_eth_dest_mac;
       assign eth_src_mac                 = m_roce_to_dropper_eth_src_mac;
@@ -1434,9 +1482,10 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
 
 
 
-  udp_RoCE_connection_manager_64 #(
-  .LISTEN_UDP_PORT(16'h4321)
-  ) udp_RoCE_connection_manager_64_instance (
+  udp_RoCE_connection_manager #(
+    .DATA_WIDTH(64),
+    .LISTEN_UDP_PORT(16'h4321)
+  ) udp_RoCE_connection_manager_instance (
     .clk(clk),
     .rst(rst),
     .s_udp_hdr_valid(rx_udp_cm_hdr_valid),
@@ -1467,6 +1516,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .s_udp_payload_axis_tready(rx_udp_cm_payload_axis_tready),
     .s_udp_payload_axis_tlast(rx_udp_cm_payload_axis_tlast),
     .s_udp_payload_axis_tuser(rx_udp_cm_payload_axis_tuser),
+    .open_qp(qp_init_open_qp),
     .dma_transfer(qp_init_dma_transfer_length),
     .r_key(qp_init_r_key),
     .rem_qpn(qp_init_rem_qpn),
@@ -1482,6 +1532,7 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .qp_context_valid(qp_context_valid),
     .busy()
   );
+
 
   wire [63:0] tot_time_wo_ack_avg;
   wire [63:0] tot_time_avg;
@@ -1536,13 +1587,14 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
   );
 
   RoCE_qp_state_module #(
-  .REM_ADDR_WIDTH(16)
+    .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS),
+    .REM_ADDR_WIDTH(16)
   ) RoCE_qp_state_module_instance (
     .clk                    (clk),
     .rst                    (rst),
     .rst_qp                 (start_transfer),
     .qp_context_valid       (qp_context_valid),
-    .qp_init_dma_transfer   (qp_init_dma_transfer_length),
+    .qp_init_open_qp        (qp_init_open_qp),
     .qp_init_r_key          (qp_init_r_key),
     .qp_init_rem_qpn        (qp_init_rem_qpn),
     .qp_init_loc_qpn        (qp_init_loc_qpn),
@@ -1550,18 +1602,26 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .qp_init_loc_psn        (qp_init_loc_psn),
     .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
     .qp_init_rem_addr       (qp_init_rem_addr),
-    .s_roce_tx_bth_valid    (roce_bth_valid),
-    .s_roce_tx_bth_ready    (),
-    .s_roce_tx_bth_op_code  (roce_bth_op_code),
-    .s_roce_tx_bth_p_key    (roce_bth_p_key),
-    .s_roce_tx_bth_psn      (roce_bth_psn),
-    .s_roce_tx_bth_dest_qp  (roce_bth_dest_qp),
-    .s_roce_tx_bth_ack_req  (roce_bth_ack_req),
-    .s_roce_tx_reth_valid   (roce_reth_valid),
-    .s_roce_tx_reth_v_addr  (roce_reth_v_addr),
-    .s_roce_tx_reth_r_key   (roce_reth_r_key),
-    .s_roce_tx_reth_length  (roce_reth_length),
-    .s_roce_rx_bth_valid    (m_roce_rx_to_dropper_bth_valid),
+
+    .qp_context_req         (m_qp_context_req),
+    .qp_local_qpn_req       (m_qp_local_qpn_req),
+    .qp_req_context_valid   (s_qp_req_context_valid),
+    .qp_req_state           (s_qp_req_state),
+    .qp_req_r_key           (s_qp_req_r_key),
+    .qp_req_rem_qpn         (s_qp_req_rem_qpn),
+    .qp_req_loc_qpn         (s_qp_req_loc_qpn),
+    .qp_req_rem_psn         (s_qp_req_rem_psn),
+    .qp_req_loc_psn         (s_qp_req_loc_psn),
+    .qp_req_rem_ip_addr     (s_qp_req_rem_ip_addr),
+    .qp_req_rem_addr        (s_qp_req_rem_addr),
+
+    .s_dma_meta_valid       (s_dma_meta_valid & s_dma_meta_ready),
+    .s_meta_dma_length      (s_dma_length),
+    .s_meta_rem_qpn         (s_rem_qpn),
+    .s_meta_loc_qpn         (s_loc_qpn),
+    .s_meta_rem_psn         (s_rem_psn),
+
+    .s_roce_rx_bth_valid    (m_roce_rx_to_dropper_bth_valid & m_roce_rx_to_dropper_bth_ready),
     .s_roce_rx_bth_ready    (),
     .s_roce_rx_bth_op_code  (m_roce_rx_to_dropper_bth_op_code),
     .s_roce_rx_bth_p_key    (m_roce_rx_to_dropper_bth_p_key),
@@ -1573,87 +1633,31 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     .s_roce_rx_aeth_syndrome(m_roce_rx_to_dropper_aeth_syndrome),
     .s_roce_rx_aeth_msn     (m_roce_rx_to_dropper_aeth_msn),
     .last_acked_psn         (last_acked_psn),
-    .stop_transfer          (stop_transfer_nack)
+    .stop_transfer          (stop_transfer_nack),
+    .pmtu(pmtu)
   );
 
-  reg [3:0] pmtu_shift;
-  reg [11:0] length_pmtu_mask;
-  reg new_transfer;
-  reg [7:0] bth_op_code_reg = 8'h00;
 
-  always @(posedge clk) begin
-    case (pmtu)
-      13'd256: begin
-        pmtu_shift <= 4'd8;
-        length_pmtu_mask = {4'h0, {8{1'b1}}};
-      end
-      13'd512: begin
-        pmtu_shift <= 4'd9;
-        length_pmtu_mask = {3'h0, {9{1'b1}}};
-      end
-      13'd1024: begin
-        pmtu_shift <= 4'd10;
-        length_pmtu_mask = {2'h0, {10{1'b1}}};
-      end
-      13'd2048: begin
-        pmtu_shift <= 4'd11;
-        length_pmtu_mask = {1'h0, {11{1'b1}}};
-      end
-      13'd4096: begin
-        pmtu_shift <= 4'd12;
-        length_pmtu_mask = {12{1'b1}};
-      end
-    endcase
-  end
 
+  reg [23:0] wr_req_loc_qp;
+  reg [31:0] wr_req_dma_length;
+  reg [63:0] wr_req_addr_offset;
+  reg        wr_req_is_immediate;
+  reg        wr_req_tx_type;
+
+  // Dummy work request producer
+  // TODO add optio to do multiple transfers
   always @(posedge clk) begin
     if (m_roce_to_retrans_bth_valid && m_roce_to_retrans_bth_ready) begin
       bth_op_code_reg <= m_roce_to_retrans_bth_op_code;
     end
 
     if (start_transfer) begin
-      qp_update_dma_transfer_length_reg <= qp_init_dma_transfer_length;
-      qp_update_r_key_reg               <= qp_init_r_key;
-      qp_update_rem_qpn_reg             <= qp_init_rem_qpn;
-      qp_update_loc_qpn_reg             <= qp_init_loc_qpn;
-      qp_update_rem_psn_reg             <= qp_init_rem_psn;
-      qp_update_rem_ip_addr_reg         <= qp_init_rem_ip_addr;
-      qp_update_is_immediate_reg        <= qp_is_immediate;
-      qp_update_tx_type_reg             <= qp_tx_type;
-      qp_update_rem_addr_base_reg       <= qp_init_rem_addr;
-      qp_update_rem_addr_offset_reg     <= 32'd0;
-      sent_messages                     <= 32'd0;
-    end else begin
-      //if (roce_bth_valid && roce_bth_ready && roce_reth_valid) begin
-      if (s_dma_meta_valid && s_dma_meta_ready) begin
-        //qp_update_dma_transfer_length_reg <= qp_update_dma_transfer_length_reg;
-        //qp_update_r_key_reg <= qp_update_r_key_reg;
-        //qp_update_rem_qpn_reg <= qp_update_rem_qpn_reg;
-        //qp_update_loc_qpn_reg <= qp_update_loc_qpn_reg;
-        if (|(qp_update_dma_transfer_length_reg[11:0] & length_pmtu_mask) == 1'b0) begin
-          qp_update_rem_psn_reg <= qp_update_rem_psn_reg + (qp_update_dma_transfer_length_reg >> pmtu_shift);
-        end else begin
-          qp_update_rem_psn_reg <= qp_update_rem_psn_reg + (qp_update_dma_transfer_length_reg >> pmtu_shift) + 1;
-        end
-
-        qp_update_rem_ip_addr_reg  <= qp_update_rem_ip_addr_reg;
-        qp_update_is_immediate_reg <= qp_update_is_immediate_reg;
-        qp_update_tx_type_reg      <= qp_update_tx_type_reg;
-        qp_update_rem_addr_offset_reg[17:0] <= qp_update_rem_addr_offset_reg[17:0] + qp_update_dma_transfer_length_reg[17:0];
-      end
-    end
-
-
-    if (stop_transfer) begin
-      new_transfer  <= 1'b0;
-      sent_messages <= {32{1'b1}};
-    end else if (m_roce_to_retrans_payload_axis_tvalid && m_roce_to_retrans_payload_axis_tready && m_roce_to_retrans_payload_axis_tlast & bth_op_code_reg[7:2] == 6'b000010) begin // LAST, LAST-IMMD, ONLY, ONLY-IMMD
-      sent_messages <= sent_messages + 32'd1;
-      if (sent_messages < n_transfers - 32'd1) begin
-        new_transfer <= 1'b1;
-      end
-    end else begin
-      new_transfer <= 1'b0;
+      wr_req_loc_qp         <= qp_init_loc_qpn;
+      wr_req_dma_length     <= qp_init_dma_transfer_length;
+      wr_req_addr_offset    <= 0;
+      wr_req_is_immediate   <= qp_is_immediate;
+      wr_req_tx_type        <= qp_tx_type;
     end
 
     start_transfer_reg <= start_transfer;
@@ -1665,32 +1669,68 @@ localparam [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
     end
   end
 
-  always @* begin
-    s_dma_meta_valid_next           = s_dma_meta_valid_reg && !s_dma_meta_ready;
-    if (start_2) begin
-      s_dma_meta_valid_next = 1'b1;
-    end
-  end
+  // Work request
+  wire         s_wr_req_valid;
+  wire         s_wr_req_ready;
 
-  always @(posedge clk) begin
-    if (rst) begin
-      s_dma_meta_valid_reg <= 1'b0;
-    end else begin
-      s_dma_meta_valid_reg <= s_dma_meta_valid_next;
-    end
-  end
+  assign s_wr_req_valid = start_1 & ~start_2;
 
-  assign qp_curr_dma_transfer_length = qp_update_dma_transfer_length_reg;
-  assign qp_curr_r_key               = qp_update_r_key_reg;
-  assign qp_curr_rem_qpn             = qp_update_rem_qpn_reg;
-  assign qp_curr_loc_qpn             = qp_update_loc_qpn_reg;
-  assign qp_curr_rem_psn             = qp_update_rem_psn_reg;
-  assign qp_curr_rem_ip_addr         = qp_update_rem_ip_addr_reg;
-  assign qp_curr_is_immediate        = qp_update_is_immediate_reg;
-  assign qp_curr_tx_type             = qp_update_tx_type_reg;
-  assign qp_curr_rem_addr            = qp_update_rem_addr_base_reg + qp_update_rem_addr_offset_reg;
+  wire         s_wr_req_tx_type; // 0 WRITE, 1 SEND
+  wire         s_wr_req_is_immediate;
+  wire [23:0]  s_wr_req_loc_qp;
+  wire [63:0]  s_wr_req_addr_offset;
+  wire [31:0]  s_wr_req_dma_length; // for each transfer
+  wire [31:0]  s_wr_n_transfers;
+
+  assign s_wr_req_tx_type = wr_req_tx_type; // 0 WRITE, 1 SEND
+  assign s_wr_req_is_immediate = wr_req_is_immediate;
+  assign s_wr_req_loc_qp = wr_req_loc_qp;
+  assign s_wr_req_addr_offset = wr_req_addr_offset;
+  assign s_wr_req_dma_length = wr_req_dma_length; // for each transfer
+
+  RoCE_simple_work_queue #(
+    .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS),
+    .QUEUE_LENGTH(32)
+  ) RoCE_simple_work_queue_instance (
+    .clk(clk),
+    .rst(rst),
+
+    .s_wr_req_valid       (s_wr_req_valid),
+    .s_wr_req_ready       (s_wr_req_ready),
+    .s_wr_req_loc_qp      (s_wr_req_loc_qp),
+    .s_wr_req_dma_length  (s_wr_req_dma_length),
+    .s_wr_req_addr_offset (s_wr_req_addr_offset),
+    .s_wr_req_is_immediate(s_wr_req_is_immediate),
+    .s_wr_req_tx_type     (s_wr_req_tx_type),
+
+    .m_qp_context_req     (m_qp_context_req),
+    .m_qp_local_qpn_req   (m_qp_local_qpn_req),
+    .s_qp_context_valid   (s_qp_req_context_valid),
+    .s_qp_state           (s_qp_req_state),
+    .s_qp_r_key           (s_qp_req_r_key),
+    .s_qp_rem_qpn         (s_qp_req_rem_qpn),
+    .s_qp_loc_qpn         (s_qp_req_loc_qpn),
+    .s_qp_rem_psn         (s_qp_req_rem_psn),
+    .s_qp_loc_psn         (s_qp_req_loc_psn),
+    .s_qp_rem_ip_addr     (s_qp_req_rem_ip_addr),
+    .s_qp_rem_addr        (s_qp_req_rem_addr),
+
+    .m_dma_meta_valid     (s_dma_meta_valid),
+    .m_dma_meta_ready     (s_dma_meta_ready),
+    .m_dma_length         (s_dma_length),
+    .m_rem_qpn            (s_rem_qpn),
+    .m_loc_qpn            (s_loc_qpn),
+    .m_rem_psn            (s_rem_psn),
+    .m_r_key              (s_r_key),
+    .m_rem_ip_addr        (s_rem_ip_addr),
+    .m_rem_addr           (s_rem_addr),
+    .m_is_immediate       (s_is_immediate),
+    .m_trasfer_type       (s_trasfer_type)
+  );
+
 
   assign start_transfer_wire         = start_transfer_reg || new_transfer;
+
 
   generate
     if (DEBUG) begin
