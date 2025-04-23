@@ -353,14 +353,14 @@ module RoCE_minimal_stack #(
 
 
     wire        m_roce_bth_valid;
-    wire        m_roce_bth_ready;
+    wire        m_roce_bth_ready = 1'b1;
     wire [7:0]  m_roce_bth_op_code;
     wire [15:0] m_roce_bth_p_key;
     wire [23:0] m_roce_bth_psn;
     wire [23:0] m_roce_bth_dest_qp;
     wire        m_roce_bth_ack_req;
     wire        m_roce_aeth_valid;
-    wire        m_roce_aeth_ready;
+    wire        m_roce_aeth_ready = 1'b1;
     wire [7:0]  m_roce_aeth_syndrome;
     wire [23:0] m_roce_aeth_msn;
 
@@ -396,11 +396,11 @@ module RoCE_minimal_stack #(
     wire        qp_is_immediate;
     wire        qp_tx_type;
 
-    wire        qp_context_req;
-    wire [23:0] qp_local_qpn_req;
+    // QP request
+    wire        m_qp_context_req;
+    wire [23:0] m_qp_local_qpn_req;
 
     wire        s_qp_req_context_valid;
-    wire [31:0] s_qp_req_dma_transfer_length;
     wire [2 :0] s_qp_req_state;
     wire [23:0] s_qp_req_rem_qpn;
     wire [23:0] s_qp_req_loc_qpn;
@@ -409,6 +409,22 @@ module RoCE_minimal_stack #(
     wire [31:0] s_qp_req_r_key;
     wire [63:0] s_qp_req_rem_addr;
     wire [31:0] s_qp_req_rem_ip_addr;
+
+    // QP state spy
+    wire        m_qp_context_spy;
+    wire [23:0] m_qp_local_qpn_spy;
+
+    wire        s_qp_spy_context_valid;
+    wire [2 :0] s_qp_spy_state;
+    wire [23:0] s_qp_spy_rem_qpn;
+    wire [23:0] s_qp_spy_loc_qpn;
+    wire [23:0] s_qp_spy_rem_psn;
+    wire [23:0] s_qp_spy_rem_acked_psn;
+    wire [23:0] s_qp_spy_loc_psn;
+    wire [31:0] s_qp_spy_r_key;
+    wire [63:0] s_qp_spy_rem_addr;
+    wire [31:0] s_qp_spy_rem_ip_addr;
+
 
     wire start_transfer;
 
@@ -511,9 +527,6 @@ module RoCE_minimal_stack #(
     wire [26:0] RoCE_tx_n_valid_up;
     wire [26:0] RoCE_tx_n_ready_up;
     wire [26:0] RoCE_tx_n_both_up;
-
-    wire        m_qp_context_req;
-    wire [23:0] m_qp_local_qpn_req;
 
     reg [3:0] pmtu_shift;
     reg [11:0] length_pmtu_mask;
@@ -1602,6 +1615,20 @@ module RoCE_minimal_stack #(
         .qp_req_rem_ip_addr     (s_qp_req_rem_ip_addr),
         .qp_req_rem_addr        (s_qp_req_rem_addr),
 
+        // QP spy
+        .qp_context_spy         (m_qp_context_spy),
+        .qp_local_qpn_spy       (m_qp_local_qpn_spy),
+        .qp_spy_context_valid   (s_qp_spy_context_valid),
+        .qp_spy_state           (s_qp_spy_state),
+        .qp_spy_r_key           (s_qp_spy_r_key),
+        .qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
+        .qp_spy_loc_qpn         (s_qp_spy_loc_qpn),
+        .qp_spy_rem_psn         (s_qp_spy_rem_psn),
+        .qp_spy_rem_acked_psn   (s_qp_spy_rem_acked_psn),
+        .qp_spy_loc_psn         (s_qp_spy_loc_psn),
+        .qp_spy_rem_ip_addr     (s_qp_spy_rem_ip_addr),
+        .qp_spy_rem_addr        (s_qp_spy_rem_addr),
+
         .s_dma_meta_valid       (s_dma_meta_valid & s_dma_meta_ready),
         .s_meta_dma_length      (s_dma_length),
         .s_meta_rem_qpn         (s_rem_qpn),
@@ -1632,7 +1659,7 @@ module RoCE_minimal_stack #(
     reg        wr_req_tx_type;
 
     // Dummy work request producer
-    // TODO add optio to do multiple transfers
+    // TODO add option to do multiple transfers
     always @(posedge clk) begin
         if (m_roce_to_retrans_bth_valid && m_roce_to_retrans_bth_ready) begin
             bth_op_code_reg <= m_roce_to_retrans_bth_op_code;
@@ -1735,6 +1762,22 @@ module RoCE_minimal_stack #(
                 .probe_in11(used_memory),
                 .probe_out0(n_transfers),
                 .probe_out1(en_retrans)
+            );
+
+            vio_qp_state_spy VIO_roce_qp_state_spy (
+                .clk(clk),
+                .probe_in0(s_qp_spy_context_valid),
+                .probe_in1(s_qp_spy_state),
+                .probe_in2(s_qp_spy_r_key),
+                .probe_in3(s_qp_spy_rem_qpn),
+                .probe_in4(s_qp_spy_loc_qpn),
+                .probe_in5(s_qp_spy_rem_psn),
+                .probe_in6(s_qp_spy_rem_acked_psn),
+                .probe_in7(s_qp_spy_loc_psn),
+                .probe_in8(s_qp_spy_rem_ip_addr),
+                .probe_in9(s_qp_spy_rem_addr),
+                .probe_out0(m_qp_context_spy),
+                .probe_out1(m_qp_local_qpn_spy)
             );
 
             /*

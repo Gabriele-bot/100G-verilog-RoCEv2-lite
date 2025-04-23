@@ -53,10 +53,14 @@ module RoCE_simple_work_queue #
     localparam MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
 
     localparam [2:0]
-    QP_STATE_INIT  = 3'd0,
-    QP_STATE_RTR   = 3'd1,
-    QP_STATE_RTS   = 3'd2,
-    QP_STATE_ERROR = 3'd3;
+    QP_STATE_RESET    = 3'd0,
+    QP_STATE_INIT     = 3'd1,
+    QP_STATE_RTR      = 3'd2,
+    QP_STATE_RTS      = 3'd3,
+    QP_STATE_SQ_DRAIN = 3'd4,
+    QP_STATE_SQ_ERROR = 3'd5,
+    QP_STATE_ERROR    = 3'd6;
+
 
     localparam [9:0] WORK_QUEUE_LENGTH = 2**($clog2(24+32+64+1+1));
 
