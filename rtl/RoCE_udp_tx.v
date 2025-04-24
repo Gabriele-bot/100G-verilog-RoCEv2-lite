@@ -541,7 +541,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
                     m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
                     m_udp_payload_axis_tdata_int[11:8] = 4'b0; // Header version
                     m_udp_payload_axis_tdata_int[13:12] = 2'b0; // Pad count
-                    m_udp_payload_axis_tdata_int[14] = 1'b0; // Mig request
+                    m_udp_payload_axis_tdata_int[14] = 1'b1; // Mig request
                     m_udp_payload_axis_tdata_int[15] = solicited_event_reg; // Solicited Event
                     m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
                     m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
@@ -606,7 +606,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
                     m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
                     m_udp_payload_axis_tdata_int[11:8] = 4'b0; // Header version
                     m_udp_payload_axis_tdata_int[13:12] = 2'b0; // Pad count
-                    m_udp_payload_axis_tdata_int[14] = 1'b0; // Mig request
+                    m_udp_payload_axis_tdata_int[14] = 1'b1; // Mig request
                     m_udp_payload_axis_tdata_int[15] = solicited_event_reg; // Solicited Event
                     m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
                     m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
@@ -673,7 +673,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
                     m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
                     m_udp_payload_axis_tdata_int[11:8] = 4'b0; // Header version
                     m_udp_payload_axis_tdata_int[13:12] = 2'b0; // Pad count
-                    m_udp_payload_axis_tdata_int[14] = 1'b0; // Mig request
+                    m_udp_payload_axis_tdata_int[14] = 1'b1; // Mig request
                     m_udp_payload_axis_tdata_int[15] = solicited_event_reg; // Solicited Event
                     m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
                     m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
@@ -752,7 +752,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
                     m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
                     m_udp_payload_axis_tdata_int[11:8] = 4'b0; // Header version
                     m_udp_payload_axis_tdata_int[13:12] = 2'b0; // Pad count
-                    m_udp_payload_axis_tdata_int[14] = 1'b0; // Mig request
+                    m_udp_payload_axis_tdata_int[14] = 1'b1; // Mig request
                     m_udp_payload_axis_tdata_int[15] = solicited_event_reg; // Solicited Event
                     m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
                     m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];

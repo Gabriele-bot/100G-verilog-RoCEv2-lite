@@ -482,7 +482,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           if (m_udp_payload_axis_tready_int_reg) begin
             m_udp_payload_axis_tvalid_int = 1'b1;
             m_udp_payload_axis_tdata_int[7:0] = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
+            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b1, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
             m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
             m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
             m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
@@ -510,7 +510,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           if (m_udp_payload_axis_tready_int_reg) begin
             m_udp_payload_axis_tvalid_int       = 1'b1;
             m_udp_payload_axis_tdata_int[7:0]   = s_roce_bth_op_code[7:0];
-            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
+            m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_next, 1'b1, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
             m_udp_payload_axis_tdata_int[23:16] = s_roce_bth_p_key[15:8];
             m_udp_payload_axis_tdata_int[31:24] = s_roce_bth_p_key[7:0];
             m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
@@ -551,7 +551,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
           case (hdr_ptr_reg)
             6'h00: begin
               m_udp_payload_axis_tdata_int[7:0] = roce_bth_op_code_reg[7:0];
-              m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_reg, 1'b0, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
+              m_udp_payload_axis_tdata_int[15:8]  = {solicited_event_reg, 1'b1, 2'b0, 4'b0}; // Header version, Pad count, Mig request ,Solicited_event
               m_udp_payload_axis_tdata_int[23:16] = roce_bth_p_key_reg[15:8];
               m_udp_payload_axis_tdata_int[31:24] = roce_bth_p_key_reg[7:0];
               m_udp_payload_axis_tdata_int[39:32] = 8'b0; // Reserved
