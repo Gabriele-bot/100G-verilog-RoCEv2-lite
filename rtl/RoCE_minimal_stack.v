@@ -424,6 +424,7 @@ module RoCE_minimal_stack #(
     wire [31:0] s_qp_spy_r_key;
     wire [63:0] s_qp_spy_rem_addr;
     wire [31:0] s_qp_spy_rem_ip_addr;
+    wire [7:0]  s_qp_spy_syndrome;
 
 
     wire start_transfer;
@@ -1628,6 +1629,7 @@ module RoCE_minimal_stack #(
         .qp_spy_loc_psn         (s_qp_spy_loc_psn),
         .qp_spy_rem_ip_addr     (s_qp_spy_rem_ip_addr),
         .qp_spy_rem_addr        (s_qp_spy_rem_addr),
+        .qp_spy_syndrome        (s_qp_spy_syndrome),
 
         .s_dma_meta_valid       (s_dma_meta_valid & s_dma_meta_ready),
         .s_meta_dma_length      (s_dma_length),
@@ -1766,16 +1768,17 @@ module RoCE_minimal_stack #(
 
             vio_qp_state_spy VIO_roce_qp_state_spy (
                 .clk(clk),
-                .probe_in0(s_qp_spy_context_valid),
-                .probe_in1(s_qp_spy_state),
-                .probe_in2(s_qp_spy_r_key),
-                .probe_in3(s_qp_spy_rem_qpn),
-                .probe_in4(s_qp_spy_loc_qpn),
-                .probe_in5(s_qp_spy_rem_psn),
-                .probe_in6(s_qp_spy_rem_acked_psn),
-                .probe_in7(s_qp_spy_loc_psn),
-                .probe_in8(s_qp_spy_rem_ip_addr),
-                .probe_in9(s_qp_spy_rem_addr),
+                .probe_in0 (s_qp_spy_context_valid),
+                .probe_in1 (s_qp_spy_state),
+                .probe_in2 (s_qp_spy_r_key),
+                .probe_in3 (s_qp_spy_rem_qpn),
+                .probe_in4 (s_qp_spy_loc_qpn),
+                .probe_in5 (s_qp_spy_rem_psn),
+                .probe_in6 (s_qp_spy_rem_acked_psn),
+                .probe_in7 (s_qp_spy_loc_psn),
+                .probe_in8 (s_qp_spy_rem_ip_addr),
+                .probe_in9 (s_qp_spy_rem_addr),
+                .probe_in10(s_qp_spy_syndrome),
                 .probe_out0(m_qp_context_spy),
                 .probe_out1(m_qp_local_qpn_spy)
             );

@@ -501,11 +501,6 @@ module RoCE_qp_state_module #(
       end else begin
         stop_transfer_reg <= 1'b0;
       end
-
-      if (s_roce_rx_bth_valid) begin
-        qp_close_ptr_reg  <= s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS-1:0];
-        qp_update_ptr_reg <= s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS-1:0];
-      end
     end
   end
 
@@ -529,7 +524,7 @@ module RoCE_qp_state_module #(
   assign qp_spy_loc_psn       = qp_spy_context_pipe[LOC_PSN_OFFSET    +: 24];
   assign qp_spy_rem_addr      = qp_spy_context_pipe[VADDR_OFFSET      +: 64];
   assign qp_spy_r_key         = qp_spy_context_pipe[RKEY_OFFSET       +: 32];
-  assign qp_spy_syndrome      = qp_spy_context_pipe[SYNDROME_OFFSET   +: 32];
+  assign qp_spy_syndrome      = qp_spy_context_pipe[SYNDROME_OFFSET   +: 8];
 
   assign s_roce_rx_bth_ready = 1'b1;
   assign s_roce_rx_aeth_ready = 1'b1;
