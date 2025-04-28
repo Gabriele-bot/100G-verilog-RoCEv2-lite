@@ -47,8 +47,8 @@ initial begin
   
   always
   begin
-    #25.00 clk20 <= 1;
-    #25.00 clk20 <= 0;
+    #15.00 clk20 <= 1;
+    #15.00 clk20 <= 0;
   end
   
   always
