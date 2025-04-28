@@ -372,13 +372,8 @@ always @* begin
             `_HEADER_FIELD_(1,  udp_source_port_reg[0*8 +: 8])
             `_HEADER_FIELD_(2,  udp_dest_port_reg[1*8 +: 8])
             `_HEADER_FIELD_(3,  udp_dest_port_reg[0*8 +: 8])
-            if (s_udp_dest_port == RoCE_udp_port) begin
-                `_HEADER_FIELD_(4,  udp_length_roce_reg[1*8 +: 8])
-                `_HEADER_FIELD_(5,  udp_length_roce_reg[0*8 +: 8])
-            end else begin
-                `_HEADER_FIELD_(4,  udp_length_reg[1*8 +: 8])
-                `_HEADER_FIELD_(5,  udp_length_reg[0*8 +: 8])
-            end
+            `_HEADER_FIELD_(4,  udp_length_reg[1*8 +: 8])
+            `_HEADER_FIELD_(5,  udp_length_reg[0*8 +: 8])
             `_HEADER_FIELD_(6,  udp_checksum_reg[1*8 +: 8])
             `_HEADER_FIELD_(7,  udp_checksum_reg[0*8 +: 8])
 
@@ -422,11 +417,7 @@ always @(posedge clk) begin
         m_ip_ihl_reg <= s_ip_ihl;
         m_ip_dscp_reg <= s_ip_dscp;
         m_ip_ecn_reg <= s_ip_ecn;
-        if (s_udp_source_port == RoCE_udp_port) begin
-       	    m_ip_length_reg <= s_udp_length + 24;
-        end else begin
-            m_ip_length_reg <= s_udp_length + 20;
-        end
+        m_ip_length_reg <= s_udp_length + 20;
         m_ip_identification_reg <= s_ip_identification;
         m_ip_flags_reg <= s_ip_flags;
         m_ip_fragment_offset_reg <= s_ip_fragment_offset;
@@ -438,13 +429,12 @@ always @(posedge clk) begin
         m_is_roce_packet_reg <= s_udp_dest_port == RoCE_udp_port;
         udp_source_port_reg <= s_udp_source_port;
         udp_dest_port_reg <= s_udp_dest_port;
-        if (s_udp_source_port == RoCE_udp_port) begin
-            udp_length_reg <= s_udp_length + 16'd4;
+        if (s_udp_dest_port == RoCE_udp_port) begin
+       	    udp_length_reg <= s_udp_length + 4;
         end else begin
             udp_length_reg <= s_udp_length;
         end
         udp_checksum_reg <= s_udp_checksum;
-        udp_length_roce_reg <= s_udp_length + 16'd4;
     end
 
     if (transfer_in_save) begin
