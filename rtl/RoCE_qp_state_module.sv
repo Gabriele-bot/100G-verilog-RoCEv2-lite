@@ -122,6 +122,8 @@ module RoCE_qp_state_module #(
  Total                       32 octets (256 bits)
   */
 
+  import RoCE_params::*; // Imports RoCE parameters
+
   /*
   Local QP number starts from 2**8 and goes up to 2**8 + 2**(MAX_QUEUE_PAIRS)
   */
@@ -150,22 +152,6 @@ module RoCE_qp_state_module #(
   localparam SYNDROME_OFFSET    = 232;
   localparam RESERVED_OFFSET    = 240;
 
-  localparam [7:0]
-  RC_SEND_FIRST         = 8'h00,
-  RC_SEND_MIDDLE        = 8'h01,
-  RC_SEND_LAST          = 8'h02,
-  RC_SEND_LAST_IMD      = 8'h03,
-  RC_SEND_ONLY          = 8'h04,
-  RC_SEND_ONLY_IMD      = 8'h05,
-  RC_RDMA_WRITE_FIRST   = 8'h06,
-  RC_RDMA_WRITE_MIDDLE  = 8'h07,
-  RC_RDMA_WRITE_LAST    = 8'h08,
-  RC_RDMA_WRITE_LAST_IMD= 8'h09,
-  RC_RDMA_WRITE_ONLY    = 8'h0A,
-  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
-  RC_RDMA_ACK           = 8'h11,
-  ROCE_CNP              = 8'h81;
-
   localparam [2:0]
   STATE_IDLE          = 3'd0,
   STATE_OPEN_QP       = 3'd1,
@@ -173,15 +159,6 @@ module RoCE_qp_state_module #(
   STATE_UPDATE_QP     = 3'd3,
   STATE_ERROR_QP      = 3'd4,
   STATE_CLOSE_QP      = 3'd5;
-
-  //REQUESTS types
-  localparam
-  REQ_NULL          = 7'h0,
-  REQ_OPEN_QP       = 7'h1,
-  REQ_SEND_QP_INFO  = 7'h2,
-  REQ_MODIFY_QP_RTS = 7'h3,
-  REQ_CLOSE_QP      = 7'h4,
-  REQ_ERROR         = 7'h7;
 
   reg [QP_CONTEXT_LENGTH*8-1 :0] qp_contex [MAX_QUEUE_PAIRS-1:0];
   reg [24-1 :0] qp_rem_acked_psn_mem [MAX_QUEUE_PAIRS-1:0];

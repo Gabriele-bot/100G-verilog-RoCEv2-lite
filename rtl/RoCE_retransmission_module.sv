@@ -187,6 +187,8 @@ module RoCE_retransmission_module #(
     input wire        en_retrans
 );
 
+    import RoCE_params::*; // Imports RoCE parameters
+
     function [31:0] time2clk;
         input real time_value; // in ms
         input real clock_period; // in ns
@@ -210,8 +212,6 @@ module RoCE_retransmission_module #(
     //localparam MEMORY_STEPS   = 12 - $clog2(DATA_WIDTH/8);
 
     localparam HEADER_ADDR_WIDTH = BUFFER_ADDR_WIDTH - 8;
-
-    localparam [7:0] RC_RDMA_ACK = 8'h11;
 
     localparam RAM_OP_CODE_OFFSET   = 0;
     localparam RAM_BTH_OFFSET       = 8;
@@ -382,7 +382,7 @@ module RoCE_retransmission_module #(
         .ADDR_WIDTH(HEADER_ADDR_WIDTH),
         .DATA_WIDTH(180),
         .STRB_WIDTH(1),
-        .NPIPES(-1),
+        .NPIPES(0),
         .STYLE("auto")
     ) test_ram_instance (
         .clk(clk),
@@ -721,6 +721,7 @@ Simple DMA write logic
                     m_roce_immdh_valid_next = 1'b0;
 
                     s_roce_bth_psn_memory_next = nak_detected ? nak_psn_reg : (last_acked_psn_reg + 1);
+                    hdr_ram_addr_next = nak_detected ? nak_psn_reg : (last_acked_psn_reg + 1);
                     reset_timeout_counter_next = 1'b1;
 
                     n_retransmit_triggers_next = n_retransmit_triggers_reg + 32'd1;
@@ -811,14 +812,14 @@ Simple DMA write logic
                 end
             end
             STATE_READ_RAM_HEADER: begin
-                hdr_ram_addr_next = s_roce_bth_psn_memory_reg;
+                //hdr_ram_addr_next = s_roce_bth_psn_memory_reg;
+                hdr_ram_addr_next = hdr_ram_addr_reg;
 
                 state_next                           = STATE_WAIT_RAM_OUTPUT;
             end
             STATE_WAIT_RAM_OUTPUT: begin
-                hdr_ram_addr_next = s_roce_bth_psn_memory_reg;
-
-                hdr_data_out_next = hdr_data_out;
+                //hdr_ram_addr_next = s_roce_bth_psn_memory_reg;
+                hdr_ram_addr_next = hdr_ram_addr_reg;
 
                 state_next                           = STATE_DMA_READ_INIT;
             end
@@ -829,6 +830,8 @@ Simple DMA write logic
 
                 s_roce_bth_ready_next               = !m_roce_bth_valid_next;
 
+                hdr_data_out_next = hdr_data_out;
+
                 if (last_buffered_psn_reg + 1 == s_roce_bth_psn_memory_reg ) begin
                     state_next                           = STATE_IDLE;
                 end else begin
@@ -838,37 +841,37 @@ Simple DMA write logic
                     //s_axis_dma_read_desc_addr_next =  s_roce_bth_psn_memory_reg << MEMORY_STEPS;
                     //s_axis_dma_read_desc_len_next  =  13'd4096; // UDP length - BTH - UDP HEADER 
                         s_axis_dma_read_desc_addr_next =  s_roce_bth_psn_memory_reg  << memory_steps;
-                        if (hdr_data_out_reg[10:8] == 3'b111) begin //bth reth immdh
-                            s_axis_dma_read_desc_len_next  =  hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:13] - 12 - 16 - 4 - 8;
-                        end else if (hdr_data_out_reg[RAM_BTH_OFFSET+:3] == 3'b011) begin //bth reth
-                            s_axis_dma_read_desc_len_next  =  hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:13] - 12 - 16 - 8;
-                        end else if (hdr_data_out_reg[RAM_BTH_OFFSET+:3] == 3'b101) begin // bth immdh
+                        if (hdr_data_out[10:8] == 3'b111) begin //bth reth immdh
+                            s_axis_dma_read_desc_len_next  =  hdr_data_out[RAM_UDP_LEN_OFFSET+:13] - 12 - 16 - 4 - 8;
+                        end else if (hdr_data_out[RAM_BTH_OFFSET+:3] == 3'b011) begin //bth reth
+                            s_axis_dma_read_desc_len_next  =  hdr_data_out[RAM_UDP_LEN_OFFSET+:13] - 12 - 16 - 8;
+                        end else if (hdr_data_out[RAM_BTH_OFFSET+:3] == 3'b101) begin // bth immdh
                             s_axis_dma_read_desc_len_next  =  hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:13] - 12 - 4 - 8;
-                        end else if (hdr_data_out_reg[RAM_BTH_OFFSET+:3] == 3'b001) begin // bth
-                            s_axis_dma_read_desc_len_next  =  hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
+                        end else if (hdr_data_out[RAM_BTH_OFFSET+:3] == 3'b001) begin // bth
+                            s_axis_dma_read_desc_len_next  =  hdr_data_out[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
                         end else begin
-                            s_axis_dma_read_desc_len_next  =  hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
+                            s_axis_dma_read_desc_len_next  =  hdr_data_out[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
                         end
                         last_sent_psn_next = s_roce_bth_psn;
                         s_axis_dma_read_desc_valid_next = 1'b1;
 
-                        m_roce_bth_valid_next          = hdr_data_out_reg[RAM_BTH_OFFSET];
-                        m_roce_reth_valid_next         = hdr_data_out_reg[RAM_RETH_OFFSET];
-                        m_roce_immdh_valid_next        = hdr_data_out_reg[RAM_IMMDH_OFFSET];
+                        m_roce_bth_valid_next          = hdr_data_out[RAM_BTH_OFFSET];
+                        m_roce_reth_valid_next         = hdr_data_out[RAM_RETH_OFFSET];
+                        m_roce_immdh_valid_next        = hdr_data_out[RAM_IMMDH_OFFSET];
 
-                        retrans_roce_bth_op_code_next  = hdr_data_out_reg[RAM_OP_CODE_OFFSET+:8];
-                        //retrans_roce_bth_p_key_next    = hdr_data_out_reg[23:8];
+                        retrans_roce_bth_op_code_next  = hdr_data_out[RAM_OP_CODE_OFFSET+:8];
+                        //retrans_roce_bth_p_key_next    = hdr_data_out[23:8];
                         retrans_roce_bth_p_key_next    = curr_p_key_reg;
                         retrans_roce_bth_psn_next      = s_roce_bth_psn_memory_reg;
-                        //retrans_roce_bth_dest_qp_next  = hdr_data_out_reg[47:24];
+                        //retrans_roce_bth_dest_qp_next  = hdr_data_out[47:24];
                         retrans_roce_bth_dest_qp_next  = curr_rem_qpn_reg;
                         retrans_roce_bth_src_qp_next   = curr_loc_qpn_reg;
                         retrans_roce_bth_ack_req_next  = 1'b1;
-                        retrans_roce_reth_v_addr_next  = hdr_data_out_reg[RAM_VADDR_OFFSET+:64];
+                        retrans_roce_reth_v_addr_next  = hdr_data_out[RAM_VADDR_OFFSET+:64];
                         retrans_roce_reth_r_key_next   = curr_r_key_reg;
-                        retrans_roce_reth_length_next  = hdr_data_out_reg[RAM_RETH_LEN_OFFSET+:32];
-                        retrans_roce_immdh_data_next   = hdr_data_out_reg[RAM_IMMD_DATA_OFFSET+:32];
-                        retrans_udp_length_next        = hdr_data_out_reg[RAM_UDP_LEN_OFFSET+:16];
+                        retrans_roce_reth_length_next  = hdr_data_out[RAM_RETH_LEN_OFFSET+:32];
+                        retrans_roce_immdh_data_next   = hdr_data_out[RAM_IMMD_DATA_OFFSET+:32];
+                        retrans_udp_length_next        = hdr_data_out[RAM_UDP_LEN_OFFSET+:16];
 
                         last_sent_psn_next = s_roce_bth_psn_memory_reg;
                         s_axis_dma_read_desc_valid_next = 1'b1;
@@ -1013,6 +1016,8 @@ Simple DMA write logic
 
             retrans_roce_bth_valid_reg <= 1'b0;
             m_roce_bth_valid_reg <= 1'b0;
+            m_roce_reth_valid_reg <= 1'b0;
+            m_roce_immdh_valid_reg <= 1'b0;
 
             reset_timeout_counter_reg <= 1'b0;
 
@@ -1031,72 +1036,76 @@ Simple DMA write logic
 
             hdr_data_out_reg <= 180'd0;
 
-            n_retransmit_triggers_reg <= 32'd0;
-        end
-
-        if (s_roce_aeth_valid && (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00)) begin
-            last_acked_psn_reg <= s_roce_rx_bth_psn;
-        end
-
-        state_reg <= state_next;
-
-        reset_timeout_counter_reg <= reset_timeout_counter_next;
-
-        s_roce_bth_psn_memory_reg <= s_roce_bth_psn_memory_next;
-
-        s_roce_bth_ready_reg <= s_roce_bth_ready_next;
-
-        hdr_ram_addr_reg <= hdr_ram_addr_next;
-
-        hdr_data_out_reg <= hdr_data_out_next;
-
-        retrans_roce_bth_valid_reg <= retrans_roce_bth_valid_next;
-        m_roce_bth_valid_reg       <= m_roce_bth_valid_next;
-        m_roce_reth_valid_reg      <= m_roce_reth_valid_next;
-        m_roce_immdh_valid_reg     <= m_roce_immdh_valid_next;
-
-        retrans_roce_bth_op_code_reg  <= retrans_roce_bth_op_code_next;
-        retrans_roce_bth_p_key_reg    <= retrans_roce_bth_p_key_next  ;
-        retrans_roce_bth_psn_reg      <= retrans_roce_bth_psn_next    ;
-        retrans_roce_bth_dest_qp_reg  <= retrans_roce_bth_dest_qp_next;
-        retrans_roce_bth_src_qp_reg   <= retrans_roce_bth_src_qp_next;
-        retrans_roce_bth_ack_req_reg  <= retrans_roce_bth_ack_req_next;
-        retrans_roce_reth_v_addr_reg  <= retrans_roce_reth_v_addr_next;
-        retrans_roce_reth_r_key_reg   <= retrans_roce_reth_r_key_next ;
-        retrans_roce_reth_length_reg  <= retrans_roce_reth_length_next;
-        retrans_roce_immdh_data_reg   <= retrans_roce_immdh_data_next ;
-        retrans_udp_length_reg        <= retrans_udp_length_next      ;
-
-        s_axis_dma_read_desc_addr_reg  <= s_axis_dma_read_desc_addr_next;
-        s_axis_dma_read_desc_len_reg   <= s_axis_dma_read_desc_len_next;
-        s_axis_dma_read_desc_valid_reg <= s_axis_dma_read_desc_valid_next;
-
-        s_axis_dma_write_desc_addr_reg  <= s_axis_dma_write_desc_addr_next;
-        s_axis_dma_write_desc_len_reg   <= s_axis_dma_write_desc_len_next;
-        s_axis_dma_write_desc_valid_reg <= s_axis_dma_write_desc_valid_next;
-
-        single_packet_frame_reg <= single_packet_frame_next;
-
-        last_sent_psn_reg     <= last_sent_psn_next;
-        last_buffered_psn_reg <= last_buffered_psn_next;
-        retry_start_psn_reg   <= retry_start_psn_next;
-
-        psn_diff_reg <= psn_diff_next;
-
-
-        if (rst_retry_cntr) begin
             retry_counter_reg     <= 4'd0;
             rnr_retry_counter_reg <= 4'd0;
             n_retransmit_triggers_reg     <= 32'd0;
             n_rnr_retransmit_triggers_reg <= 32'd0;
         end else begin
-            retry_counter_reg     <= retry_counter_next;
-            rnr_retry_counter_reg <= rnr_retry_counter_next;
-            n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
-            n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
-        end
 
-        stop_transfer_reg <= stop_transfer_next;
+            if (s_roce_aeth_valid && (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00)) begin
+                last_acked_psn_reg <= s_roce_rx_bth_psn;
+            end
+
+            state_reg <= state_next;
+
+            reset_timeout_counter_reg <= reset_timeout_counter_next;
+
+            s_roce_bth_psn_memory_reg <= s_roce_bth_psn_memory_next;
+
+            s_roce_bth_ready_reg <= s_roce_bth_ready_next;
+
+            hdr_ram_addr_reg <= hdr_ram_addr_next;
+
+            hdr_data_out_reg <= hdr_data_out_next;
+
+            retrans_roce_bth_valid_reg <= retrans_roce_bth_valid_next;
+            m_roce_bth_valid_reg       <= m_roce_bth_valid_next;
+            m_roce_reth_valid_reg      <= m_roce_reth_valid_next;
+            m_roce_immdh_valid_reg     <= m_roce_immdh_valid_next;
+
+            retrans_roce_bth_op_code_reg  <= retrans_roce_bth_op_code_next;
+            retrans_roce_bth_p_key_reg    <= retrans_roce_bth_p_key_next  ;
+            retrans_roce_bth_psn_reg      <= retrans_roce_bth_psn_next    ;
+            retrans_roce_bth_dest_qp_reg  <= retrans_roce_bth_dest_qp_next;
+            retrans_roce_bth_src_qp_reg   <= retrans_roce_bth_src_qp_next;
+            retrans_roce_bth_ack_req_reg  <= retrans_roce_bth_ack_req_next;
+            retrans_roce_reth_v_addr_reg  <= retrans_roce_reth_v_addr_next;
+            retrans_roce_reth_r_key_reg   <= retrans_roce_reth_r_key_next ;
+            retrans_roce_reth_length_reg  <= retrans_roce_reth_length_next;
+            retrans_roce_immdh_data_reg   <= retrans_roce_immdh_data_next ;
+            retrans_udp_length_reg        <= retrans_udp_length_next      ;
+
+            s_axis_dma_read_desc_addr_reg  <= s_axis_dma_read_desc_addr_next;
+            s_axis_dma_read_desc_len_reg   <= s_axis_dma_read_desc_len_next;
+            s_axis_dma_read_desc_valid_reg <= s_axis_dma_read_desc_valid_next;
+
+            s_axis_dma_write_desc_addr_reg  <= s_axis_dma_write_desc_addr_next;
+            s_axis_dma_write_desc_len_reg   <= s_axis_dma_write_desc_len_next;
+            s_axis_dma_write_desc_valid_reg <= s_axis_dma_write_desc_valid_next;
+
+            single_packet_frame_reg <= single_packet_frame_next;
+
+            last_sent_psn_reg     <= last_sent_psn_next;
+            last_buffered_psn_reg <= last_buffered_psn_next;
+            retry_start_psn_reg   <= retry_start_psn_next;
+
+            psn_diff_reg <= psn_diff_next;
+
+
+            if (rst_retry_cntr) begin
+                retry_counter_reg     <= 4'd0;
+                rnr_retry_counter_reg <= 4'd0;
+                n_retransmit_triggers_reg     <= 32'd0;
+                n_rnr_retransmit_triggers_reg <= 32'd0;
+            end else begin
+                retry_counter_reg     <= retry_counter_next;
+                rnr_retry_counter_reg <= rnr_retry_counter_next;
+                n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
+                n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
+            end
+
+            stop_transfer_reg <= stop_transfer_next;
+        end
     end
 
 

@@ -164,6 +164,8 @@ separate AXI stream.
 
 */
 
+import RoCE_params::*; // Imports RoCE parameters
+
   // bus width assertions
   initial begin
     if (DATA_WIDTH < 256) begin
@@ -176,18 +178,6 @@ separate AXI stream.
       $finish;
     end
   end
-
-
-  localparam [7:0]
-  RC_RDMA_WRITE_FIRST   = 8'h06,
-  RC_RDMA_WRITE_MIDDLE  = 8'h07,
-  RC_RDMA_WRITE_LAST    = 8'h08,
-  RC_RDMA_WRITE_LAST_IMD= 8'h09,
-  RC_RDMA_WRITE_ONLY    = 8'h0A,
-  RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
-  RC_RDMA_ACK           = 8'h11;
-
-  localparam [15:0] ROCE_UDP_PORT = 16'h12B7;
 
 
   localparam [2:0] STATE_IDLE = 3'd0, STATE_READ_BTH_AETH = 3'd1, STATE_CHECK_ICRC = 3'd2, STATE_WAIT_LAST = 3'd3;

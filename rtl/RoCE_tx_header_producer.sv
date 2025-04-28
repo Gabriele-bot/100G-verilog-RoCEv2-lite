@@ -90,6 +90,8 @@ module RoCE_tx_header_producer #(
 
 );
 
+    import RoCE_params::*; // Imports RoCE parameters
+
     integer i;
 
     function [$clog2(DATA_WIDTH/8):0] keep2count;
@@ -103,22 +105,6 @@ module RoCE_tx_header_producer #(
             end
         end
     endfunction
-
-
-    localparam [7:0]
-    RC_SEND_FIRST         = 8'h00,
-    RC_SEND_MIDDLE        = 8'h01,
-    RC_SEND_LAST          = 8'h02,
-    RC_SEND_LAST_IMD      = 8'h03,
-    RC_SEND_ONLY          = 8'h04,
-    RC_SEND_ONLY_IMD      = 8'h05,
-    RC_RDMA_WRITE_FIRST   = 8'h06,
-    RC_RDMA_WRITE_MIDDLE  = 8'h07,
-    RC_RDMA_WRITE_LAST    = 8'h08,
-    RC_RDMA_WRITE_LAST_IMD= 8'h09,
-    RC_RDMA_WRITE_ONLY    = 8'h0A,
-    RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
-    RC_RDMA_ACK           = 8'h11;
 
     localparam [2:0]
     STATE_IDLE               = 3'd0,

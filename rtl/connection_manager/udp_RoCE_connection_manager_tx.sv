@@ -26,15 +26,16 @@
  * | [36:33] |  [295:264]  |  QP_info_rem_r_key       |
  * | [44:37] |  [359:296]  |  QP_info_rem_base_addr   |
  * | [48:45] |  [391:360]  |  QP_info_rem_ip_addr     |
+ * | [50:49] |  [407:392]  |  QP_info_listening_port  | // relevant only for listener 
  * +---------+-------------+--------------------------+
- * |   49    |  [392:392]  |  txmeta_valid            |
- * |   49    |  [394:393]  |  txmeta_start            |
- * |   49    |  [394:394]  |  txmeta_is_immediate     |
- * |   49    |  [395:395]  |  txmeta_tx_type          |
- * |   49    |  [399:396]  |  txmeta_reserved         |
- * | [57:50] |  [463:400]  |  txmeta_rem_addr_offset  |
- * | [61:58] |  [495:464]  |  txmeta_dma_length       |
- * | [63:62] |  [511:496]  |  txmeta_rem_udp_port     |
+ * |   51    |  [408:408]  |  txmeta_valid            |
+ * |   51    |  [409:409]  |  txmeta_start            |
+ * |   51    |  [410:410]  |  txmeta_is_immediate     |
+ * |   51    |  [411:411]  |  txmeta_tx_type          |
+ * |   51    |  [415:412]  |  txmeta_reserved         |
+ * | [55:52] |  [447:416]  |  txmeta_dma_length       |
+ * | [59:56] |  [479:448]  |  txmeta_n_transfers      |
+ * | [63:60] |  [511:480]  |  reserved                |
  * +---------+-------------+--------------------------+
  * TOTAL length 512 bits, 64 bytes
  */
@@ -48,20 +49,22 @@ module udp_RoCE_connection_manager_tx #(
     /*
      * RoCE QP parameters
      */
-    input wire        s_qp_context_valid,
-    output wire       s_qp_context_ready,
+    input wire        s_qp_info_valid,
+    output wire       s_qp_info_ready,
 
-    input wire [6 :0] s_qp_context_req_type,
-    input wire [23:0] s_qp_context_loc_qpn,
-    input wire [23:0] s_qp_context_loc_psn,
-    input wire [31:0] s_qp_context_loc_r_key,
-    input wire [31:0] s_qp_context_loc_ip_addr,
-    input wire [63:0] s_qp_context_loc_base_addr,
-    input wire [23:0] s_qp_context_rem_qpn,
-    input wire [23:0] s_qp_context_rem_psn,
-    input wire [31:0] s_qp_context_rem_r_key,
-    input wire [31:0] s_qp_context_rem_ip_addr,
-    input wire [63:0] s_qp_context_rem_base_addr,
+    input wire [6 :0] s_qp_info_req_type,
+    input wire [23:0] s_qp_info_loc_qpn,
+    input wire [23:0] s_qp_info_loc_psn,
+    input wire [31:0] s_qp_info_loc_r_key,
+    input wire [31:0] s_qp_info_loc_ip_addr,
+    input wire [63:0] s_qp_info_loc_base_addr,
+    input wire [23:0] s_qp_info_rem_qpn,
+    input wire [23:0] s_qp_info_rem_psn,
+    input wire [31:0] s_qp_info_rem_r_key,
+    input wire [31:0] s_qp_info_rem_ip_addr,
+    input wire [63:0] s_qp_info_rem_base_addr,
+
+    input wire [15:0] s_qp_info_udp_dest_port,
 
     /*
      * UDP frame output
@@ -87,8 +90,7 @@ module udp_RoCE_connection_manager_tx #(
     /*
      * Configuration
      */
-    input wire [15:0] cfg_udp_source_port,
-    input wire [15:0] cfg_udp_dest_port
+    input wire [15:0] cfg_udp_source_port
 );
 
     parameter KEEP_ENABLE = 1;
@@ -96,41 +98,43 @@ module udp_RoCE_connection_manager_tx #(
 
     parameter BYTE_LANES = KEEP_ENABLE ? KEEP_WIDTH : 1;
 
-    parameter QP_CONTEXT_SIZE = 64;
+    parameter QP_INFO_SIZE = 64;
 
-    parameter CYCLE_COUNT = (QP_CONTEXT_SIZE+BYTE_LANES-1)/BYTE_LANES;
+    parameter CYCLE_COUNT = (QP_INFO_SIZE+BYTE_LANES-1)/BYTE_LANES;
 
     parameter PTR_WIDTH = $clog2(CYCLE_COUNT);
 
-    parameter OFFSET = QP_CONTEXT_SIZE % BYTE_LANES;
+    parameter OFFSET = QP_INFO_SIZE % BYTE_LANES;
 
     // datapath control signals
-    reg store_qp_context;
+    reg store_qp_info;
 
-    reg send_qp_context_reg = 1'b0, send_qp_context_next;
+    reg send_qp_info_reg = 1'b0, send_qp_info_next;
     reg [PTR_WIDTH-1:0] ptr_reg = 0, ptr_next;
 
     reg flush_save;
     reg transfer_in_save;
 
-    reg        qp_context_valid_reg;
-    reg [6 :0] qp_context_req_type_reg;
+    reg        qp_info_valid_reg;
+    reg [6 :0] qp_info_req_type_reg;
 
-    reg [23:0] qp_context_loc_qpn_reg;
-    reg [23:0] qp_context_loc_psn_reg;
-    reg [31:0] qp_context_loc_r_key_reg;
-    reg [63:0] qp_context_loc_base_addr_reg;
-    reg [31:0] qp_context_loc_ip_addr_reg;
+    reg [23:0] qp_info_loc_qpn_reg;
+    reg [23:0] qp_info_loc_psn_reg;
+    reg [31:0] qp_info_loc_r_key_reg;
+    reg [63:0] qp_info_loc_base_addr_reg;
+    reg [31:0] qp_info_loc_ip_addr_reg;
     
-    reg [23:0] qp_context_rem_qpn_reg;
-    reg [23:0] qp_context_rem_psn_reg;
-    reg [31:0] qp_context_rem_r_key_reg;
-    reg [63:0] qp_context_rem_base_addr_reg;
-    reg [31:0] qp_context_rem_ip_addr_reg;
+    reg [23:0] qp_info_rem_qpn_reg;
+    reg [23:0] qp_info_rem_psn_reg;
+    reg [31:0] qp_info_rem_r_key_reg;
+    reg [63:0] qp_info_rem_base_addr_reg;
+    reg [31:0] qp_info_rem_ip_addr_reg;
 
-    reg s_qp_context_ready_reg = 1'b0, s_qp_context_ready_next;
+    reg [15:0] s_qp_info_udp_dest_port_reg;
 
-    reg s_qp_context_valid_del;
+    reg s_qp_info_ready_reg = 1'b0, s_qp_info_ready_next;
+
+    reg s_qp_info_valid_del;
 
     reg        m_udp_hdr_valid_reg = 1'b0, m_udp_hdr_valid_next;
     reg [31:0] m_ip_source_ip_reg = 32'd0;
@@ -151,7 +155,7 @@ module udp_RoCE_connection_manager_tx #(
     reg                   m_udp_payload_axis_tuser_int;
     wire                  m_udp_payload_axis_tready_int_early;
 
-    assign s_qp_context_ready = s_qp_context_ready_reg;
+    assign s_qp_info_ready = s_qp_info_ready_reg;
 
     assign m_udp_hdr_valid = m_udp_hdr_valid_reg;
     assign m_ip_source_ip = m_ip_source_ip_reg;
@@ -165,14 +169,14 @@ module udp_RoCE_connection_manager_tx #(
     assign busy = busy_reg;
 
     always @* begin
-        send_qp_context_next = send_qp_context_reg;
+        send_qp_info_next = send_qp_info_reg;
         ptr_next = ptr_reg;
 
-        s_qp_context_ready_next = 1'b0;
+        s_qp_info_ready_next = 1'b0;
 
         m_udp_hdr_valid_next = m_udp_hdr_valid_reg && !m_udp_hdr_ready;
 
-        store_qp_context = 1'b0;
+        store_qp_info = 1'b0;
 
         flush_save = 1'b0;
         transfer_in_save = 1'b0;
@@ -184,21 +188,17 @@ module udp_RoCE_connection_manager_tx #(
         m_udp_payload_axis_tuser_int = 1'b0;
 
 
-        if (s_qp_context_ready && s_qp_context_valid) begin
-            store_qp_context = 1'b1;
+        if (s_qp_info_ready && s_qp_info_valid) begin
+            store_qp_info = 1'b1;
             ptr_next = 0;
 
             m_udp_hdr_valid_next = 1'b1;
 
-            send_qp_context_next = 1'b1;
+            send_qp_info_next = 1'b1;
         end
 
-        //if (s_qp_open_valid_del) begin
-        //    m_ip_hdr_valid_next = 1'b1;
-        //end
-
         if (m_udp_payload_axis_tready_int_reg && (!OFFSET || m_udp_payload_axis_tvalid_int)) begin
-            if (send_qp_context_reg) begin
+            if (send_qp_info_reg) begin
                 ptr_next = ptr_reg + 1;
 
                 m_udp_payload_axis_tvalid_int = 1'b1;
@@ -208,57 +208,57 @@ module udp_RoCE_connection_manager_tx #(
                     m_udp_payload_axis_tdata_int[(offset%BYTE_LANES)*8 +: 8] = field; \
                     m_udp_payload_axis_tkeep_int[offset%BYTE_LANES] = 1'b1; \
                 end
-                `_HEADER_FIELD_(0 ,  {qp_context_req_type_reg, qp_context_valid_reg})
-                `_HEADER_FIELD_(1 ,  qp_context_loc_qpn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(2 ,  qp_context_loc_qpn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(3 ,  qp_context_loc_qpn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(0 ,  {qp_info_req_type_reg, qp_info_valid_reg})
+                `_HEADER_FIELD_(1 ,  qp_info_loc_qpn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_reg[2*8 +: 8])
                 `_HEADER_FIELD_(4 ,  8'h00)
-                `_HEADER_FIELD_(5 ,  qp_context_loc_psn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(6 ,  qp_context_loc_psn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(7 ,  qp_context_loc_psn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(5 ,  qp_info_loc_psn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(6 ,  qp_info_loc_psn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(7 ,  qp_info_loc_psn_reg[2*8 +: 8])
                 `_HEADER_FIELD_(8 ,  8'h00)
-                `_HEADER_FIELD_(9 ,  qp_context_loc_r_key_reg[0*8 +: 8])
-                `_HEADER_FIELD_(10,  qp_context_loc_r_key_reg[1*8 +: 8])
-                `_HEADER_FIELD_(11,  qp_context_loc_r_key_reg[2*8 +: 8])
-                `_HEADER_FIELD_(12,  qp_context_loc_r_key_reg[3*8 +: 8])
-                `_HEADER_FIELD_(13,  qp_context_loc_base_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(14,  qp_context_loc_base_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(15,  qp_context_loc_base_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(16,  qp_context_loc_base_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(17,  qp_context_loc_base_addr_reg[4*8 +: 8])
-                `_HEADER_FIELD_(18,  qp_context_loc_base_addr_reg[5*8 +: 8])
-                `_HEADER_FIELD_(19,  qp_context_loc_base_addr_reg[6*8 +: 8])
-                `_HEADER_FIELD_(20,  qp_context_loc_base_addr_reg[7*8 +: 8])
-                `_HEADER_FIELD_(21,  qp_context_loc_ip_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(22,  qp_context_loc_ip_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(23,  qp_context_loc_ip_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(24,  qp_context_loc_ip_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(25,  qp_context_rem_qpn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(26,  qp_context_rem_qpn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(27,  qp_context_rem_qpn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(9 ,  qp_info_loc_r_key_reg[0*8 +: 8])
+                `_HEADER_FIELD_(10,  qp_info_loc_r_key_reg[1*8 +: 8])
+                `_HEADER_FIELD_(11,  qp_info_loc_r_key_reg[2*8 +: 8])
+                `_HEADER_FIELD_(12,  qp_info_loc_r_key_reg[3*8 +: 8])
+                `_HEADER_FIELD_(13,  qp_info_loc_base_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(14,  qp_info_loc_base_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(15,  qp_info_loc_base_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(16,  qp_info_loc_base_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(17,  qp_info_loc_base_addr_reg[4*8 +: 8])
+                `_HEADER_FIELD_(18,  qp_info_loc_base_addr_reg[5*8 +: 8])
+                `_HEADER_FIELD_(19,  qp_info_loc_base_addr_reg[6*8 +: 8])
+                `_HEADER_FIELD_(20,  qp_info_loc_base_addr_reg[7*8 +: 8])
+                `_HEADER_FIELD_(21,  qp_info_loc_ip_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(22,  qp_info_loc_ip_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(23,  qp_info_loc_ip_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(24,  qp_info_loc_ip_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(25,  qp_info_rem_qpn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(26,  qp_info_rem_qpn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(27,  qp_info_rem_qpn_reg[2*8 +: 8])
                 `_HEADER_FIELD_(28 ,  8'h00)
-                `_HEADER_FIELD_(29,  qp_context_rem_psn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(30,  qp_context_rem_psn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(31,  qp_context_rem_psn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(29,  qp_info_rem_psn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(30,  qp_info_rem_psn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(31,  qp_info_rem_psn_reg[2*8 +: 8])
                 `_HEADER_FIELD_(32 ,  8'h00)
-                `_HEADER_FIELD_(33,  qp_context_rem_r_key_reg[0*8 +: 8])
-                `_HEADER_FIELD_(34,  qp_context_rem_r_key_reg[1*8 +: 8])
-                `_HEADER_FIELD_(35,  qp_context_rem_r_key_reg[2*8 +: 8])
-                `_HEADER_FIELD_(36,  qp_context_rem_r_key_reg[3*8 +: 8])
-                `_HEADER_FIELD_(37,  qp_context_rem_base_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(38,  qp_context_rem_base_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(39,  qp_context_rem_base_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(40,  qp_context_rem_base_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(41,  qp_context_rem_base_addr_reg[4*8 +: 8])
-                `_HEADER_FIELD_(42,  qp_context_rem_base_addr_reg[5*8 +: 8])
-                `_HEADER_FIELD_(43,  qp_context_rem_base_addr_reg[6*8 +: 8])
-                `_HEADER_FIELD_(44,  qp_context_rem_base_addr_reg[7*8 +: 8])
-                `_HEADER_FIELD_(45,  qp_context_rem_ip_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(46,  qp_context_rem_ip_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(47,  qp_context_rem_ip_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(48,  qp_context_rem_ip_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(49,  8'h00)
-                `_HEADER_FIELD_(50,  8'h00)
+                `_HEADER_FIELD_(33,  qp_info_rem_r_key_reg[0*8 +: 8])
+                `_HEADER_FIELD_(34,  qp_info_rem_r_key_reg[1*8 +: 8])
+                `_HEADER_FIELD_(35,  qp_info_rem_r_key_reg[2*8 +: 8])
+                `_HEADER_FIELD_(36,  qp_info_rem_r_key_reg[3*8 +: 8])
+                `_HEADER_FIELD_(37,  qp_info_rem_base_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(38,  qp_info_rem_base_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(39,  qp_info_rem_base_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(40,  qp_info_rem_base_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(41,  qp_info_rem_base_addr_reg[4*8 +: 8])
+                `_HEADER_FIELD_(42,  qp_info_rem_base_addr_reg[5*8 +: 8])
+                `_HEADER_FIELD_(43,  qp_info_rem_base_addr_reg[6*8 +: 8])
+                `_HEADER_FIELD_(44,  qp_info_rem_base_addr_reg[7*8 +: 8])
+                `_HEADER_FIELD_(45,  qp_info_rem_ip_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(49,  m_udp_source_port_reg[0*8 +: 8])
+                `_HEADER_FIELD_(50,  m_udp_source_port_reg[1*8 +: 8])
                 `_HEADER_FIELD_(51,  8'h00)
                 `_HEADER_FIELD_(52,  8'h00)
                 `_HEADER_FIELD_(53,  8'h00)
@@ -273,8 +273,8 @@ module udp_RoCE_connection_manager_tx #(
                 `_HEADER_FIELD_(62,  8'h00)
                 `_HEADER_FIELD_(63,  8'h00)
 
-                if (ptr_reg == (QP_CONTEXT_SIZE-1)/BYTE_LANES) begin
-                    send_qp_context_next = 1'b0;
+                if (ptr_reg == (QP_INFO_SIZE-1)/BYTE_LANES) begin
+                    send_qp_info_next = 1'b0;
                     m_udp_payload_axis_tlast_int = 1'b1;
                 end
 
@@ -282,48 +282,50 @@ module udp_RoCE_connection_manager_tx #(
         end
         end
 
-        s_qp_context_ready_next = !m_udp_hdr_valid_next && !(send_qp_context_next);
+        s_qp_info_ready_next = !m_udp_hdr_valid_next && !(send_qp_info_next);
     end
 
     always @(posedge clk) begin
-        send_qp_context_reg <= send_qp_context_next;
+        send_qp_info_reg <= send_qp_info_next;
         ptr_reg <= ptr_next;
 
-        s_qp_context_ready_reg <= s_qp_context_ready_next;
+        s_qp_info_ready_reg <= s_qp_info_ready_next;
 
         m_udp_hdr_valid_reg <= m_udp_hdr_valid_next;
 
-        busy_reg <= send_qp_context_next;
+        busy_reg <= send_qp_info_next;
 
-        s_qp_context_valid_del <= s_qp_context_valid && s_qp_context_ready_reg;
+        s_qp_info_valid_del <= s_qp_info_valid && s_qp_info_ready_reg;
 
-        if (store_qp_context) begin
-            qp_context_valid_reg         <= 1'b1; 
-            qp_context_req_type_reg      <= s_qp_context_req_type; 
-            qp_context_loc_qpn_reg       <= s_qp_context_loc_qpn;
-            qp_context_loc_psn_reg       <= s_qp_context_loc_psn; 
-            qp_context_loc_r_key_reg     <= s_qp_context_loc_r_key;
-            qp_context_loc_base_addr_reg <= s_qp_context_loc_base_addr;
-            qp_context_loc_ip_addr_reg   <= s_qp_context_loc_ip_addr;
+        if (store_qp_info) begin
+            qp_info_valid_reg         <= 1'b1; 
+            qp_info_req_type_reg      <= s_qp_info_req_type; 
+            qp_info_loc_qpn_reg       <= s_qp_info_loc_qpn;
+            qp_info_loc_psn_reg       <= s_qp_info_loc_psn; 
+            qp_info_loc_r_key_reg     <= s_qp_info_loc_r_key;
+            qp_info_loc_base_addr_reg <= s_qp_info_loc_base_addr;
+            qp_info_loc_ip_addr_reg   <= s_qp_info_loc_ip_addr;
 
-            qp_context_rem_qpn_reg       <= s_qp_context_rem_qpn;
-            qp_context_rem_psn_reg       <= s_qp_context_rem_psn;
-            qp_context_rem_r_key_reg     <= s_qp_context_rem_r_key;
-            qp_context_rem_base_addr_reg <= s_qp_context_rem_base_addr;
-            qp_context_rem_ip_addr_reg   <= s_qp_context_rem_ip_addr;
+            qp_info_rem_qpn_reg       <= s_qp_info_rem_qpn;
+            qp_info_rem_psn_reg       <= s_qp_info_rem_psn;
+            qp_info_rem_r_key_reg     <= s_qp_info_rem_r_key;
+            qp_info_rem_base_addr_reg <= s_qp_info_rem_base_addr;
+            qp_info_rem_ip_addr_reg   <= s_qp_info_rem_ip_addr;
 
-            m_ip_source_ip_reg    <= s_qp_context_loc_ip_addr;
-            m_ip_dest_ip_reg      <= s_qp_context_rem_ip_addr;
+            s_qp_info_udp_dest_port_reg <= s_qp_info_udp_dest_port;
+
+            m_ip_source_ip_reg    <= s_qp_info_loc_ip_addr;
+            m_ip_dest_ip_reg      <= s_qp_info_rem_ip_addr;
             m_udp_source_port_reg <= cfg_udp_source_port;
-            m_udp_dest_port_reg   <= cfg_udp_dest_port;
-            m_udp_length_reg      <= QP_CONTEXT_SIZE+16'd8;
+            m_udp_dest_port_reg   <= s_qp_info_udp_dest_port;
+            m_udp_length_reg      <= QP_INFO_SIZE+16'd8;
             m_udp_checksum_reg    <= 16'd0;
         end
 
         if (rst) begin
-            send_qp_context_reg <= 1'b0;
+            send_qp_info_reg <= 1'b0;
             ptr_reg <= 0;
-            s_qp_context_ready_reg <= 1'b0;
+            s_qp_info_ready_reg <= 1'b0;
             m_udp_hdr_valid_reg <= 1'b0;
             busy_reg <= 1'b0;
         end

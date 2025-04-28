@@ -1,4 +1,3 @@
-// Language: Verilog 2001
 
 `resetall `timescale 1ns / 1ps `default_nettype none
 
@@ -110,7 +109,7 @@ RDMA WRITE MIDDLE or RMDA WRITE LAST
 IP_HDR + UDP_HDR +BTH + PAYLOAD + ICRC
 RMDA WRITE LAST with IMMD + PAYLOAD + ICRC
 IP_HDR + UDP_HDR +BTH + IMMD + PAYLOAD + ICRC
-
+`include "RoCE_parameters.svh"
 
 +--------------------------------------+
 |                BTH                   |
@@ -159,6 +158,8 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
 */
 
+    import RoCE_params::*; // Imports RoCE parameters
+
     // bus width assertions
     initial begin
         if (DATA_WIDTH < 256) begin
@@ -171,21 +172,6 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             $finish;
         end
     end
-
-    localparam [7:0]
-    RC_SEND_FIRST         = 8'h00,
-    RC_SEND_MIDDLE        = 8'h01,
-    RC_SEND_LAST          = 8'h02,
-    RC_SEND_LAST_IMD      = 8'h03,
-    RC_SEND_ONLY          = 8'h04,
-    RC_SEND_ONLY_IMD      = 8'h05,
-    RC_RDMA_WRITE_FIRST   = 8'h06,
-    RC_RDMA_WRITE_MIDDLE  = 8'h07,
-    RC_RDMA_WRITE_LAST    = 8'h08,
-    RC_RDMA_WRITE_LAST_IMD= 8'h09,
-    RC_RDMA_WRITE_ONLY    = 8'h0A,
-    RC_RDMA_WRITE_ONLY_IMD= 8'h0B,
-    RC_RDMA_ACK           = 8'h11;
 
     // TODO improove the FSM..
     localparam [4:0]

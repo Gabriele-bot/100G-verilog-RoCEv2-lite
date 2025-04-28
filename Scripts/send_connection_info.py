@@ -28,8 +28,8 @@ parser.add_argument('-lp', '--loc_psn', metavar='N', type=int, default=0x0,
 #TX meta for debug
 parser.add_argument('-l', '--length', metavar='N', type=int, default=128,
                     help='DMA transfer size in byte')
-parser.add_argument('-o', '--addrOffset', metavar='N', type=int, default=0x0,
-                    help='Address offset')
+parser.add_argument('-n', '--nTransfers', metavar='N', type=int, default=0x1,
+                    help='Number of dma transfers')
 parser.add_argument('-i', '--immediate', action='store_true',
                     help='Immediate transfer')
 parser.add_argument('-t', '--txtype', action='store_false',
@@ -50,7 +50,8 @@ REQ_ERROR         = 0x7
 
 args = parser.parse_args()
 
-UDP_PORT = 0x4321
+REM_UDP_PORT       = 0x4321
+LISTENING_UDP_PORT = 0x4322
 
 #REQUESTS types
 REQ_NULL          = 0x0
@@ -96,21 +97,23 @@ def request_qp_info(rem_ip_addr="22.1.212.10", loc_ip_addr="22.1.212.11",loc_qpn
     MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
     MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
     MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+
+    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
     # TX META values
     MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<Q", 0x0)  # TXmeta_rem_addr
     MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<H", 0x0)  # UDP_PORT
+    MESSAGE += struct.pack("<L", 0x0)  # N transfers
+    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
-    print("UDP target port:", UDP_PORT)
+    print("UDP target port:", REM_UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
+    sock.sendto(MESSAGE, (REM_IP_ADDRESS, REM_UDP_PORT))
 
     rcv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    rcv_sock.bind((LOC_IP_ADDRESS, 0x4321))
+    rcv_sock.bind((LOC_IP_ADDRESS, LISTENING_UDP_PORT))
     while True:
         data, addr = rcv_sock.recvfrom(1024)  # buffer size is 1024 bytes
         print("received message: %s" % data)
@@ -153,18 +156,19 @@ def send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
     MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
     MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+
+    MESSAGE += struct.pack('<H', REM_UDP_PORT)
     # TX META values
     MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<Q", 0x0)  # TXmeta_rem_addr
     MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<H", 0x0)  # UDP_PORT
-
+    MESSAGE += struct.pack("<L", 0x0)  # N transfers
+    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
     print("UDP target IP:", REM_IP_ADDRESS)
-    print("UDP target port:", UDP_PORT)
+    print("UDP target port:", LISTENING_UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
+    sock.sendto(MESSAGE, (REM_IP_ADDRESS, LISTENING_UDP_PORT))
 
 def modify_qp_rts(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_key=0x1234, rem_base_addr=0x12345678, loc_ip_addr="22.1.212.11",loc_qpn=0x100, loc_psn=0x0, loc_r_key=0x1234, loc_base_addr=0x12345678):
     LOC_IP_ADDRESS = loc_ip_addr
@@ -201,21 +205,23 @@ def modify_qp_rts(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_k
     MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
     MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
     MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+
+    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
     # TX META values
     MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<Q", 0x0)  # TXmeta_rem_addr
     MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<H", 0x0)  # UDP_PORT
+    MESSAGE += struct.pack("<L", 0x0)  # N transfers
+    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
-    print("UDP target port:", UDP_PORT)
+    print("UDP target port:", REM_UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
+    sock.sendto(MESSAGE, (REM_IP_ADDRESS, REM_UDP_PORT))
 
     rcv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    rcv_sock.bind((LOC_IP_ADDRESS, 0x4321))
+    rcv_sock.bind((LOC_IP_ADDRESS, LISTENING_UDP_PORT))
     while True:
         data, addr = rcv_sock.recvfrom(1024)  # buffer size is 1024 bytes
         print("received message: %s" % data)
@@ -258,21 +264,23 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
     MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
     MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+
+    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
     # TX META values
     MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<Q", 0x0)  # TXmeta_rem_addr
     MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<H", 0x0)  # UDP_PORT
+    MESSAGE += struct.pack("<L", 0x0)  # N transfers
+    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
-    print("UDP target port:", UDP_PORT)
+    print("UDP target port:", REM_UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
+    sock.sendto(MESSAGE, (REM_IP_ADDRESS, REM_UDP_PORT))
 
     rcv_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    rcv_sock.bind((LOC_IP_ADDRESS, 0x4321))
+    rcv_sock.bind((LOC_IP_ADDRESS, LISTENING_UDP_PORT))
     while True:
         data, addr = rcv_sock.recvfrom(1024)  # buffer size is 1024 bytes
         print("received message: %s" % data)
@@ -281,7 +289,7 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     return data
 
 def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x11, loc_qpn=0x12,
-                addr_offset=0x0, rdma_length=0x0, start_flag=0, immd_flag=0, txtype_flag=1):
+                rdma_length=0x0, n_trasnfers=1, start_flag=0, immd_flag=0, txtype_flag=1):
 
     LOC_IP_ADDRESS = loc_ip_addr
     LOC_IP_ADDRESS_INT = int(ip_address(loc_ip_addr))
@@ -298,8 +306,8 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     REM_BASE_ADDR = 0x0
 
     # Tx meta
-    ADDR_OFFSET = addr_offset
     DMA_LENGTH = rdma_length
+    N_TRANSFERS = n_trasnfers
 
     REQ_TYPE = REQ_NULL
 
@@ -323,18 +331,20 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
     MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
     MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+
+    MESSAGE += struct.pack('<H', 0x0)  # listenijg udp port (not needed here)
     #TX META values
     MESSAGE += struct.pack("<B", txmeta_flags)  # TX meta flags: valid, start, is_immd, txtype
-    MESSAGE += struct.pack("<Q", ADDR_OFFSET)  # TXmeta_addr_offset
     MESSAGE += struct.pack("<L", DMA_LENGTH)  # DMA length
-    MESSAGE += struct.pack("<H", 0x3412)  # UDP_PORT
+    MESSAGE += struct.pack("<L", N_TRANSFERS)  # N transfers
+    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
-    print("UDP target port:", UDP_PORT)
+    print("UDP target port:", REM_UDP_PORT)
     print("message:", MESSAGE)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP
-    sock.sendto(MESSAGE, (REM_IP_ADDRESS, UDP_PORT))
+    sock.sendto(MESSAGE, (REM_IP_ADDRESS, REM_UDP_PORT))
 
 
 def decode_udp_packet(pkt):
@@ -388,7 +398,7 @@ if __name__ == "__main__":
 
     if args.start:
         send_txmeta(loc_ip_addr=args.loc_ip_addr, rem_ip_addr=args.rem_ip_addr, rem_qpn=args.rem_qpn,
-                    addr_offset=args.addrOffset, rdma_length=args.length, start_flag=args.start,
+                    n_trasnfers=args.nTransfers, rdma_length=args.length, start_flag=args.start,
                     immd_flag=args.immediate, txtype_flag=args.txtype)
     else:
         if args.request == REQ_OPEN_QP:

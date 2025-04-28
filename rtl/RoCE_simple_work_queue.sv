@@ -62,7 +62,7 @@ module RoCE_simple_work_queue #
     QP_STATE_ERROR    = 3'd6;
 
 
-    localparam [9:0] WORK_QUEUE_LENGTH = 2**($clog2(24+32+64+1+1));
+    localparam [9:0] WORK_QUEUE_LENGTH_WIDTH = 2**($clog2(24+32+64+1+1));
 
     localparam LOC_QPN_OFFSET     = 0;
     localparam DMA_LENGTH_OFFSET  = 24;
@@ -77,8 +77,8 @@ module RoCE_simple_work_queue #
 
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
-    reg  [WORK_QUEUE_LENGTH-1 :0] WQE;
-    wire [WORK_QUEUE_LENGTH-1 :0] WQE_fifo_out;
+    reg  [WORK_QUEUE_LENGTH_WIDTH-1 :0] WQE;
+    wire [WORK_QUEUE_LENGTH_WIDTH-1 :0] WQE_fifo_out;
     wire [23:0] WQE_fifo_out_loc_qpn;
 
     reg [31:0] m_dma_length_fifo_out_reg;
@@ -106,7 +106,7 @@ module RoCE_simple_work_queue #
     // Write into queue
 
     always @* begin
-        WQE[WORK_QUEUE_LENGTH-1 :0]  = 0; //default
+        WQE[WORK_QUEUE_LENGTH_WIDTH-1 :0]  = 0; //default
         WQE[LOC_QPN_OFFSET    +: 24] = s_wr_req_loc_qp;
         WQE[DMA_LENGTH_OFFSET +: 32] = s_wr_req_dma_length;
         WQE[ADDR_OFF_OFFSET   +: 64] = s_wr_req_addr_offset;
@@ -115,8 +115,8 @@ module RoCE_simple_work_queue #
     end
 
     axis_fifo #(
-        .DEPTH(WORK_QUEUE_LENGTH/8*QUEUE_LENGTH),
-        .DATA_WIDTH(WORK_QUEUE_LENGTH),
+        .DEPTH(WORK_QUEUE_LENGTH_WIDTH/8*QUEUE_LENGTH),
+        .DATA_WIDTH(WORK_QUEUE_LENGTH_WIDTH),
         .KEEP_ENABLE(0),
         .LAST_ENABLE(0),
         .ID_ENABLE(0),
@@ -176,7 +176,7 @@ module RoCE_simple_work_queue #
                 WQE_fifo_out_ready_next = 1'b0;
                 if (m_dma_meta_ready && m_dma_meta_valid) begin
                     state_next = STATE_WORK_REQ_SENT;
-                end else if (s_qp_state != QP_STATE_RTS) begin
+                end else if (s_qp_context_valid && s_qp_state != QP_STATE_RTS) begin
                     state_next = STATE_IDLE;
                 end else begin
                     state_next = STATE_NEW_WORK_REQ;
