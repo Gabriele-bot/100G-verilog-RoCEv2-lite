@@ -124,6 +124,7 @@ module udp_arb_mux #
 parameter CL_S_COUNT = $clog2(S_COUNT);
 
 reg frame_reg = 1'b0, frame_next;
+reg single_frame_pkt_reg = 1'b0, single_frame_pkt_next;
 
 reg [S_COUNT-1:0] s_udp_hdr_ready_reg = {S_COUNT{1'b0}}, s_udp_hdr_ready_next;
 
@@ -286,6 +287,7 @@ assign acknowledge = hdr_first ? ack_hdr_reg & ack_payload : (payload_first ? ac
 
 always @* begin
     frame_next = frame_reg;
+    single_frame_pkt_next = single_frame_pkt_reg;
 
     s_udp_hdr_ready_next = {S_COUNT{1'b0}};
 
@@ -312,15 +314,25 @@ always @* begin
     m_udp_checksum_next = m_udp_checksum_reg;
 
     if (s_udp_payload_axis_tvalid[grant_encoded] && s_udp_payload_axis_tready[grant_encoded]) begin
-        // end of frame detection
-        if (s_udp_payload_axis_tlast[grant_encoded]) begin
-            frame_next = 1'b0;
-        end
+      // end of frame detection
+      if (s_udp_payload_axis_tlast[grant_encoded]) begin
+        frame_next = 1'b0;
+      end
+    end else if (single_frame_pkt_reg) begin
+      frame_next = 1'b0;
+    end
+    
+    // case if frame_next is stuck to 1'b1
+    if (frame_reg && acknowledge != 0) begin
+      frame_next = 1'b0;
     end
 
-    if (!frame_reg && grant_valid && (m_udp_hdr_ready || !m_udp_hdr_valid)) begin
+
+    if ((!frame_reg) && grant_valid && (m_udp_hdr_ready || !m_udp_hdr_valid)) begin
         // start of frame
         frame_next = 1'b1;
+
+        single_frame_pkt_next = s_udp_payload_axis_tlast[grant_encoded];
 
         s_udp_hdr_ready_next = grant;
 
@@ -345,6 +357,10 @@ always @* begin
         m_udp_dest_port_next = s_udp_dest_port[grant_encoded*16 +: 16];
         m_udp_length_next = s_udp_length[grant_encoded*16 +: 16];
         m_udp_checksum_next = s_udp_checksum[grant_encoded*16 +: 16];
+    end
+    
+    if (single_frame_pkt_reg) begin
+      single_frame_pkt_next = 1'b0;
     end
 
     // pass through selected packet data
