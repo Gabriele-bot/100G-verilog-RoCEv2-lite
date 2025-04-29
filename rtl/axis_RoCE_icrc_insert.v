@@ -7,7 +7,7 @@ module axis_RoCE_icrc_insert #
   (
     parameter DATA_WIDTH   = 256,
     parameter CRC_COMP_TYPE = 1, // 0 My implementation, 1 SV implementation
-    parameter N_PIPE        = 2  // pipeline reg within SV CRC module 
+    parameter N_PIPE        = 2 // pipeline reg within SV CRC module 
 ) (
     input wire clk,
     input wire rst,
@@ -38,7 +38,10 @@ module axis_RoCE_icrc_insert #
     output wire busy
 );
 
-    localparam [1:0] STATE_IDLE = 2'd0, STATE_PAYLOAD = 2'd1, STATE_ICRC = 2'd2;
+    localparam [1:0]
+    STATE_IDLE = 2'd0,
+    STATE_PAYLOAD = 2'd1,
+    STATE_ICRC = 2'd2;
 
     localparam CRC_COMP_LATENCY = CRC_COMP_TYPE ? ($clog2(DATA_WIDTH/8) + N_PIPE + 2)  : DATA_WIDTH / 32;
 
@@ -273,7 +276,7 @@ module axis_RoCE_icrc_insert #
     generate
 
         if (CRC_COMP_TYPE) begin
-            
+
             crc_gen_byteEn #(
                 .DWIDTH(DATA_WIDTH),
                 .CRC_WIDTH(32),
@@ -310,7 +313,7 @@ module axis_RoCE_icrc_insert #
                 .valid_in(axis_masked_tvalid && axis_masked_tready),
                 .last_in(axis_masked_tvalid && axis_masked_tlast && axis_masked_tready),
                 .crcout(crc_out),
-                .valid_crc_out(crc_valid_out) 
+                .valid_crc_out(crc_valid_out)
             );
 
         end

@@ -2,9 +2,17 @@
 
 package RoCE_params;
 
+    import Board_params::*; // Imports RoCE parameters
+
+    function [31:0] time2clk;
+        input real time_value; // in ms
+        input real clock_period; // in ns
+        time2clk = time_value*1e6/clock_period;
+    endfunction
+
     /*
-RoCE OP CODES
-*/
+    RoCE OP CODES
+    */
     parameter [7:0]
     RC_SEND_FIRST         = 8'h00,
     RC_SEND_MIDDLE        = 8'h01,
@@ -23,9 +31,45 @@ RoCE OP CODES
 
     parameter [15:0] ROCE_UDP_PORT = 16'h12B7;
 
+    // Infiniband specification Vol 1 realeas 1.4 page 354
+    parameter [63:0] RNR_TIMER_VALUES = {
+        time2clk(655.36, NET_CLOCK_PERIOD),
+        time2clk(0.01,   NET_CLOCK_PERIOD),
+        time2clk(0.02,   NET_CLOCK_PERIOD),
+        time2clk(0.03,   NET_CLOCK_PERIOD),
+        time2clk(0.04,   NET_CLOCK_PERIOD),
+        time2clk(0.06,   NET_CLOCK_PERIOD),
+        time2clk(0.08,   NET_CLOCK_PERIOD),
+        time2clk(0.12,   NET_CLOCK_PERIOD),
+        time2clk(0.16,   NET_CLOCK_PERIOD),
+        time2clk(0.24,   NET_CLOCK_PERIOD),
+        time2clk(0.32,   NET_CLOCK_PERIOD),
+        time2clk(0.48,   NET_CLOCK_PERIOD),
+        time2clk(0.64,   NET_CLOCK_PERIOD),
+        time2clk(0.96,   NET_CLOCK_PERIOD),
+        time2clk(1.28,   NET_CLOCK_PERIOD),
+        time2clk(1.92,   NET_CLOCK_PERIOD),
+        time2clk(2.56,   NET_CLOCK_PERIOD),
+        time2clk(3.84,   NET_CLOCK_PERIOD),
+        time2clk(5.12,   NET_CLOCK_PERIOD),
+        time2clk(7.68,   NET_CLOCK_PERIOD),
+        time2clk(10.24,  NET_CLOCK_PERIOD),
+        time2clk(15.36,  NET_CLOCK_PERIOD),
+        time2clk(20.48,  NET_CLOCK_PERIOD),
+        time2clk(30.72,  NET_CLOCK_PERIOD),
+        time2clk(40.98,  NET_CLOCK_PERIOD),
+        time2clk(61.44,  NET_CLOCK_PERIOD),
+        time2clk(81.92,  NET_CLOCK_PERIOD),
+        time2clk(122.88, NET_CLOCK_PERIOD),
+        time2clk(163.84, NET_CLOCK_PERIOD),
+        time2clk(245.76, NET_CLOCK_PERIOD),
+        time2clk(327.68, NET_CLOCK_PERIOD),
+        time2clk(491.52, NET_CLOCK_PERIOD)
+    };
+
     /*
-Connection manager parameters
-*/
+    Connection manager parameters
+    */
     //REQUESTS types
     parameter
     REQ_NULL          = 7'h0,

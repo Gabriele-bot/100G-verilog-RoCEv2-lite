@@ -291,16 +291,16 @@ module udp_RoCE_connection_manager_new #(
 
         qp_info_valid_next = qp_info_valid_reg && !s_qp_info_ready;
 
-        qp_info_req_type_next    = qp_info_req_type_reg    ;
-        qp_info_loc_r_key_next   = qp_info_loc_r_key_reg   ;
-        qp_info_loc_qpn_next     = qp_info_loc_qpn_reg     ;
-        qp_info_loc_psn_next     = qp_info_loc_psn_reg     ;
-        qp_info_loc_ip_addr_next = qp_info_loc_ip_addr_reg ;
-        qp_info_loc_base_addr_next    = qp_info_loc_base_addr_reg    ;
-        qp_info_rem_r_key_next   = qp_info_rem_r_key_reg   ;
-        qp_info_rem_qpn_next     = qp_info_rem_qpn_reg     ;
-        qp_info_rem_psn_next     = qp_info_rem_psn_reg     ;
-        qp_info_rem_ip_addr_next = qp_info_rem_ip_addr_reg ;
+        qp_info_req_type_next    = qp_info_req_type_reg;
+        qp_info_loc_r_key_next   = qp_info_loc_r_key_reg;
+        qp_info_loc_qpn_next     = qp_info_loc_qpn_reg;
+        qp_info_loc_psn_next     = qp_info_loc_psn_reg;
+        qp_info_loc_ip_addr_next = qp_info_loc_ip_addr_reg;
+        qp_info_loc_base_addr_next    = qp_info_loc_base_addr_reg;
+        qp_info_rem_r_key_next   = qp_info_rem_r_key_reg;
+        qp_info_rem_qpn_next     = qp_info_rem_qpn_reg;
+        qp_info_rem_psn_next     = qp_info_rem_psn_reg;
+        qp_info_rem_ip_addr_next = qp_info_rem_ip_addr_reg;
         qp_info_rem_base_addr_next    = qp_info_rem_base_addr_reg;
 
         qp_info_udp_dest_port_next = qp_info_udp_dest_port_reg;

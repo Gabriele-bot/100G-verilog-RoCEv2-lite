@@ -189,12 +189,6 @@ module RoCE_retransmission_module #(
 
     import RoCE_params::*; // Imports RoCE parameters
 
-    function [31:0] time2clk;
-        input real time_value; // in ms
-        input real clock_period; // in ns
-        time2clk = time_value*1e6/clock_period;
-    endfunction
-
     /*
     +--------------------------------------+
     |            QP PARAMS                 |
@@ -406,47 +400,8 @@ module RoCE_retransmission_module #(
     reg [BUFFER_ADDR_WIDTH-1:0] s_axis_dma_read_debug_addr;
     reg [AXI_DMA_LENGTH-1:0]    s_axis_dma_read_debug_len;
 
-    reg [31:0] rnr_timer_values [31:0];
-
     reg [127:0] m_qp_close_params_reg;
     reg         m_qp_close_params_valid_reg;
-
-    // Infiniband specification Vol 1 realeas 1.4 page 354
-    initial begin
-        rnr_timer_values[0 ] = time2clk(655.36, CLOCK_PERIOD);
-        rnr_timer_values[1 ] = time2clk(0.01, CLOCK_PERIOD);
-        rnr_timer_values[2 ] = time2clk(0.02, CLOCK_PERIOD);
-        rnr_timer_values[3 ] = time2clk(0.03, CLOCK_PERIOD);
-        rnr_timer_values[4 ] = time2clk(0.04, CLOCK_PERIOD);
-        rnr_timer_values[5 ] = time2clk(0.06, CLOCK_PERIOD);
-        rnr_timer_values[6 ] = time2clk(0.08, CLOCK_PERIOD);
-        rnr_timer_values[7 ] = time2clk(0.12, CLOCK_PERIOD);
-        rnr_timer_values[8 ] = time2clk(0.16, CLOCK_PERIOD);
-        rnr_timer_values[9 ] = time2clk(0.24, CLOCK_PERIOD);
-        rnr_timer_values[10] = time2clk(0.32, CLOCK_PERIOD);
-        rnr_timer_values[11] = time2clk(0.48, CLOCK_PERIOD);
-        rnr_timer_values[12] = time2clk(0.64, CLOCK_PERIOD);
-        rnr_timer_values[13] = time2clk(0.96, CLOCK_PERIOD);
-        rnr_timer_values[14] = time2clk(1.28, CLOCK_PERIOD);
-        rnr_timer_values[15] = time2clk(1.92, CLOCK_PERIOD);
-        rnr_timer_values[16] = time2clk(2.56, CLOCK_PERIOD);
-        rnr_timer_values[17] = time2clk(3.84, CLOCK_PERIOD);
-        rnr_timer_values[18] = time2clk(5.12, CLOCK_PERIOD);
-        rnr_timer_values[19] = time2clk(7.68, CLOCK_PERIOD);
-        rnr_timer_values[20] = time2clk(10.24, CLOCK_PERIOD);
-        rnr_timer_values[21] = time2clk(15.36, CLOCK_PERIOD);
-        rnr_timer_values[22] = time2clk(20.48, CLOCK_PERIOD);
-        rnr_timer_values[23] = time2clk(30.72, CLOCK_PERIOD);
-        rnr_timer_values[24] = time2clk(40.98, CLOCK_PERIOD);
-        rnr_timer_values[25] = time2clk(61.44, CLOCK_PERIOD);
-        rnr_timer_values[26] = time2clk(81.92, CLOCK_PERIOD);
-        rnr_timer_values[27] = time2clk(122.88, CLOCK_PERIOD);
-        rnr_timer_values[28] = time2clk(163.84, CLOCK_PERIOD);
-        rnr_timer_values[29] = time2clk(245.76, CLOCK_PERIOD);
-        rnr_timer_values[30] = time2clk(327.68, CLOCK_PERIOD);
-        rnr_timer_values[31] = time2clk(491.52, CLOCK_PERIOD);
-    end
-
 
 
     // BTH fields
@@ -943,7 +898,7 @@ Simple DMA write logic
                         end
                         2'b01:begin // RNR NAK
                         // load appropriate timer value
-                            rnr_timeout_counter <= rnr_timer_values[s_roce_rx_aeth_syndrome[4:0]];
+                            rnr_timeout_counter <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
                             nak_psn_reg         <= s_roce_rx_bth_psn;
                             timeout_counter     <= timeout_period;
                             trigger_retransmit  <= 1'b0;
@@ -1162,9 +1117,9 @@ Simple DMA write logic
 
     axis_fifo #(
         .DEPTH(256),
-        .DATA_WIDTH(512),
+        .DATA_WIDTH(DATA_WIDTH),
         .KEEP_ENABLE(1),
-        .KEEP_WIDTH(64),
+        .KEEP_WIDTH(DATA_WIDTH/8),
         .ID_ENABLE(0),
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
