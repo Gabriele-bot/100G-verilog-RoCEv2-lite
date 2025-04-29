@@ -19,7 +19,9 @@ Up to now only RC RDMA WRITE and RC SEND with and without IMMEDIATE for both. RX
 A Connection Manager (CM) is implemented via UDP packets. The structure of the UDP packet can be found [here](https://github.com/Gabriele-bot/100G-verilog-RoCEv2-lite/blob/main/rtl/connection_manager/udp_RoCE_connection_manager_rx.sv#L10-L39). An example script can be found here [Scripts/send_connection_info.py](Scripts/send_connection_info.py).
 
 To open a connection use the following command:
-`python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -r 1`
+```
+python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -r 1
+```
 Where
 * `il` is the local IP address
 * `ir` is the remote IP address
@@ -31,12 +33,16 @@ Where
 
 The FPGA will reply with its own local parameters, the only relevant one is its QP number and should be starting from 256.
 The the QP needs to be modified to RTS to do so run the command:
-`python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 3`
+```
+python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 3
+```
 * `rq` is the remote QP number given by the FPGA
 * `r` in this case in `REQ_MODIFY_QP_RTS`
 
 Once the QP is in RTS state it is possible to start sending data, as a debug it you can run this command that will instruct the FPGA to send dummy data on that QP (if it is in RTS state):
-`python3 send_connection_info.py -ir '22.1.212.10' -il '22.1.212.11' -rq 256 -r 0 -s -l 16000 -n 100`
+```
+python3 send_connection_info.py -ir '22.1.212.10' -il '22.1.212.11' -rq 256 -r 0 -s -l 16000 -n 100
+```
 * `rq` is the remote QP number given by the FPGA
 * `r` in this case in `REQ_NULL`
 * `s` start transfer
@@ -44,7 +50,9 @@ Once the QP is in RTS state it is possible to start sending data, as a debug it 
 * `n` is the number of transfers
 
 Eventually the QP must be closed and its QP number must be made availabel again, to do so run the command:
-`python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 4`
+```
+python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 4
+```
 * `rq` is the remote QP number given by the FPGA
 * `r` in this case in `REQ_CLOSE_QP`
 
