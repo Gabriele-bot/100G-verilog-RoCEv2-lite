@@ -32,7 +32,7 @@ package RoCE_params;
     parameter [15:0] ROCE_UDP_PORT = 16'h12B7;
 
     // Infiniband specification Vol 1 realeas 1.4 page 354
-    parameter [63:0] RNR_TIMER_VALUES = {
+    parameter [0:31][31:0] RNR_TIMER_VALUES = {
         time2clk(655.36, NET_CLOCK_PERIOD),
         time2clk(0.01,   NET_CLOCK_PERIOD),
         time2clk(0.02,   NET_CLOCK_PERIOD),
@@ -65,6 +65,26 @@ package RoCE_params;
         time2clk(245.76, NET_CLOCK_PERIOD),
         time2clk(327.68, NET_CLOCK_PERIOD),
         time2clk(491.52, NET_CLOCK_PERIOD)
+    };
+
+    parameter [0:15][31:0] FREQ_CLK_COUNTER_VALUES = {
+        64'd0,
+        time2clk(1e3/1, NET_CLOCK_PERIOD),    // 1 Hz
+        time2clk(1e3/5, NET_CLOCK_PERIOD),    // 5 Hz
+        time2clk(1e3/10, NET_CLOCK_PERIOD),   // 10 Hz
+        time2clk(1e3/50, NET_CLOCK_PERIOD),   // 50 Hz
+        time2clk(1e3/100, NET_CLOCK_PERIOD),  // 100 Hz
+        time2clk(1e3/500, NET_CLOCK_PERIOD),  // 500 Hz
+        time2clk(1e3/1e3, NET_CLOCK_PERIOD),  // 1 kHz
+        time2clk(1e3/5e3, NET_CLOCK_PERIOD),  // 5 kHz
+        time2clk(1e3/1e4, NET_CLOCK_PERIOD),  // 10 kHz
+        time2clk(1e3/5e4, NET_CLOCK_PERIOD),  // 50 kHz
+        time2clk(1e3/1e5, NET_CLOCK_PERIOD),  // 100 kHz
+        time2clk(1e3/5e5, NET_CLOCK_PERIOD),  // 500 kHz
+        time2clk(1e3/1e6, NET_CLOCK_PERIOD),  // 1 MHz
+        time2clk(1e3/5e6, NET_CLOCK_PERIOD),  // 5 MHz
+        time2clk(1e3/1e7, NET_CLOCK_PERIOD)  // 10 MHz
+
     };
 
     /*

@@ -5,7 +5,7 @@
 module RoCE_minimal_stack #(
     parameter DATA_WIDTH      = 256,
     parameter MAX_QUEUE_PAIRS = 4,
-    parameter CLOCK_PERIOD  = 6.4, // in ns
+    parameter CLOCK_PERIOD    = 6.4, // in ns
     parameter DEBUG           = 0,
     parameter RETRANSMISSION  = 1,
     parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 24,
@@ -460,6 +460,7 @@ module RoCE_minimal_stack #(
     wire txmeta_tx_type;
     wire [31:0] txmeta_dma_transfer;
     wire [31:0] txmeta_n_transfers;
+    wire [31:0] txmeta_frequency;
 
     wire        s_dma_meta_valid;
     wire        s_dma_meta_ready;
@@ -511,6 +512,46 @@ module RoCE_minimal_stack #(
     wire                                        m_axi_rlast;
     wire                                        m_axi_rvalid;
     wire                                        m_axi_rready;
+
+    /*
+    AXI RAM BUFFER INTERFACE
+    */
+    localparam BUFFER_ADDR_WIDTH = 24;
+    wire [0                :0]   m_axi_buffer_awid;
+    wire [BUFFER_ADDR_WIDTH-1:0] m_axi_buffer_awaddr;
+    wire [7:0]                   m_axi_buffer_awlen;
+    wire [2:0]                   m_axi_buffer_awsize;
+    wire [1:0]                   m_axi_buffer_awburst;
+    wire                         m_axi_buffer_awlock;
+    wire [3:0]                   m_axi_buffer_awcache;
+    wire [2:0]                   m_axi_buffer_awprot;
+    wire                         m_axi_buffer_awvalid;
+    wire                         m_axi_buffer_awready;
+    wire [DATA_WIDTH   - 1 : 0]  m_axi_buffer_wdata;
+    wire [DATA_WIDTH/8 - 1 : 0]  m_axi_buffer_wstrb;
+    wire                         m_axi_buffer_wlast;
+    wire                         m_axi_buffer_wvalid;
+    wire                         m_axi_buffer_wready;
+    wire [0             :0]      m_axi_buffer_bid;
+    wire [1:0]                   m_axi_buffer_bresp;
+    wire                         m_axi_buffer_bvalid;
+    wire                         m_axi_buffer_bready;
+    wire [0               :0]    m_axi_buffer_arid;
+    wire [BUFFER_ADDR_WIDTH-1:0] m_axi_buffer_araddr;
+    wire [7:0]                   m_axi_buffer_arlen;
+    wire [2:0]                   m_axi_buffer_arsize;
+    wire [1:0]                   m_axi_buffer_arburst;
+    wire                         m_axi_buffer_arlock;
+    wire [3:0]                   m_axi_buffer_arcache;
+    wire [2:0]                   m_axi_buffer_arprot;
+    wire                         m_axi_buffer_arvalid;
+    wire                         m_axi_buffer_arready;
+    wire [0             :0]      m_axi_buffer_rid;
+    wire [DATA_WIDTH   - 1 : 0]  m_axi_buffer_rdata;
+    wire [1:0]                   m_axi_buffer_rresp;
+    wire                         m_axi_buffer_rlast;
+    wire                         m_axi_buffer_rvalid;
+    wire                         m_axi_buffer_rready;
 
     wire         qp_close_params_valid;
     wire [127:0] qp_close_params;
@@ -630,7 +671,7 @@ module RoCE_minimal_stack #(
     (s_select_roce_reg && rx_udp_RoCE_payload_axis_tready);
 
     axis_fifo #(
-        .DEPTH(1024),
+        .DEPTH(4096),
         .DATA_WIDTH(DATA_WIDTH),
         .KEEP_ENABLE(1),
         .KEEP_WIDTH(DATA_WIDTH/8),
@@ -668,25 +709,14 @@ module RoCE_minimal_stack #(
         .status_bad_frame (),
         .status_good_frame()
     );
+    
 
     RoCE_tx_header_producer #(
     .DATA_WIDTH(DATA_WIDTH)
     ) Roce_tx_header_producer_instance (
         .clk                       (clk),
         .rst                       (rst),
-        /* 
-        .s_dma_meta_valid          (s_dma_meta_valid),
-        .s_dma_meta_ready          (s_dma_meta_ready),
-        .s_dma_length              (qp_curr_dma_transfer_length),
-        .s_rem_qpn                 (qp_curr_rem_qpn),
-        .s_loc_qpn                 (qp_curr_loc_qpn),
-        .s_rem_psn                 (qp_curr_rem_psn),
-        .s_r_key                   (qp_curr_r_key),
-        .s_rem_ip_addr             (qp_curr_rem_ip_addr),
-        .s_rem_addr                (qp_curr_rem_addr),
-        .s_is_immediate            (qp_curr_is_immediate),
-        .s_trasfer_type            (qp_curr_tx_type),
-        */
+
         .s_dma_meta_valid          (s_dma_meta_valid),
         .s_dma_meta_ready          (s_dma_meta_ready),
         .s_dma_length              (s_dma_length),
@@ -698,6 +728,7 @@ module RoCE_minimal_stack #(
         .s_rem_addr                (s_rem_addr),
         .s_is_immediate            (s_is_immediate),
         .s_trasfer_type            (s_trasfer_type),
+
         .s_axis_tdata              (s_payload_fifo_axis_tdata),
         .s_axis_tkeep              (s_payload_fifo_axis_tkeep),
         .s_axis_tvalid             (s_payload_fifo_axis_tvalid),
@@ -1505,6 +1536,7 @@ module RoCE_minimal_stack #(
         .m_txmeta_tx_type     (txmeta_tx_type),
         .m_txmeta_dma_transfer(txmeta_dma_transfer),
         .m_txmeta_n_transfers (txmeta_n_transfers),
+        .m_txmeta_frequency   (txmeta_frequency),
 
         .cfg_udp_source_port(16'h8765),
         .cfg_loc_ip_addr(loc_ip_addr),
@@ -1719,12 +1751,17 @@ module RoCE_minimal_stack #(
     );
 
 
+
     reg [23:0] wr_req_loc_qp;
     reg [31:0] wr_req_dma_length;
     reg        wr_req_is_immediate;
     reg        wr_req_tx_type;
     reg [31:0] messages_to_trasnfer;
     reg [27:0] address_offset;
+
+    reg [31:0] txmeta_frequency_reg;
+    reg [63:0] transmit_wait_ctnr; // wait counter trasnfering at a given frequency
+
     reg transfer_ongoing;
 
     reg s_wr_req_valid_reg = 1'b0, s_wr_req_valid_next;
@@ -1754,7 +1791,7 @@ module RoCE_minimal_stack #(
 
         // loop over until all requests are sent
         if (s_wr_req_ready && ~s_wr_req_valid_reg) begin
-            if (messages_to_trasnfer > 0) begin
+            if (messages_to_trasnfer > 0 && transmit_wait_ctnr == 0) begin
                 s_wr_req_valid_next  = 1'b1;
             end else begin
                 s_wr_req_valid_next = 1'b0;
@@ -1766,32 +1803,61 @@ module RoCE_minimal_stack #(
 
     always @(posedge clk) begin
 
-        // load request only
-        if (txmeta_valid && txmeta_start_transfer && ~transfer_ongoing) begin
-            wr_req_loc_qp         <= txmeta_loc_qpn;
-            wr_req_is_immediate   <= txmeta_is_immediate;
-            wr_req_tx_type        <= txmeta_tx_type;
-            wr_req_dma_length     <= txmeta_dma_transfer;
-            messages_to_trasnfer  <= txmeta_n_transfers;
-            address_offset        <= 28'd0;
-            transfer_ongoing      <= 1'b1;
-        end
+        if (rst)  begin
+            transmit_wait_ctnr <= {64{1'b1}};
+            wr_req_loc_qp         <= 0;
+            wr_req_is_immediate   <= 0;
+            wr_req_tx_type        <= 0;
+            wr_req_dma_length     <= 0;
+            messages_to_trasnfer  <= 0;
+            txmeta_frequency_reg  <= 0;
+            address_offset        <= 0;
+            transfer_ongoing      <= 0;
+            s_wr_req_valid_reg    <= 0;
 
-        // loop over until all requests are sent
-        if (messages_to_trasnfer > 0) begin
-            if (s_wr_req_valid && s_wr_req_ready) begin
-                messages_to_trasnfer <= messages_to_trasnfer - 32'd1;
-                if (wr_req_dma_length <= 32'h10000000) begin
-                    address_offset <= address_offset + wr_req_dma_length[27:0];
-                end else begin
-                    address_offset <= 28'd0;
-                end
-            end
         end else begin
-            transfer_ongoing    <= 1'b0;
-        end
+            // load request only
+            if (txmeta_valid && txmeta_start_transfer && ~transfer_ongoing) begin
+                wr_req_loc_qp         <= txmeta_loc_qpn;
+                wr_req_is_immediate   <= txmeta_is_immediate;
+                wr_req_tx_type        <= txmeta_tx_type;
+                wr_req_dma_length     <= txmeta_dma_transfer;
+                messages_to_trasnfer  <= txmeta_n_transfers;
+                txmeta_frequency_reg  <= txmeta_frequency;
+                address_offset        <= 28'd0;
+                transfer_ongoing      <= 1'b1;
+            end
 
-        s_wr_req_valid_reg <= s_wr_req_valid_next;
+            if (txmeta_valid && txmeta_start_transfer && ~transfer_ongoing) begin
+                transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency[4:0]];
+            end else if (transmit_wait_ctnr == 64'd0) begin
+                if (s_wr_req_ready) begin
+                    transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency_reg[4:0]];
+                end else begin
+                    transmit_wait_ctnr <= transmit_wait_ctnr;
+                end
+            end else if (messages_to_trasnfer > 0) begin
+                transmit_wait_ctnr <= transmit_wait_ctnr - 64'd1;
+            end else begin
+                transmit_wait_ctnr <= transmit_wait_ctnr;
+            end
+
+            // loop over until all requests are sent
+            if (messages_to_trasnfer > 0) begin
+                if (s_wr_req_valid && s_wr_req_ready) begin
+                    messages_to_trasnfer <= messages_to_trasnfer - 32'd1;
+                    if (wr_req_dma_length <= 32'h10000000) begin
+                        address_offset <= address_offset + wr_req_dma_length[27:0];
+                    end else begin
+                        address_offset <= 28'd0;
+                    end
+                end
+            end else begin
+                transfer_ongoing    <= 1'b0;
+            end
+
+            s_wr_req_valid_reg <= s_wr_req_valid_next;
+        end
     end
 
     always @(posedge clk) begin

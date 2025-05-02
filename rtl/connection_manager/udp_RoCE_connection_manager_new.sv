@@ -70,6 +70,7 @@ module udp_RoCE_connection_manager_new #(
     output wire [23:0] m_txmeta_loc_qpn,
     output wire [31:0] m_txmeta_dma_transfer,
     output wire [31:0] m_txmeta_n_transfers,
+    output wire [31:0] m_txmeta_frequency,
     output wire        m_txmeta_is_immediate,
     output wire        m_txmeta_tx_type, // 0 SEND, 1 RDMA WRITE
 
@@ -218,6 +219,7 @@ module udp_RoCE_connection_manager_new #(
         .m_txmeta_loc_qpn     (m_txmeta_loc_qpn),
         .m_txmeta_dma_transfer(m_txmeta_dma_transfer),
         .m_txmeta_n_transfers (m_txmeta_n_transfers),
+        .m_txmeta_frequency   (m_txmeta_frequency),
         .m_txmeta_is_immediate(m_txmeta_is_immediate),
         .m_txmeta_tx_type     (m_txmeta_tx_type),
 

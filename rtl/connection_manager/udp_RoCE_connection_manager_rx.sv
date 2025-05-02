@@ -35,7 +35,7 @@
  * |   51    |  [415:412]  |  txmeta_reserved         |
  * | [55:52] |  [447:416]  |  txmeta_dma_length       |
  * | [59:56] |  [479:448]  |  txmeta_n_transfers      |
- * | [63:60] |  [511:480]  |  reserved                |
+ * | [63:60] |  [511:480]  |  txmeta_frequency        |
  * +---------+-------------+--------------------------+
  * TOTAL length 512 bits, 64 bytes
  */
@@ -86,6 +86,7 @@ module udp_RoCE_connection_manager_rx #(
     output wire [23:0] m_txmeta_loc_qpn,
     output wire [31:0] m_txmeta_dma_transfer,
     output wire [31:0] m_txmeta_n_transfers,
+    output wire [31:0] m_txmeta_frequency,
     output wire        m_txmeta_is_immediate,
     output wire        m_txmeta_tx_type, // 0 SEND, 1 RDMA WRITE
     /*
@@ -150,6 +151,7 @@ module udp_RoCE_connection_manager_rx #(
     reg txmeta_tx_type_reg, txmeta_tx_type_next;
     reg [31:0] txmeta_n_transfers_reg, txmeta_n_transfers_next;
     reg [31:0] txmeta_dma_lentgh_reg, txmeta_dma_lentgh_next;
+    reg [31:0] txmeta_frequency_reg, txmeta_frequency_next;
 
     reg s_qp_info_valid_reg, s_qp_info_valid_next;
 
@@ -202,6 +204,7 @@ module udp_RoCE_connection_manager_rx #(
         txmeta_tx_type_next            = txmeta_tx_type_reg;
         txmeta_dma_lentgh_next         = txmeta_dma_lentgh_reg;
         txmeta_n_transfers_next        = txmeta_n_transfers_reg;
+        txmeta_frequency_next          = txmeta_frequency_reg;
 
         s_qp_info_valid_next  = 1'b0;
 
@@ -310,6 +313,10 @@ module udp_RoCE_connection_manager_rx #(
                     `_HEADER_FIELD_(57,  txmeta_n_transfers_next[1*8 +: 8])
                     `_HEADER_FIELD_(58,  txmeta_n_transfers_next[2*8 +: 8])
                     `_HEADER_FIELD_(59,  txmeta_n_transfers_next[3*8 +: 8])
+                    `_HEADER_FIELD_(60,  txmeta_frequency_next[0*8 +: 8])
+                    `_HEADER_FIELD_(61,  txmeta_frequency_next[1*8 +: 8])
+                    `_HEADER_FIELD_(62,  txmeta_frequency_next[2*8 +: 8])
+                    `_HEADER_FIELD_(63,  txmeta_frequency_next[3*8 +: 8])
 
                     txmeta_loc_qpn_next = qp_info_rem_qpn_next;
 
@@ -392,6 +399,7 @@ module udp_RoCE_connection_manager_rx #(
                 txmeta_tx_type_reg         <= txmeta_tx_type_next;
                 txmeta_dma_lentgh_reg      <= txmeta_dma_lentgh_next;
                 txmeta_n_transfers_reg     <= txmeta_n_transfers_next;
+                txmeta_frequency_reg       <= txmeta_frequency_next;
             end else begin
                 txmeta_start_reg           <= 1'b0;
             end
@@ -421,6 +429,7 @@ module udp_RoCE_connection_manager_rx #(
     assign m_txmeta_loc_qpn        = txmeta_loc_qpn_reg;
     assign m_txmeta_dma_transfer   = txmeta_dma_lentgh_reg;
     assign m_txmeta_n_transfers    = txmeta_n_transfers_reg;
+    assign m_txmeta_frequency      = txmeta_frequency_reg;
     assign m_txmeta_is_immediate   = txmeta_is_immediate_reg;
     assign m_txmeta_tx_type        = txmeta_tx_type_reg;
 

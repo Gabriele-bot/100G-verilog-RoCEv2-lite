@@ -30,6 +30,8 @@ parser.add_argument('-l', '--length', metavar='N', type=int, default=128,
                     help='DMA transfer size in byte')
 parser.add_argument('-n', '--nTransfers', metavar='N', type=int, default=0x1,
                     help='Number of dma transfers')
+parser.add_argument('-fr', '--Frequency', metavar='N', type=int, default=0x0,
+                    help='Transfer Frequency, use 0 to ignore')
 parser.add_argument('-i', '--immediate', action='store_true',
                     help='Immediate transfer')
 parser.add_argument('-t', '--txtype', action='store_false',
@@ -289,7 +291,7 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     return data
 
 def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x11, loc_qpn=0x12,
-                rdma_length=0x0, n_trasnfers=1, start_flag=0, immd_flag=0, txtype_flag=1):
+                rdma_length=0x0, n_trasnfers=1, freq=0, start_flag=0, immd_flag=0, txtype_flag=1):
 
     LOC_IP_ADDRESS = loc_ip_addr
     LOC_IP_ADDRESS_INT = int(ip_address(loc_ip_addr))
@@ -308,6 +310,7 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     # Tx meta
     DMA_LENGTH = rdma_length
     N_TRANSFERS = n_trasnfers
+    FREQUENCY = freq
 
     REQ_TYPE = REQ_NULL
 
@@ -337,7 +340,7 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     MESSAGE += struct.pack("<B", txmeta_flags)  # TX meta flags: valid, start, is_immd, txtype
     MESSAGE += struct.pack("<L", DMA_LENGTH)  # DMA length
     MESSAGE += struct.pack("<L", N_TRANSFERS)  # N transfers
-    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
+    MESSAGE += struct.pack("<L", FREQUENCY)  # Frequency
 
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", REM_UDP_PORT)
@@ -398,7 +401,7 @@ if __name__ == "__main__":
 
     if args.start:
         send_txmeta(loc_ip_addr=args.loc_ip_addr, rem_ip_addr=args.rem_ip_addr, rem_qpn=args.rem_qpn,
-                    n_trasnfers=args.nTransfers, rdma_length=args.length, start_flag=args.start,
+                    n_trasnfers=args.nTransfers, freq=args.Frequecny, rdma_length=args.length, start_flag=args.start,
                     immd_flag=args.immediate, txtype_flag=args.txtype)
     else:
         if args.request == REQ_OPEN_QP:
