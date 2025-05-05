@@ -635,7 +635,7 @@ Simple DMA write logic
 
                 s_axis_dma_read_desc_valid_next = 1'b0;
 
-                if (trigger_rnr_wait) begin // RNR
+                if (rnr_timeout_counter > 0) begin // RNR
 
                     state_next  = STATE_RNR_WAIT;
 

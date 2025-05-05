@@ -674,8 +674,8 @@ module top (
       .DEBUG(0),
       .RETRANSMISSION(1),
       .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
-      .ENABLE_SIM_PACKET_DROP_TX(1),
-      .ENABLE_SIM_PACKET_DROP_RX(1)
+      .ENABLE_SIM_PACKET_DROP_TX(0),
+      .ENABLE_SIM_PACKET_DROP_RX(0)
   ) RoCE_minimal_stack_instance (
       .clk(clk_x1),
       .rst(rst),
@@ -742,7 +742,7 @@ module top (
       .loc_ip_addr(local_ip),
       .timeout_period(64'd4000),
       .retry_count(4'd5),
-      .rnr_retry_count(4'd5)
+      .rnr_retry_count(4'd7)
   );
 
 endmodule
