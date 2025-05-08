@@ -861,7 +861,7 @@ This module integrates the IP and ARP modules for a complete IP stack
         .m_axis_tlast (icmp_tx_ip_payload_axis_tlast),
         .m_axis_tid   (),
         .m_axis_tdest (),
-        .m_axis_tuser (icmp_tx_ip_payload_axis_tuser),
+        .m_axis_tuser (icmp_tx_ip_payload_axis_tuser)
     );
 
   end else begin
