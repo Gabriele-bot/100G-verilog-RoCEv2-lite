@@ -473,33 +473,12 @@ module icmp_echo_reply #(
         .busy(tx_busy)
     );
 
-    axis_pipeline_register #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .KEEP_ENABLE(1),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .REG_TYPE(2),
-    .LENGTH(1)
-  ) eth_tx_pipeline_inst (
-    .clk(clk),
-    .rst(rst),
-
-    .s_axis_tdata (tx_pipeline_ip_payload_axis_tdata),
-    .s_axis_tkeep (tx_pipeline_ip_payload_axis_tkeep),
-    .s_axis_tvalid(tx_pipeline_ip_payload_axis_tvalid),
-    .s_axis_tready(tx_pipeline_ip_payload_axis_tready),
-    .s_axis_tlast (tx_pipeline_ip_payload_axis_tlast),
-    .s_axis_tuser (tx_pipeline_ip_payload_axis_tuser),
-
-    .m_axis_tdata (m_ip_payload_axis_tdata),
-    .m_axis_tkeep (m_ip_payload_axis_tkeep),
-    .m_axis_tvalid(m_ip_payload_axis_tvalid),
-    .m_axis_tready(m_ip_payload_axis_tready),
-    .m_axis_tlast (m_ip_payload_axis_tlast),
-    .m_axis_tuser (m_ip_payload_axis_tuser)
-  );
+   assign m_ip_payload_axis_tdata  = tx_pipeline_ip_payload_axis_tdata;
+   assign m_ip_payload_axis_tkeep  = tx_pipeline_ip_payload_axis_tkeep; 
+   assign m_ip_payload_axis_tvalid = tx_pipeline_ip_payload_axis_tvalid;
+   assign tx_pipeline_ip_payload_axis_tready = m_ip_payload_axis_tready;
+   assign m_ip_payload_axis_tlast  = tx_pipeline_ip_payload_axis_tlast; 
+   assign m_ip_payload_axis_tuser  = tx_pipeline_ip_payload_axis_tuser;
 
 
 endmodule
