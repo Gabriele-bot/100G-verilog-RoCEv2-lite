@@ -90,7 +90,7 @@ module qpn_fifo_init #
     always @(posedge clk) begin
         if (rst) begin
             for (i = 0; i < MAX_QUEUE_PAIRS; i = i + 1) begin
-                qpn_mem[i] = 24'd256 + i;
+                qpn_mem[i] <= 24'd256 + i;
             end
             fifo_wr_ptr_reg <= {1'b1, {MAX_QUEUE_PAIRS_WIDTH{1'b0}}}; // initialize fifo full
         end else begin

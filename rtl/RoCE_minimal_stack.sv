@@ -709,7 +709,7 @@ module RoCE_minimal_stack #(
         .status_bad_frame (),
         .status_good_frame()
     );
-    
+
 
     RoCE_tx_header_producer #(
     .DATA_WIDTH(DATA_WIDTH)
@@ -784,6 +784,28 @@ module RoCE_minimal_stack #(
     generate
         if (RETRANSMISSION) begin
 
+            /*
+            WORKAROUND to to have only one qp in RTS at the same time
+            */
+            reg        qp_active;
+            reg [23:0] curr_open_qpn;
+
+            always @(posedge clk) begin
+                if (rst) begin
+                    curr_open_qpn <= 24'd0;
+                    qp_active     <= 1'b0;
+                end else begin
+                    if (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS && !qp_active) begin
+                        curr_open_qpn <= qp_init_loc_qpn;
+                        qp_active     <= 1'b1;
+                    end else if (qp_init_valid && qp_init_req_type == REQ_CLOSE_QP && qp_active) begin
+                        curr_open_qpn <= 24'd0;
+                        qp_active     <= 1'b0;
+                    end
+                end
+            end
+
+
             wire [127:0] s_qp_params;
             assign s_qp_params[31 :0  ] = qp_init_rem_ip_addr;
             assign s_qp_params[55 :32 ] = qp_init_rem_qpn;
@@ -801,8 +823,8 @@ module RoCE_minimal_stack #(
             ) RoCE_retransmission_module_instance (
                 .clk(clk),
                 .rst(rst),
-                .rst_retry_cntr              (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS),
-                .s_qp_params_valid           (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS),
+                .rst_retry_cntr              (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+                .s_qp_params_valid           (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
                 .s_qp_params                 (s_qp_params),
                 .s_roce_aeth_valid           (m_roce_aeth_valid),
                 .s_roce_rx_aeth_syndrome     (m_roce_aeth_syndrome),

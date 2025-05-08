@@ -217,6 +217,32 @@ module RoCE_qp_state_module #(
   reg [3:0] pmtu_shift;
   reg [11:0] length_pmtu_mask;
 
+  /*
+  WORKAROUND to to have only one qp in RTS at the same time
+  */
+  reg        qp_active;
+  reg        qp_active_del;
+  reg [23:0] curr_open_qpn;
+
+  always @(posedge clk) begin
+    if (rst) begin
+      curr_open_qpn <= 24'd0;
+      qp_active     <= 1'b0;
+    end else begin
+      if (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS && !qp_active) begin
+        curr_open_qpn <= qp_init_loc_qpn;
+        qp_active     <= 1'b1;
+      end else if (qp_init_valid && qp_init_req_type == REQ_CLOSE_QP && qp_active) begin
+        curr_open_qpn <= 24'd0;
+        qp_active     <= 1'b0;
+      end
+    end
+    qp_active_del <= qp_active;
+  end
+  /*
+  WORKAROUND to to have only one qp in RTS at the same time
+  */
+
   integer i;
 
   initial begin
@@ -264,6 +290,8 @@ module RoCE_qp_state_module #(
     qp_close_ptr_next  = qp_close_ptr_reg;
 
     qp_aeth_syndrome_next = qp_aeth_syndrome_reg;
+
+    qp_update_rem_psn_next = qp_update_rem_psn_reg;
 
     store_qp_info = 1'b0;
 
@@ -427,19 +455,24 @@ module RoCE_qp_state_module #(
       STATE_MODIFY_QP_RTS: begin
         // check if QP is RESET state
         if (qp_contex[qp_update_ptr_reg][QP_STATE_OFFSET   +: 3]  == QP_STATE_INIT) begin
-          qp_contex[qp_update_ptr_reg][QP_STATE_OFFSET   +: 3 ] <= QP_STATE_RTS;
-          qp_contex[qp_update_ptr_reg][REM_IPADDR_OFFSET +: 32] <= qp_contex[qp_update_ptr_reg][REM_IPADDR_OFFSET +: 32];
-          qp_contex[qp_update_ptr_reg][REM_QPN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][REM_QPN_OFFSET    +: 24];
-          qp_contex[qp_update_ptr_reg][LOC_QPN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][LOC_QPN_OFFSET    +: 24];
-          qp_contex[qp_update_ptr_reg][REM_PSN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][REM_PSN_OFFSET    +: 24];
-          qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24];
-          qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64] <= qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64];
-          qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32] <= qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32];
-          qp_contex[qp_update_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= qp_contex[qp_update_ptr_reg][SYNDROME_OFFSET   +: 8 ];
-          qp_contex[qp_update_ptr_reg][RESERVED_OFFSET   +: 16] <= qp_contex[qp_update_ptr_reg][RESERVED_OFFSET   +: 16];
+          if (!qp_active_del) begin
+            qp_contex[qp_update_ptr_reg][QP_STATE_OFFSET   +: 3 ] <= QP_STATE_RTS;
+            qp_contex[qp_update_ptr_reg][REM_IPADDR_OFFSET +: 32] <= qp_contex[qp_update_ptr_reg][REM_IPADDR_OFFSET +: 32];
+            qp_contex[qp_update_ptr_reg][REM_QPN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][REM_QPN_OFFSET    +: 24];
+            qp_contex[qp_update_ptr_reg][LOC_QPN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][LOC_QPN_OFFSET    +: 24];
+            qp_contex[qp_update_ptr_reg][REM_PSN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][REM_PSN_OFFSET    +: 24];
+            qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24] <= qp_contex[qp_update_ptr_reg][LOC_PSN_OFFSET    +: 24];
+            qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64] <= qp_contex[qp_update_ptr_reg][VADDR_OFFSET      +: 64];
+            qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32] <= qp_contex[qp_update_ptr_reg][RKEY_OFFSET       +: 32];
+            qp_contex[qp_update_ptr_reg][SYNDROME_OFFSET   +: 8 ] <= qp_contex[qp_update_ptr_reg][SYNDROME_OFFSET   +: 8 ];
+            qp_contex[qp_update_ptr_reg][RESERVED_OFFSET   +: 16] <= qp_contex[qp_update_ptr_reg][RESERVED_OFFSET   +: 16];
 
-          error_qp_request     <= 1'b0;
-          qp_open_status_valid <= 1'b1;
+            error_qp_request     <= 1'b0;
+            qp_open_status_valid <= 1'b1;
+          end else begin
+            error_qp_request     <= 1'b1;
+            qp_open_status_valid <= 1'b1;
+          end
         end else begin
           error_qp_request     <= 1'b1;
           qp_open_status_valid <= 1'b1;

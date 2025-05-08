@@ -98,6 +98,8 @@ create_project.tcl: Makefile $(XCI_FILES_REL) $(IP_TCL_FILES_REL)
 	for x in $(IP_TCL_FILES_REL); do echo "source $$x" >> $@; done
 	for x in $(CONFIG_TCL_FILES_REL); do echo "source $$x" >> $@; done
 	for x in $(IMPL_XDC_FILES_REL); do echo "set_property used_in_synthesis false [get_files $$x]" >> $@; done
+	echo "set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE EarlyBlockPlacement [get_runs impl_1]" >> $@
+	echo "set_property STEPS.PHYS_OPT_DESIGN.ARGS.DIRECTIVE AlternateFlowWithRetiming [get_runs impl_1]" >> $@
 	#echo "set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE Explore [get_runs impl_1]" >> $@
 	#echo "set_property STEPS.PHYS_OPT_DESIGN.ARGS.DIRECTIVE AggressiveExplore [get_runs impl_1]" >> $@
 

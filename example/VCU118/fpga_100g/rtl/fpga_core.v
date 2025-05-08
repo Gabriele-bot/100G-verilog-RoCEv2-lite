@@ -660,7 +660,7 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
 
   // ROCE TX inst
   // 10G  64b@156MHz   --> 2**18 * 8 bits / 10Gbps  = 210 us of buffering (best case scenario, every frame is full)
-  // 125G 642b@390MHz  --> 2**20 * 8 bits / 25Gbps  = 168 us of buffering (best case scenario, every frame is full)
+  // 25G  642b@390MHz  --> 2**20 * 8 bits / 25Gbps  = 168 us of buffering (best case scenario, every frame is full)
   // 100G 512b@322MHz  --> 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
   // 200G 512b@400MHz  --> 2**22 * 8 bits / 200Gbps = 168 us of buffering (best case scenario, every frame is full)
   // 400G 1024b@400MHz --> 2**24 * 8 bits / 400Gbps = 168 us of buffering (best case scenario, every frame is full)
@@ -734,7 +734,8 @@ assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
       .RoCE_udp_port(RoCE_udp_port),
       .loc_ip_addr(local_ip),
       .timeout_period(64'd20000), //3.1 ns * 20000 = 62 ns
-      .retry_count(4'd14)
+      .retry_count(3'd7),
+      .rnr_retry_count(3'd7)
   );
   
   /*

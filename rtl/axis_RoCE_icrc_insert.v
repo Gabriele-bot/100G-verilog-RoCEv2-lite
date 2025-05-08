@@ -96,8 +96,8 @@ module axis_RoCE_icrc_insert #
     reg  [DATA_WIDTH/8 - 1 : 0] icrc_m_tkeep_0;
     reg  [DATA_WIDTH/8 - 1 : 0] icrc_m_tkeep_1;
 
-    reg  [DATA_WIDTH   - 1 : 0]  icrc_m_tdata_temp [DATA_WIDTH / 32 - 1:0];
-    reg  [DATA_WIDTH/8 - 1 : 0]  icrc_m_tkeep_temp [DATA_WIDTH / 32 - 1:0];
+    reg  [DATA_WIDTH   - 1 : 0]  icrc_m_tdata_temp [DATA_WIDTH / 32 - 2:0];
+    reg  [DATA_WIDTH/8 - 1 : 0]  icrc_m_tkeep_temp [DATA_WIDTH / 32 - 2:0];
 
     reg [15:0] frame_ptr_reg = 16'd0, frame_ptr_next;
 
@@ -273,6 +273,7 @@ module axis_RoCE_icrc_insert #
 
     end
 
+    /* */
     generate
 
         if (CRC_COMP_TYPE) begin
@@ -401,46 +402,50 @@ module axis_RoCE_icrc_insert #
         end
     end
 
+    always @* begin
+        icrc_m_tdata_0[31:0] = axis_not_masked_fifo_out_tdata[31 : 0];
+        icrc_m_tkeep_0[3:0 ] = 4'hF;
+    end
+
+    genvar j;
+        
     generate
-        for (genvar j = 0; j <= DATA_WIDTH / 32 - 2; j = j + 1) begin
+        for (j = 0; j <= DATA_WIDTH / 32 - 2; j = j + 1) begin
             always @* begin
-                //icrc_m_tdata_temp[j] = {~icrc_to_output, icrc_s_tdata[(j+1)*32-1 : 0]};
-                icrc_m_tdata_temp[j] = {~crc_out_fifo, icrc_s_tdata[(j+1)*32-1 : 0]};
-                icrc_m_tkeep_temp[j] = {4'hF, {(j+1){4'hF}}};
+                case(icrc_s_tkeep[j*4 +: 8])
+                    8'hFF: begin
+                        icrc_m_tdata_0[(j+1)*32 +: 32] = axis_not_masked_fifo_out_tdata[(j+1)*32 +: 32];
+                        icrc_m_tkeep_0[(j+1)*4  +: 4]   = 4'hF;
+                    end
+                    8'h0F: begin
+                        icrc_m_tdata_0[(j+1)*32 +: 32] = ~crc_out_fifo;
+                        icrc_m_tkeep_0[(j+1)*4  +: 4]   = 4'hF;
+                    end
+                    8'h00: begin
+                        icrc_m_tdata_0[(j+1)*32 +: 32]   = 32'd0;
+                        icrc_m_tkeep_0[(j+1) *4 +: 4] = 4'h0;
+                    end
+                    default: begin
+                        icrc_m_tdata_0[(j+1)*32 +: 32]   = 32'd0;
+                        icrc_m_tkeep_0[(j+1) *4 +: 4] = 4'h0;
+                    end
+                endcase
             end
         end
     endgenerate
 
-
-    // Append ICRC
     always @* begin
-        icrc_m_tdata_0 = 0;
-        icrc_m_tdata_1 = 0;
-        icrc_m_tkeep_0 = 0;
-        icrc_m_tkeep_1 = 0;
-        for (i = DATA_WIDTH / 32 - 1; i >= 0; i = i - 1) begin
-            if (i == DATA_WIDTH / 32 - 1) begin
-                if (icrc_s_tkeep[i*4 +: 4] == 4'hF) begin // Need a new cycle to accomodate the ICRC
-                    icrc_m_tdata_0 = icrc_s_tdata;
-                    //icrc_m_tdata_1[31:0] =  ~icrc_to_output;
-                    icrc_m_tdata_1[31:0] =  ~crc_out_fifo;
-                    icrc_m_tkeep_0 = {DATA_WIDTH/32{4'hF}};
-                    icrc_m_tkeep_1[3:0] = 4'hF;
-                end
-            end else begin
-                if (icrc_s_tkeep[i*4 +: 8] == 8'h0F) begin // append ~icrc on the next 32 bits
-                    icrc_m_tdata_0 = icrc_m_tdata_temp[i];
-                    icrc_m_tkeep_0 = icrc_m_tkeep_temp[i];
-                end else if (icrc_s_tkeep[i*4 +: 8] == 8'h00) begin // This one shuld not happen (with tvalid asserted)
-                    icrc_m_tdata_0 = 0;
-                    icrc_m_tdata_1 = 0;
-                    icrc_m_tkeep_0 = 0;
-                    icrc_m_tkeep_1 = 0;
-                end
-            end
+        if (icrc_s_tkeep == {DATA_WIDTH/32{4'hF}}) begin // Need a new cycle to accomodate the ICRC
+            icrc_m_tdata_1[31:0] =  ~crc_out_fifo;
+            icrc_m_tdata_1[DATA_WIDTH-1:32] = {DATA_WIDTH-32{1'b0}};
+            icrc_m_tkeep_1[3:0] = 4'hF;
+            icrc_m_tkeep_1[DATA_WIDTH/8-1:4] = {DATA_WIDTH/8-4{1'b0}};
+        end else begin
+            icrc_m_tdata_1 = {DATA_WIDTH{1'b0}};
+            icrc_m_tkeep_1 = {DATA_WIDTH/8{1'b0}};
         end
-
     end
+
 
     always @* begin
         state_next                    = STATE_IDLE;

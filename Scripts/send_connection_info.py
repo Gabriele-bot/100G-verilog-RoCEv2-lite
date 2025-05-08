@@ -396,12 +396,14 @@ def decode_udp_packet(pkt):
     print("REM_BASE_ADDR:", hex(REM_BASE_ADDR))
     print("REM_IP_ADDRESS:", IPv4Address(REM_IP_ADDRESS_INT))
 
+    return LOC_QPN
+
 
 if __name__ == "__main__":
 
     if args.start:
         send_txmeta(loc_ip_addr=args.loc_ip_addr, rem_ip_addr=args.rem_ip_addr, rem_qpn=args.rem_qpn,
-                    n_trasnfers=args.nTransfers, freq=args.Frequecny, rdma_length=args.length, start_flag=args.start,
+                    n_trasnfers=args.nTransfers, freq=args.Frequency, rdma_length=args.length, start_flag=args.start,
                     immd_flag=args.immediate, txtype_flag=args.txtype)
     else:
         if args.request == REQ_OPEN_QP:

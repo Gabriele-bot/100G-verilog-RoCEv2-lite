@@ -673,9 +673,9 @@ module top (
       .CLOCK_PERIOD(6.4),
       .DEBUG(0),
       .RETRANSMISSION(1),
-      .RETRANSMISSION_ADDR_BUFFER_WIDTH(22),
-      .ENABLE_SIM_PACKET_DROP_TX(0),
-      .ENABLE_SIM_PACKET_DROP_RX(0)
+      .RETRANSMISSION_ADDR_BUFFER_WIDTH(20),
+      .ENABLE_SIM_PACKET_DROP_TX(1),
+      .ENABLE_SIM_PACKET_DROP_RX(1)
   ) RoCE_minimal_stack_instance (
       .clk(clk_x1),
       .rst(rst),

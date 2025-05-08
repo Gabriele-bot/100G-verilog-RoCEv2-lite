@@ -35,9 +35,9 @@ module axis_data_generator #(
     generate
         for (genvar j = 0; j <= DATA_WIDTH/8 - 1; j = j + 1) begin
             if (j == 0) begin
-                initial count2keep_reg[j] = 0;
+                initial count2keep_reg[j] = {(DATA_WIDTH/8){1'b0}};
             end else begin
-                initial count2keep_reg[j] = {(j){1'b1}};
+                initial count2keep_reg[j] = {{(DATA_WIDTH/8-j){1'b0}}, {(j){1'b1}}};
             end
         end
     endgenerate
@@ -63,7 +63,7 @@ module axis_data_generator #(
     parameter SLICES_32BIT = DATA_WIDTH/32;
     parameter WORD_WIDTH   = DATA_WIDTH/8;
 
-    reg [31:0] length_reg = 32'd0;
+    reg [31:0] length_reg;
     reg start_1;
     reg start_2;
 
@@ -82,6 +82,8 @@ module axis_data_generator #(
             length_reg        <= 32'd0;
             remaining_words   <= 64'd0;
             stop_transfer_reg <= 1'b0;
+            start_1 <= 1'b0;
+            start_2 <= 1'b0;
         end else begin
             start_1 <= start;
             start_2 <= start_1;
@@ -136,7 +138,7 @@ module axis_data_generator #(
     endgenerate
 
     // TKEEP
-    assign m_axis_tkeep = m_axis_tlast ? ((count2keep(remaining_words) == 0) ? {DATA_WIDTH/8{1'b1}} : count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
+    assign m_axis_tkeep = m_axis_tlast ? (count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
 
     assign m_axis_tvalid = ((word_counter < length_reg) ? 1'b1 : 1'b0);
     assign m_axis_tlast = ((word_counter + WORD_WIDTH >= length_reg) ? 1'b1 : 1'b0);

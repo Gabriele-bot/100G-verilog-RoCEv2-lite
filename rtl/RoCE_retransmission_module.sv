@@ -237,6 +237,8 @@ module RoCE_retransmission_module #(
     reg trigger_rnr_wait = 1'b0;
     reg nak_detected       = 1'b0;
     reg [23:0] nak_psn_reg        = 24'd0;
+    reg rnr_nak_detected       = 1'b0;
+    reg [23:0] rnr_nak_psn_reg        = 24'd0;
     reg [63:0] timeout_counter;
     reg [63:0] rnr_timeout_counter;
     reg retransmit_started = 1'b0;
@@ -645,7 +647,7 @@ Simple DMA write logic
                     m_roce_reth_valid_next  = 1'b0;
                     m_roce_immdh_valid_next = 1'b0;
 
-                    s_roce_bth_psn_memory_next = nak_psn_reg;
+                    s_roce_bth_psn_memory_next = rnr_nak_psn_reg;
                     reset_timeout_counter_next = 1'b1;
 
                     n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg + 32'd1;
@@ -846,7 +848,7 @@ Simple DMA write logic
                 s_axis_dma_write_desc_valid_next = 1'b0;
 
                 if (m_axis_dma_read_data_tready && m_axis_dma_read_data_tvalid && m_axis_dma_read_data_tlast) begin
-                    if (trigger_retransmit) begin
+                    if (trigger_retransmit  || rnr_timeout_counter > 0) begin
                         state_next                           = STATE_IDLE;
                     end else begin
                         state_next                           = STATE_READ_RAM_HEADER;
@@ -857,6 +859,7 @@ Simple DMA write logic
             end
             STATE_RNR_WAIT: begin
                 retry_counter_next = 0; // reset retry counter to 0
+                hdr_ram_addr_next  = rnr_nak_psn_reg;
                 if (rnr_timeout_counter == 32'd0) begin
                     state_next = STATE_READ_RAM_HEADER;
                 end else begin
@@ -873,6 +876,7 @@ Simple DMA write logic
             timeout_counter     <= 64'd0;
             rnr_timeout_counter <= 64'd0;
             nak_psn_reg         <= 24'd0;
+            rnr_nak_psn_reg     <= 24'd0;
             trigger_retransmit  <= 1'b0;
             trigger_rnr_wait    <= 1'b0;
             nak_detected        <= 1'b0;
@@ -883,7 +887,7 @@ Simple DMA write logic
                     trigger_retransmit <= 1'b0;
                     trigger_rnr_wait   <= 1'b0;
                 end else if (state_reg == STATE_RNR_WAIT) begin
-                    if (rnr_timeout_counter > 32'd0) begin
+                    if (rnr_timeout_counter > 64'd0) begin
                         rnr_timeout_counter <= rnr_timeout_counter - 64'd1;
                     end
                     trigger_retransmit <= 1'b1;
@@ -899,7 +903,8 @@ Simple DMA write logic
                         2'b01:begin // RNR NAK
                         // load appropriate timer value
                             rnr_timeout_counter <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
-                            nak_psn_reg         <= s_roce_rx_bth_psn;
+                            rnr_nak_psn_reg     <= s_roce_rx_bth_psn;
+                            rnr_nak_detected    <= 1'b1;
                             timeout_counter     <= timeout_period;
                             trigger_retransmit  <= 1'b0;
                             trigger_rnr_wait    <= 1'b1;
@@ -1186,7 +1191,7 @@ Simple DMA write logic
         .m_axis_tuser ({s_axis_dma_write_fifo_data_tuser, axis_bypass_tuser})
     );
 
-    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && !trigger_retransmit && trigger_rnr_wait == 0);
+    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && !trigger_retransmit && rnr_timeout_counter == 0);
 
     axis_mux #(
         .S_COUNT(2),

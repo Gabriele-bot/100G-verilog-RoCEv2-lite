@@ -61,6 +61,7 @@ SYN_FILES += ip/cmac_pad.v
 
 
 # RoCE Files
+SYN_FILES +=  lib/RoCE/rtl/header_files/Board_parameters.sv
 SYN_FILES +=  lib/RoCE/rtl/header_files/RoCE_parameters.sv
 SYN_FILES +=  lib/RoCE/rtl/axis_mask_fields_icrc.v
 SYN_FILES +=  lib/RoCE/rtl/axis_data_generator.sv

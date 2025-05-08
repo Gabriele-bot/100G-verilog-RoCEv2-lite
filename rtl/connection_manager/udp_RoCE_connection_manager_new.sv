@@ -291,6 +291,8 @@ module udp_RoCE_connection_manager_new #(
 
         qp_close_req_next = 1'b0;
 
+        s_qpn_next = s_qpn_reg;
+
         qp_info_valid_next = qp_info_valid_reg && !s_qp_info_ready;
 
         qp_info_req_type_next    = qp_info_req_type_reg;

@@ -4,7 +4,7 @@ import sys
 import socket
 import time
 
-from send_connection_info import send_txmeta, send_qp_info
+from send_connection_info import *
 
 from ipaddress import ip_address, IPv4Address
 
@@ -492,25 +492,33 @@ ETH_P_ALL = 3  # not defined in socket module, sadly...
 s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
 s.bind(("tap0", 0))
 
-iterations = 10
+iterations = 100
 
 try:
     for i in range(iterations):
         data_stream = []
 
-        dma_length_set  = 4096*np.random.randint(1, high=20, size=None, dtype=int) + np.random.randint(0, high=31, size=None, dtype=int)*4 #integer number of pmtu + an integer value of 4 bytes
+        dma_length_set   = 4096*np.random.randint(0, high=40, size=None, dtype=int) + np.random.randint(0, high=31, size=None, dtype=int)*4 #integer number of pmtu + an integer value of 4 bytes
         r_key_set        = np.random.randint(1, high=2**32-1, size=None, dtype=np.uint32)
         starting_psn_set = np.random.randint(1, high=2**24-1, size=None, dtype=np.uint32)
-        rem_qpn_set      = np.random.randint(2**8, high=2**8+3, size=None, dtype=np.uint32)
         loc_qpn_set      = np.random.randint(1, high=2 ** 14 -1, size=None, dtype=np.uint32)
         base_addr        = np.random.randint(1, high=2**64-1, size=None, dtype=np.uint64)
 
         #time.sleep(0.5)
-        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=loc_qpn_set, fpga_qpn=rem_qpn_set, psn=starting_psn_set, r_key=r_key_set, rem_base_addr=base_addr)
+        data = request_qp_info(loc_ip_addr=args.tap_ip_addr, rem_ip_addr=args.sim_ip_addr, loc_qpn=loc_qpn_set,
+                               loc_psn=starting_psn_set, loc_r_key=r_key_set, loc_base_addr=base_addr)
 
-        send_txmeta(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, fpga_qpn=rem_qpn_set, rdma_length=dma_length_set, start_flag=0x1)
+        rem_qpn = decode_udp_packet(data)
 
-        send_qp_info(client_ip_addr=args.tap_ip_addr, fpga_ip_addr=args.sim_ip_addr, client_qpn=loc_qpn_set, fpga_qpn=rem_qpn_set, close_qp=True)
+        data = modify_qp_rts(loc_ip_addr=args.tap_ip_addr, rem_ip_addr=args.sim_ip_addr, loc_qpn=loc_qpn_set,
+                               loc_psn=starting_psn_set, loc_r_key=r_key_set, loc_base_addr=base_addr,
+                             rem_qpn=rem_qpn, rem_psn=0, rem_r_key=0, rem_base_addr=0)
+
+        decode_udp_packet(data)
+
+        send_txmeta(loc_ip_addr=args.tap_ip_addr, rem_ip_addr=args.sim_ip_addr, rem_qpn=rem_qpn,
+                    n_trasnfers=1, freq=0, rdma_length=dma_length_set, start_flag=0x1,
+                    immd_flag=0, txtype_flag=1)
 
         data_temp = []
 
@@ -543,6 +551,12 @@ try:
         else:
             print(bcolors.FAIL + 'Errors observed!' + bcolors.ENDC)
             break
+
+        data = close_rem_qp(loc_ip_addr=args.tap_ip_addr, rem_ip_addr=args.sim_ip_addr, loc_qpn=loc_qpn_set,
+                            loc_psn=starting_psn_set, loc_r_key=r_key_set, loc_base_addr=base_addr,
+                            rem_qpn=rem_qpn, rem_psn=0, rem_r_key=0, rem_base_addr=0)
+
+        decode_udp_packet(data)
 
 except KeyboardInterrupt:
 
