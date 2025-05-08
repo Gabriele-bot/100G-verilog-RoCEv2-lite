@@ -821,13 +821,13 @@ This module integrates the IP and ARP modules for a complete IP stack
         .s_axis_tdest (0),
         .s_axis_tuser (icmp_rx_ip_payload_axis_tuser),
         // AXI output
-        .m_axis_tdata (icmp_rx_ip_payload_64_axis_tdata)
-        .m_axis_tkeep (icmp_rx_ip_payload_64_axis_tkeep)
-        .m_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid)
-        .m_axis_tready(icmp_rx_ip_payload_64_axis_tready)
-        .m_axis_tlast (icmp_rx_ip_payload_64_axis_tlast)
-        .m_axis_tid   (0)
-        .m_axis_tdest (0)
+        .m_axis_tdata (icmp_rx_ip_payload_64_axis_tdata),
+        .m_axis_tkeep (icmp_rx_ip_payload_64_axis_tkeep),
+        .m_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid),
+        .m_axis_tready(icmp_rx_ip_payload_64_axis_tready),
+        .m_axis_tlast (icmp_rx_ip_payload_64_axis_tlast),
+        .m_axis_tid   (),
+        .m_axis_tdest (),
         .m_axis_tuser (icmp_rx_ip_payload_64_axis_tuser)
     );
 
@@ -854,14 +854,14 @@ This module integrates the IP and ARP modules for a complete IP stack
         .s_axis_tdest (0),
         .s_axis_tuser (icmp_tx_ip_payload_64_axis_tuser),
         // AXI output
-        .m_axis_tdata (icmp_tx_ip_payload_axis_tdata)
-        .m_axis_tkeep (icmp_tx_ip_payload_axis_tkeep)
-        .m_axis_tvalid(icmp_tx_ip_payload_axis_tvalid)
-        .m_axis_tready(icmp_tx_ip_payload_axis_tready)
-        .m_axis_tlast (icmp_tx_ip_payload_axis_tlast)
-        .m_axis_tid   (0)
-        .m_axis_tdest (0)
-        .m_axis_tuser (icmp_tx_ip_payload_axis_tuser)
+        .m_axis_tdata (icmp_tx_ip_payload_axis_tdata),
+        .m_axis_tkeep (icmp_tx_ip_payload_axis_tkeep),
+        .m_axis_tvalid(icmp_tx_ip_payload_axis_tvalid),
+        .m_axis_tready(icmp_tx_ip_payload_axis_tready),
+        .m_axis_tlast (icmp_tx_ip_payload_axis_tlast),
+        .m_axis_tid   (),
+        .m_axis_tdest (),
+        .m_axis_tuser (icmp_tx_ip_payload_axis_tuser),
     );
 
   end else begin
