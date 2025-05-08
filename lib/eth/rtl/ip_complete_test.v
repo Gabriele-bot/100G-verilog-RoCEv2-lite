@@ -810,8 +810,8 @@ This module integrates the IP and ARP modules for a complete IP stack
         .USER_WIDTH(1)
     )
     icmp_rx_adapter_inst (
-        .clk(s_clk),
-        .rst(s_rst),
+        .clk(clk),
+        .rst(rst),
         // AXI input
         .s_axis_tdata (icmp_rx_ip_payload_axis_tdata),
         .s_axis_tkeep (icmp_rx_ip_payload_axis_tkeep),
@@ -843,8 +843,8 @@ This module integrates the IP and ARP modules for a complete IP stack
         .USER_WIDTH(1)
     )
     icmp_tx_adapter_inst (
-        .clk(s_clk),
-        .rst(s_rst),
+        .clk(clk),
+        .rst(rst),
         // AXI input
         .s_axis_tdata (icmp_tx_ip_payload_64_axis_tdata),
         .s_axis_tkeep (icmp_tx_ip_payload_64_axis_tkeep),
@@ -929,7 +929,7 @@ This module integrates the IP and ARP modules for a complete IP stack
       .local_ip(local_ip)
     );
   end
-  
+
 endgenerate
 
   /*
