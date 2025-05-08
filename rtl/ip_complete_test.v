@@ -718,68 +718,216 @@ This module integrates the IP and ARP modules for a complete IP stack
  /*
  * ICMP Echo reply
  */
- icmp_echo_reply #(
-  .DATA_WIDTH(DATA_WIDTH),
-  .KEEP_ENABLE(1),
-  .CHECKSUM_PAYLOAD_FIFO_DEPTH(512),
-  .CHECKSUM_HEADER_FIFO_DEPTH(8)
- ) icmp_echo_reply_inst (
-   .clk(clk),
-   .rst(rst),
-   // IP frame input
-   .s_ip_hdr_valid(icmp_rx_ip_hdr_valid),
-   .s_ip_hdr_ready(icmp_rx_ip_hdr_ready),
-   .s_eth_dest_mac(0),
-   .s_eth_src_mac(0),
-   .s_eth_type(0),
-   .s_ip_version(icmp_rx_ip_version),
-   .s_ip_ihl(icmp_rx_ip_ihl),
-   .s_ip_dscp(icmp_rx_ip_dscp),
-   .s_ip_ecn(icmp_rx_ip_ecn),
-   .s_ip_length(icmp_rx_ip_length),
-   .s_ip_identification(icmp_rx_ip_identification),
-   .s_ip_flags(icmp_rx_ip_flags),
-   .s_ip_fragment_offset(icmp_rx_ip_fragment_offset),
-   .s_ip_ttl(icmp_rx_ip_ttl),
-   .s_ip_protocol(icmp_rx_ip_protocol),
-   .s_ip_header_checksum(icmp_rx_ip_header_checksum),
-   .s_ip_source_ip(icmp_rx_ip_source_ip),
-   .s_ip_dest_ip(icmp_rx_ip_dest_ip),
-   .s_ip_payload_axis_tdata( icmp_rx_ip_payload_axis_tdata),
-   .s_ip_payload_axis_tkeep( icmp_rx_ip_payload_axis_tkeep),
-   .s_ip_payload_axis_tvalid(icmp_rx_ip_payload_axis_tvalid),
-   .s_ip_payload_axis_tready(icmp_rx_ip_payload_axis_tready),
-   .s_ip_payload_axis_tlast( icmp_rx_ip_payload_axis_tlast),
-   .s_ip_payload_axis_tuser( icmp_rx_ip_payload_axis_tuser),
-   // IP frame output
-   .m_ip_hdr_valid(icmp_tx_ip_hdr_valid),
-   .m_ip_hdr_ready(icmp_tx_ip_hdr_ready),
-   .m_eth_dest_mac(),
-   .m_eth_src_mac(),
-   .m_eth_type(),
-   .m_ip_version(icmp_tx_ip_version),
-   .m_ip_ihl(icmp_tx_ip_ihl),
-   .m_ip_dscp(icmp_tx_ip_dscp),
-   .m_ip_ecn(icmp_tx_ip_ecn),
-   .m_ip_length(icmp_tx_ip_length),
-   .m_ip_identification(icmp_tx_ip_identification),
-   .m_ip_flags(icmp_tx_ip_flags),
-   .m_ip_fragment_offset(icmp_tx_ip_fragment_offset),
-   .m_ip_ttl(icmp_tx_ip_ttl),
-   .m_ip_protocol(icmp_tx_ip_protocol),
-   .m_ip_header_checksum(icmp_tx_ip_header_checksum),
-   .m_ip_source_ip(icmp_tx_ip_source_ip),
-   .m_ip_dest_ip(icmp_tx_ip_dest_ip),
-   .m_is_roce_packet(icmp_tx_is_roce_packet),
-   .m_ip_payload_axis_tdata( icmp_tx_ip_payload_axis_tdata),
-   .m_ip_payload_axis_tkeep( icmp_tx_ip_payload_axis_tkeep),
-   .m_ip_payload_axis_tvalid(icmp_tx_ip_payload_axis_tvalid),
-   .m_ip_payload_axis_tready(icmp_tx_ip_payload_axis_tready),
-   .m_ip_payload_axis_tlast( icmp_tx_ip_payload_axis_tlast),
-   .m_ip_payload_axis_tuser( icmp_tx_ip_payload_axis_tuser),
-   // Configuration
-   .local_ip(local_ip)
- );
+ generate 
+  if (DATA_WIDTH > 64) begin
+
+    wire [63:0] icmp_tx_ip_payload_64_axis_tdata;
+    wire [7 :0] icmp_tx_ip_payload_64_axis_tkeep;
+    wire        icmp_tx_ip_payload_64_axis_tvalid;
+    wire        icmp_tx_ip_payload_64_axis_tready;
+    wire        icmp_tx_ip_payload_64_axis_tlast;
+    wire        icmp_tx_ip_payload_64_axis_tuser;
+
+    wire [63:0] icmp_rx_ip_payload_64_axis_tdata;
+    wire [7 :0] icmp_rx_ip_payload_64_axis_tkeep;
+    wire        icmp_rx_ip_payload_64_axis_tvalid;
+    wire        icmp_rx_ip_payload_64_axis_tready;
+    wire        icmp_rx_ip_payload_64_axis_tlast;
+    wire        icmp_rx_ip_payload_64_axis_tuser;
+
+    icmp_echo_reply #(
+      .DATA_WIDTH(64),
+      .KEEP_ENABLE(1),
+      .CHECKSUM_PAYLOAD_FIFO_DEPTH(512),
+      .CHECKSUM_HEADER_FIFO_DEPTH(8)
+    ) icmp_echo_reply_inst (
+      .clk(clk),
+      .rst(rst),
+      // IP frame input
+      .s_ip_hdr_valid(icmp_rx_ip_hdr_valid),
+      .s_ip_hdr_ready(icmp_rx_ip_hdr_ready),
+      .s_eth_dest_mac(0),
+      .s_eth_src_mac(0),
+      .s_eth_type(0),
+      .s_ip_version(icmp_rx_ip_version),
+      .s_ip_ihl(icmp_rx_ip_ihl),
+      .s_ip_dscp(icmp_rx_ip_dscp),
+      .s_ip_ecn(icmp_rx_ip_ecn),
+      .s_ip_length(icmp_rx_ip_length),
+      .s_ip_identification(icmp_rx_ip_identification),
+      .s_ip_flags(icmp_rx_ip_flags),
+      .s_ip_fragment_offset(icmp_rx_ip_fragment_offset),
+      .s_ip_ttl(icmp_rx_ip_ttl),
+      .s_ip_protocol(icmp_rx_ip_protocol),
+      .s_ip_header_checksum(icmp_rx_ip_header_checksum),
+      .s_ip_source_ip(icmp_rx_ip_source_ip),
+      .s_ip_dest_ip(icmp_rx_ip_dest_ip),
+      .s_ip_payload_axis_tdata( icmp_rx_ip_payload_64_axis_tdata),
+      .s_ip_payload_axis_tkeep( icmp_rx_ip_payload_64_axis_tkeep),
+      .s_ip_payload_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid),
+      .s_ip_payload_axis_tready(icmp_rx_ip_payload_64_axis_tready),
+      .s_ip_payload_axis_tlast( icmp_rx_ip_payload_64_axis_tlast),
+      .s_ip_payload_axis_tuser( icmp_rx_ip_payload_64_axis_tuser),
+      // IP frame output
+      .m_ip_hdr_valid(icmp_tx_ip_hdr_valid),
+      .m_ip_hdr_ready(icmp_tx_ip_hdr_ready),
+      .m_eth_dest_mac(),
+      .m_eth_src_mac(),
+      .m_eth_type(),
+      .m_ip_version(icmp_tx_ip_version),
+      .m_ip_ihl(icmp_tx_ip_ihl),
+      .m_ip_dscp(icmp_tx_ip_dscp),
+      .m_ip_ecn(icmp_tx_ip_ecn),
+      .m_ip_length(icmp_tx_ip_length),
+      .m_ip_identification(icmp_tx_ip_identification),
+      .m_ip_flags(icmp_tx_ip_flags),
+      .m_ip_fragment_offset(icmp_tx_ip_fragment_offset),
+      .m_ip_ttl(icmp_tx_ip_ttl),
+      .m_ip_protocol(icmp_tx_ip_protocol),
+      .m_ip_header_checksum(icmp_tx_ip_header_checksum),
+      .m_ip_source_ip(icmp_tx_ip_source_ip),
+      .m_ip_dest_ip(icmp_tx_ip_dest_ip),
+      .m_is_roce_packet(icmp_tx_is_roce_packet),
+      .m_ip_payload_axis_tdata( icmp_tx_ip_payload_64_axis_tdata),
+      .m_ip_payload_axis_tkeep( icmp_tx_ip_payload_64_axis_tkeep),
+      .m_ip_payload_axis_tvalid(icmp_tx_ip_payload_64_axis_tvalid),
+      .m_ip_payload_axis_tready(icmp_tx_ip_payload_64_axis_tready),
+      .m_ip_payload_axis_tlast( icmp_tx_ip_payload_64_axis_tlast),
+      .m_ip_payload_axis_tuser( icmp_tx_ip_payload_64_axis_tuser),
+      // Configuration
+      .local_ip(local_ip)
+    );
+
+    axis_adapter #(
+        .S_DATA_WIDTH(DATA_WIDTH),
+        .S_KEEP_ENABLE(1),
+        .M_DATA_WIDTH(64),
+        .M_KEEP_ENABLE(1),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1)
+    )
+    icmp_rx_adapter_inst (
+        .clk(s_clk),
+        .rst(s_rst),
+        // AXI input
+        .s_axis_tdata (icmp_rx_ip_payload_axis_tdata),
+        .s_axis_tkeep (icmp_rx_ip_payload_axis_tkeep),
+        .s_axis_tvalid(icmp_rx_ip_payload_axis_tvalid),
+        .s_axis_tready(icmp_rx_ip_payload_axis_tready),
+        .s_axis_tlast (icmp_rx_ip_payload_axis_tlast),
+        .s_axis_tid   (0),
+        .s_axis_tdest (0),
+        .s_axis_tuser (icmp_rx_ip_payload_axis_tuser),
+        // AXI output
+        .m_axis_tdata (icmp_rx_ip_payload_64_axis_tdata)
+        .m_axis_tkeep (icmp_rx_ip_payload_64_axis_tkeep)
+        .m_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid)
+        .m_axis_tready(icmp_rx_ip_payload_64_axis_tready)
+        .m_axis_tlast (icmp_rx_ip_payload_64_axis_tlast)
+        .m_axis_tid   (0)
+        .m_axis_tdest (0)
+        .m_axis_tuser (icmp_rx_ip_payload_64_axis_tuser)
+    );
+
+    axis_adapter #(
+        .S_DATA_WIDTH(64),
+        .S_KEEP_ENABLE(1),
+        .M_DATA_WIDTH(DATA_WIDTH),
+        .M_KEEP_ENABLE(1),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1)
+    )
+    icmp_tx_adapter_inst (
+        .clk(s_clk),
+        .rst(s_rst),
+        // AXI input
+        .s_axis_tdata (icmp_tx_ip_payload_64_axis_tdata),
+        .s_axis_tkeep (icmp_tx_ip_payload_64_axis_tkeep),
+        .s_axis_tvalid(icmp_tx_ip_payload_64_axis_tvalid),
+        .s_axis_tready(icmp_tx_ip_payload_64_axis_tready),
+        .s_axis_tlast (icmp_tx_ip_payload_64_axis_tlast),
+        .s_axis_tid   (0),
+        .s_axis_tdest (0),
+        .s_axis_tuser (icmp_tx_ip_payload_64_axis_tuser),
+        // AXI output
+        .m_axis_tdata (icmp_tx_ip_payload_axis_tdata)
+        .m_axis_tkeep (icmp_tx_ip_payload_axis_tkeep)
+        .m_axis_tvalid(icmp_tx_ip_payload_axis_tvalid)
+        .m_axis_tready(icmp_tx_ip_payload_axis_tready)
+        .m_axis_tlast (icmp_tx_ip_payload_axis_tlast)
+        .m_axis_tid   (0)
+        .m_axis_tdest (0)
+        .m_axis_tuser (icmp_tx_ip_payload_axis_tuser)
+    );
+
+  end else begin
+    icmp_echo_reply #(
+      .DATA_WIDTH(DATA_WIDTH),
+      .KEEP_ENABLE(1),
+      .CHECKSUM_PAYLOAD_FIFO_DEPTH(512),
+      .CHECKSUM_HEADER_FIFO_DEPTH(8)
+    ) icmp_echo_reply_inst (
+      .clk(clk),
+      .rst(rst),
+      // IP frame input
+      .s_ip_hdr_valid(icmp_rx_ip_hdr_valid),
+      .s_ip_hdr_ready(icmp_rx_ip_hdr_ready),
+      .s_eth_dest_mac(0),
+      .s_eth_src_mac(0),
+      .s_eth_type(0),
+      .s_ip_version(icmp_rx_ip_version),
+      .s_ip_ihl(icmp_rx_ip_ihl),
+      .s_ip_dscp(icmp_rx_ip_dscp),
+      .s_ip_ecn(icmp_rx_ip_ecn),
+      .s_ip_length(icmp_rx_ip_length),
+      .s_ip_identification(icmp_rx_ip_identification),
+      .s_ip_flags(icmp_rx_ip_flags),
+      .s_ip_fragment_offset(icmp_rx_ip_fragment_offset),
+      .s_ip_ttl(icmp_rx_ip_ttl),
+      .s_ip_protocol(icmp_rx_ip_protocol),
+      .s_ip_header_checksum(icmp_rx_ip_header_checksum),
+      .s_ip_source_ip(icmp_rx_ip_source_ip),
+      .s_ip_dest_ip(icmp_rx_ip_dest_ip),
+      .s_ip_payload_axis_tdata( icmp_rx_ip_payload_axis_tdata),
+      .s_ip_payload_axis_tkeep( icmp_rx_ip_payload_axis_tkeep),
+      .s_ip_payload_axis_tvalid(icmp_rx_ip_payload_axis_tvalid),
+      .s_ip_payload_axis_tready(icmp_rx_ip_payload_axis_tready),
+      .s_ip_payload_axis_tlast( icmp_rx_ip_payload_axis_tlast),
+      .s_ip_payload_axis_tuser( icmp_rx_ip_payload_axis_tuser),
+      // IP frame output
+      .m_ip_hdr_valid(icmp_tx_ip_hdr_valid),
+      .m_ip_hdr_ready(icmp_tx_ip_hdr_ready),
+      .m_eth_dest_mac(),
+      .m_eth_src_mac(),
+      .m_eth_type(),
+      .m_ip_version(icmp_tx_ip_version),
+      .m_ip_ihl(icmp_tx_ip_ihl),
+      .m_ip_dscp(icmp_tx_ip_dscp),
+      .m_ip_ecn(icmp_tx_ip_ecn),
+      .m_ip_length(icmp_tx_ip_length),
+      .m_ip_identification(icmp_tx_ip_identification),
+      .m_ip_flags(icmp_tx_ip_flags),
+      .m_ip_fragment_offset(icmp_tx_ip_fragment_offset),
+      .m_ip_ttl(icmp_tx_ip_ttl),
+      .m_ip_protocol(icmp_tx_ip_protocol),
+      .m_ip_header_checksum(icmp_tx_ip_header_checksum),
+      .m_ip_source_ip(icmp_tx_ip_source_ip),
+      .m_ip_dest_ip(icmp_tx_ip_dest_ip),
+      .m_is_roce_packet(icmp_tx_is_roce_packet),
+      .m_ip_payload_axis_tdata( icmp_tx_ip_payload_axis_tdata),
+      .m_ip_payload_axis_tkeep( icmp_tx_ip_payload_axis_tkeep),
+      .m_ip_payload_axis_tvalid(icmp_tx_ip_payload_axis_tvalid),
+      .m_ip_payload_axis_tready(icmp_tx_ip_payload_axis_tready),
+      .m_ip_payload_axis_tlast( icmp_tx_ip_payload_axis_tlast),
+      .m_ip_payload_axis_tuser( icmp_tx_ip_payload_axis_tuser),
+      // Configuration
+      .local_ip(local_ip)
+    );
+  end
 
   /*
  * ARP module
