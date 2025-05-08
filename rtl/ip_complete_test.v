@@ -719,6 +719,7 @@ This module integrates the IP and ARP modules for a complete IP stack
  * ICMP Echo reply
  */
  generate 
+
   if (DATA_WIDTH > 64) begin
 
     wire [63:0] icmp_tx_ip_payload_64_axis_tdata;
@@ -928,6 +929,8 @@ This module integrates the IP and ARP modules for a complete IP stack
       .local_ip(local_ip)
     );
   end
+  
+endgenerate
 
   /*
  * ARP module
