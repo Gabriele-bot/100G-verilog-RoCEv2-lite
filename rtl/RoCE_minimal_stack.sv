@@ -670,6 +670,13 @@ module RoCE_minimal_stack #(
     assign s_udp_payload_axis_tready = (s_select_udp_reg && rx_udp_cm_payload_axis_tready) ||
     (s_select_roce_reg && rx_udp_RoCE_payload_axis_tready);
 
+    wire [DATA_WIDTH -1  :0]    s_payload_fifo_temp_axis_tdata;
+    wire [DATA_WIDTH/8 -1:0]    s_payload_fifo_temp_axis_tkeep;
+    wire                        s_payload_fifo_temp_axis_tvalid;
+    wire                        s_payload_fifo_temp_axis_tready;
+    wire                        s_payload_fifo_temp_axis_tlast;
+    wire                        s_payload_fifo_temp_axis_tuser;
+
     axis_fifo #(
         .DEPTH(4096),
         .DATA_WIDTH(DATA_WIDTH),
@@ -695,21 +702,20 @@ module RoCE_minimal_stack #(
         .s_axis_tuser(s_payload_axis_tuser),
 
         // AXI output
-        .m_axis_tdata(s_payload_fifo_axis_tdata),
-        .m_axis_tkeep(s_payload_fifo_axis_tkeep),
+        .m_axis_tdata (s_payload_fifo_axis_tdata),
+        .m_axis_tkeep (s_payload_fifo_axis_tkeep),
         .m_axis_tvalid(s_payload_fifo_axis_tvalid),
         .m_axis_tready(s_payload_fifo_axis_tready),
-        .m_axis_tlast(s_payload_fifo_axis_tlast),
-        .m_axis_tid(),
-        .m_axis_tdest(),
-        .m_axis_tuser(s_payload_fifo_axis_tuser),
+        .m_axis_tlast (s_payload_fifo_axis_tlast),
+        .m_axis_tid   (),
+        .m_axis_tdest (),
+        .m_axis_tuser (s_payload_fifo_axis_tuser),
 
         // Status
         .status_overflow  (),
         .status_bad_frame (),
         .status_good_frame()
     );
-
 
     RoCE_tx_header_producer #(
     .DATA_WIDTH(DATA_WIDTH)
