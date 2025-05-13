@@ -50,7 +50,7 @@ module udp_RoCE_connection_manager_new #(
      * QP info to QP state module
      */
     output wire        qp_init_valid,
-    output wire [6:0 ] qp_init_req_type,
+    output wire [2:0 ] qp_init_req_type,
     output wire [31:0] qp_init_r_key,
     output wire [23:0] qp_init_rem_qpn,
     output wire [23:0] qp_init_loc_qpn,
@@ -97,7 +97,9 @@ module udp_RoCE_connection_manager_new #(
 
 
     wire        m_qp_info_valid;
-    wire [6 :0] m_qp_info_req_type;
+    wire [2 :0] m_qp_info_req_type;
+    wire        m_qp_info_ack_valid;
+    wire [2 :0] m_qp_info_ack_type;
     wire [31:0] m_qp_info_loc_r_key;
     wire [23:0] m_qp_info_loc_qpn;
     wire [23:0] m_qp_info_loc_psn;
@@ -112,7 +114,9 @@ module udp_RoCE_connection_manager_new #(
 
     wire        s_qp_info_valid;
     wire        s_qp_info_ready;
-    wire [6 :0] s_qp_info_req_type;
+    wire [2 :0] s_qp_info_req_type;
+    wire        s_qp_info_ack_valid;
+    wire [2 :0] s_qp_info_ack_type;
     wire [31:0] s_qp_info_loc_r_key;
     wire [23:0] s_qp_info_loc_qpn;
     wire [23:0] s_qp_info_loc_psn;
@@ -128,7 +132,9 @@ module udp_RoCE_connection_manager_new #(
 
 
     reg qp_info_valid_reg, qp_info_valid_next;
-    reg [6:0] qp_info_req_type_reg, qp_info_req_type_next;
+    reg [2:0] qp_info_req_type_reg, qp_info_req_type_next;
+    reg qp_info_ack_valid_reg, qp_info_ack_valid_next;
+    reg [2:0] qp_info_ack_type_reg, qp_info_ack_type_next;
 
     reg [31:0] qp_info_loc_r_key_reg  , qp_info_loc_r_key_next;
     reg [31:0] qp_info_loc_qpn_reg    , qp_info_loc_qpn_next;
@@ -146,7 +152,7 @@ module udp_RoCE_connection_manager_new #(
 
     reg qp_init_valid_reg, qp_init_valid_next;
 
-    reg [6 :0] qp_init_req_type_reg, qp_init_req_type_next;
+    reg [2 :0] qp_init_req_type_reg, qp_init_req_type_next;
     reg [31:0] qp_init_r_key_reg, qp_init_r_key_next;
     reg [23:0] qp_init_rem_qpn_reg, qp_init_rem_qpn_next;
     reg [23:0] qp_init_loc_qpn_reg, qp_init_loc_qpn_next;
@@ -197,8 +203,10 @@ module udp_RoCE_connection_manager_new #(
         .s_udp_payload_axis_tlast(s_udp_payload_axis_tlast),
         .s_udp_payload_axis_tuser(s_udp_payload_axis_tuser),
 
-        .m_qp_info_valid   (m_qp_info_valid),
-        .m_qp_info_req_type(m_qp_info_req_type),
+        .m_qp_info_valid    (m_qp_info_valid),
+        .m_qp_info_req_type (m_qp_info_req_type),
+        .m_qp_info_ack_valid(m_qp_info_ack_valid),
+        .m_qp_info_ack_type (m_qp_info_ack_type),
 
         .m_qp_info_loc_r_key    (m_qp_info_loc_r_key),
         .m_qp_info_loc_qpn      (m_qp_info_loc_qpn),
@@ -236,6 +244,8 @@ module udp_RoCE_connection_manager_new #(
         .s_qp_info_ready        (s_qp_info_ready),
 
         .s_qp_info_req_type     (s_qp_info_req_type),
+        .s_qp_info_ack_valid    (s_qp_info_ack_valid),
+        .s_qp_info_ack_type     (s_qp_info_ack_type),
         .s_qp_info_loc_qpn      (s_qp_info_loc_qpn),
         .s_qp_info_loc_psn      (s_qp_info_loc_psn),
         .s_qp_info_loc_r_key    (s_qp_info_loc_r_key),
@@ -293,9 +303,11 @@ module udp_RoCE_connection_manager_new #(
 
         s_qpn_next = s_qpn_reg;
 
-        qp_info_valid_next = qp_info_valid_reg && !s_qp_info_ready;
+        qp_info_valid_next     = qp_info_valid_reg && !s_qp_info_ready;
+        qp_info_ack_valid_next = qp_info_ack_valid_reg && (qp_info_valid_reg && !s_qp_info_ready);
 
         qp_info_req_type_next    = qp_info_req_type_reg;
+        qp_info_ack_type_next    = qp_info_ack_type_reg;
         qp_info_loc_r_key_next   = qp_info_loc_r_key_reg;
         qp_info_loc_qpn_next     = qp_info_loc_qpn_reg;
         qp_info_loc_psn_next     = qp_info_loc_psn_reg;
@@ -331,7 +343,7 @@ module udp_RoCE_connection_manager_new #(
                             if (m_qpn_fifo_valid) begin // QP available
                                 m_qpn_fifo_ready_next = 1'b1;
 
-                                qp_info_req_type_next = REQ_SEND_QP_INFO;
+                                qp_info_req_type_next = REQ_OPEN_QP;
                                 // Swap loc with rem
                                 qp_info_loc_r_key_next   = 32'd0;
                                 qp_info_loc_qpn_next     = m_qpn;
@@ -360,12 +372,14 @@ module udp_RoCE_connection_manager_new #(
 
                                 state_next = STATE_MODIFY_QP;
                             end else begin
+                                // Failed to open qp
+                                qp_info_ack_type_next = ACK_NO_QP;
                                 state_next = STATE_SEND_ERROR;
                             end
                         end
                         REQ_MODIFY_QP_RTS: begin
 
-                            qp_info_req_type_next = REQ_SEND_QP_INFO;
+                            qp_info_req_type_next = REQ_MODIFY_QP_RTS;
                             // Swap loc with rem
                             qp_info_loc_r_key_next     = m_qp_info_rem_r_key;
                             qp_info_loc_qpn_next       = m_qp_info_rem_qpn;
@@ -396,40 +410,50 @@ module udp_RoCE_connection_manager_new #(
                         end
                         REQ_CLOSE_QP: begin
 
-                            qp_close_req_next = 1'b1;
+                            if ((m_qp_info_rem_qpn[23:8] == 16'd1 && m_qp_info_rem_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+                                //  QP goes to error state, some errors occoured during transfer (e.g. transmission timeout)
 
-                            qp_info_req_type_next = REQ_SEND_QP_INFO;
-                            // Swap loc with rem
-                            qp_info_loc_r_key_next     = m_qp_info_rem_r_key;
-                            qp_info_loc_qpn_next       = m_qp_info_rem_qpn;
-                            qp_info_loc_psn_next       = m_qp_info_rem_psn;
-                            qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
-                            qp_info_loc_base_addr_next = m_qp_info_rem_base_addr;
+                                qp_close_req_next = 1'b1;
 
-                            qp_info_rem_r_key_next     = m_qp_info_loc_r_key;
-                            qp_info_rem_qpn_next       = m_qp_info_loc_qpn;
-                            qp_info_rem_psn_next       = m_qp_info_loc_psn;
-                            qp_info_rem_ip_addr_next   = m_qp_info_loc_ip_addr;
-                            qp_info_rem_base_addr_next = m_qp_info_loc_base_addr;
+                                qp_info_req_type_next = REQ_CLOSE_QP;
+                                // Swap loc with rem
+                                qp_info_loc_r_key_next     = m_qp_info_rem_r_key;
+                                qp_info_loc_qpn_next       = m_qp_info_rem_qpn;
+                                qp_info_loc_psn_next       = m_qp_info_rem_psn;
+                                qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
+                                qp_info_loc_base_addr_next = m_qp_info_rem_base_addr;
 
-                            qp_info_udp_dest_port_next = m_qp_info_listening_port;
+                                qp_info_rem_r_key_next     = m_qp_info_loc_r_key;
+                                qp_info_rem_qpn_next       = m_qp_info_loc_qpn;
+                                qp_info_rem_psn_next       = m_qp_info_loc_psn;
+                                qp_info_rem_ip_addr_next   = m_qp_info_loc_ip_addr;
+                                qp_info_rem_base_addr_next = m_qp_info_loc_base_addr;
 
-                            qp_init_valid_next = 1'b1;
+                                qp_info_udp_dest_port_next = m_qp_info_listening_port;
 
-                            qp_init_req_type_next    = REQ_CLOSE_QP;
-                            qp_init_r_key_next       = m_qp_info_loc_r_key;
-                            qp_init_rem_qpn_next     = m_qp_info_loc_qpn;
-                            qp_init_loc_qpn_next     = m_qp_info_rem_qpn;
-                            qp_init_rem_psn_next     = m_qp_info_loc_psn;
-                            qp_init_loc_psn_next     = m_qp_info_rem_psn;
-                            qp_init_rem_ip_addr_next = m_qp_info_loc_ip_addr;
-                            qp_init_rem_base_addr_next    = m_qp_info_loc_base_addr;
+                                qp_init_valid_next = 1'b1;
 
-                            state_next = STATE_MODIFY_QP;
+                                qp_init_req_type_next    = REQ_CLOSE_QP;
+                                qp_init_r_key_next       = m_qp_info_loc_r_key;
+                                qp_init_rem_qpn_next     = m_qp_info_loc_qpn;
+                                qp_init_loc_qpn_next     = m_qp_info_rem_qpn;
+                                qp_init_rem_psn_next     = m_qp_info_loc_psn;
+                                qp_init_loc_psn_next     = m_qp_info_rem_psn;
+                                qp_init_rem_ip_addr_next = m_qp_info_loc_ip_addr;
+                                qp_init_rem_base_addr_next    = m_qp_info_loc_base_addr;
+
+                                state_next = STATE_MODIFY_QP;
+                            end else begin
+                                // Try to cloase a QP that is not in the suitable range
+                                qp_info_ack_type_next = ACK_NAK;
+                                state_next = STATE_SEND_ERROR;
+                            end
                         end
                         default: begin
-                            qp_info_valid_next    = 1'b0;
+                            qp_info_valid_next     = 1'b0;
+                            qp_info_ack_valid_next = 1'b0;
                             qp_info_req_type_next = REQ_NULL;
+                            qp_info_ack_type_next = ACK_NULL;
                         end
                     endcase
                 end
@@ -438,19 +462,28 @@ module udp_RoCE_connection_manager_new #(
                 qp_close_req_next = qp_close_req_reg;
                 if (qp_init_status_valid) begin
                     if (qp_init_status == 2'b00) begin
-                        qp_info_valid_next    = 1'b1;
+                        qp_info_valid_next     = 1'b1;
+                        qp_info_ack_valid_next = 1'b1;
+                        qp_info_ack_type_next = ACK_ACK;
                         if (qp_close_req_reg && s_qpn_fifo_ready) begin
+                            // succesfully closed QP
                             s_qpn_next = qp_init_loc_qpn_reg;
                             s_qpn_fifo_valid_next = 1'b1;
                             state_next = STATE_IDLE;
                         end else if (qp_close_req_reg && ~s_qpn_fifo_ready)  begin
-                            qp_info_valid_next    = 1'b0;
+                            // Falied to close QP
+                            qp_info_valid_next     = 1'b0;
+                            qp_info_ack_valid_next = 1'b0;
+                            qp_info_ack_type_next = ACK_ERROR;
                             state_next = STATE_SEND_ERROR;
                         end else if (~qp_close_req_reg) begin
                             state_next = STATE_IDLE;
                         end
                     end else begin
-                        qp_info_valid_next    = 1'b0;
+                        // Failed to open/modify, QP in the wrong state
+                        qp_info_valid_next     = 1'b0;
+                        qp_info_ack_valid_next = 1'b0;
+                        qp_info_ack_type_next = ACK_ERROR;
                         state_next = STATE_SEND_ERROR;
                     end
                 end else begin
@@ -458,9 +491,8 @@ module udp_RoCE_connection_manager_new #(
                 end
             end
             STATE_SEND_ERROR: begin
-                qp_info_valid_next    = 1'b1;
-
-                qp_info_req_type_next = REQ_ERROR;
+                qp_info_valid_next      = 1'b1;
+                qp_info_ack_valid_next  = 1'b1;
 
                 state_next = STATE_IDLE;
             end
@@ -482,9 +514,11 @@ module udp_RoCE_connection_manager_new #(
 
             qp_close_req_reg <= 1'b0;
 
-            qp_info_valid_reg <= 1'b0;
+            qp_info_valid_reg     <= 1'b0;
+            qp_info_ack_valid_reg <= 1'b0;
 
-            qp_info_req_type_reg      <= 0;
+            qp_info_req_type_reg      <= REQ_NULL;
+            qp_info_ack_type_reg      <= ACK_NULL;
             qp_info_loc_r_key_reg     <= 0;
             qp_info_loc_qpn_reg       <= 0;
             qp_info_loc_psn_reg       <= 0;
@@ -518,8 +552,10 @@ module udp_RoCE_connection_manager_new #(
             qp_close_req_reg <= qp_close_req_next;
 
             qp_info_valid_reg <= qp_info_valid_next;
+            qp_info_ack_valid_reg <= qp_info_ack_valid_next;
 
             qp_info_req_type_reg      <= qp_info_req_type_next    ;
+            qp_info_ack_type_reg      <= qp_info_ack_type_next    ;
             qp_info_loc_r_key_reg     <= qp_info_loc_r_key_next   ;
             qp_info_loc_qpn_reg       <= qp_info_loc_qpn_next     ;
             qp_info_loc_psn_reg       <= qp_info_loc_psn_next     ;
@@ -558,9 +594,11 @@ module udp_RoCE_connection_manager_new #(
     assign qp_init_rem_ip_addr = qp_init_rem_ip_addr_reg;
     assign qp_init_rem_base_addr = qp_init_rem_base_addr_reg;
 
-    assign s_qp_info_valid = qp_info_valid_reg;
+    assign s_qp_info_valid     = qp_info_valid_reg;
+    assign s_qp_info_ack_valid = qp_info_ack_valid_reg;
 
     assign s_qp_info_req_type = qp_info_req_type_reg;
+    assign s_qp_info_ack_type = qp_info_ack_type_reg;
     assign s_qp_info_loc_qpn  = qp_info_loc_qpn_reg;
     assign s_qp_info_loc_psn = qp_info_loc_psn_reg;
     assign s_qp_info_loc_r_key = qp_info_loc_r_key_reg;

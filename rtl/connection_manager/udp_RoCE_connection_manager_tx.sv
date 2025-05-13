@@ -11,7 +11,9 @@
  * | OCTETS  |  BIT RANGE  |       Field              |
  * +---------+-------------+--------------------------+
  * |   0     |  [0  :0  ]  |  QP_info_valid           |
- * |   0     |  [7  :1  ]  |  QP_req_type             |
+ * |   0     |  [3  :1  ]  |  QP_req_type             |
+ * |   0     |  [4  :4  ]  |  QP_ack_valid            |
+ * |   0     |  [7  :5  ]  |  QP_ack_type             |
  * | [3:1]   |  [32 :8  ]  |  QP_info_loc_qpn         |
  * |   4     |  [39 :33 ]  |  ZERO_PADD               |
  * | [7:5]   |  [63 :40 ]  |  QP_info_loc_psn         |
@@ -52,7 +54,9 @@ module udp_RoCE_connection_manager_tx #(
     input wire        s_qp_info_valid,
     output wire       s_qp_info_ready,
 
-    input wire [6 :0] s_qp_info_req_type,
+    input wire [2 :0] s_qp_info_req_type,
+    input wire        s_qp_info_ack_valid,
+    input wire [2 :0] s_qp_info_ack_type,
     input wire [23:0] s_qp_info_loc_qpn,
     input wire [23:0] s_qp_info_loc_psn,
     input wire [31:0] s_qp_info_loc_r_key,
@@ -116,7 +120,9 @@ module udp_RoCE_connection_manager_tx #(
     reg transfer_in_save;
 
     reg        qp_info_valid_reg;
-    reg [6 :0] qp_info_req_type_reg;
+    reg [2 :0] qp_info_req_type_reg;
+    reg        qp_info_ack_valid_reg;
+    reg [2 :0] qp_info_ack_type_reg;
 
     reg [23:0] qp_info_loc_qpn_reg;
     reg [23:0] qp_info_loc_psn_reg;
@@ -208,7 +214,7 @@ module udp_RoCE_connection_manager_tx #(
                     m_udp_payload_axis_tdata_int[(offset%BYTE_LANES)*8 +: 8] = field; \
                     m_udp_payload_axis_tkeep_int[offset%BYTE_LANES] = 1'b1; \
                 end
-                `_HEADER_FIELD_(0 ,  {qp_info_req_type_reg, qp_info_valid_reg})
+                `_HEADER_FIELD_(0 ,  {qp_info_ack_type_reg, qp_info_ack_valid_reg, qp_info_req_type_reg, qp_info_valid_reg})
                 `_HEADER_FIELD_(1 ,  qp_info_loc_qpn_reg[0*8 +: 8])
                 `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_reg[1*8 +: 8])
                 `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_reg[2*8 +: 8])
@@ -300,6 +306,8 @@ module udp_RoCE_connection_manager_tx #(
         if (store_qp_info) begin
             qp_info_valid_reg         <= 1'b1; 
             qp_info_req_type_reg      <= s_qp_info_req_type; 
+            qp_info_ack_valid_reg     <= s_qp_info_ack_valid; 
+            qp_info_ack_type_reg      <= s_qp_info_ack_type; 
             qp_info_loc_qpn_reg       <= s_qp_info_loc_qpn;
             qp_info_loc_psn_reg       <= s_qp_info_loc_psn; 
             qp_info_loc_r_key_reg     <= s_qp_info_loc_r_key;

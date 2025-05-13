@@ -12,7 +12,7 @@ module RoCE_qp_state_module #(
   input wire rst_qp,
 
   input wire        qp_init_valid,
-  input wire [6 :0] qp_init_req_type,
+  input wire [2 :0] qp_init_req_type,
   input wire [31:0] qp_init_r_key,
   input wire [23:0] qp_init_rem_qpn,
   input wire [23:0] qp_init_loc_qpn,
@@ -123,12 +123,6 @@ module RoCE_qp_state_module #(
   */
 
   import RoCE_params::*; // Imports RoCE parameters
-
-  /*
-  Local QP number starts from 2**8 and goes up to 2**8 + 2**(MAX_QUEUE_PAIRS)
-  */
-
-  localparam MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
 
   localparam [2:0]
   QP_STATE_RESET    = 3'd0,

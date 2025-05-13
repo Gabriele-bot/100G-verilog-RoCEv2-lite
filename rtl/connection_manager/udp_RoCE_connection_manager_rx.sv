@@ -11,7 +11,9 @@
  * | OCTETS  |  BIT RANGE  |       Field              |
  * +---------+-------------+--------------------------+
  * |   0     |  [0  :0  ]  |  QP_info_valid           |
- * |   0     |  [7  :1  ]  |  QP_req_type             |
+ * |   0     |  [3  :1  ]  |  QP_req_type             |
+ * |   0     |  [4  :4  ]  |  QP_ack_valid            |
+ * |   0     |  [7  :5  ]  |  QP_ack_type             |
  * | [3:1]   |  [32 :8  ]  |  QP_info_loc_qpn         |
  * |   4     |  [39 :33 ]  |  ZERO_PADD               |
  * | [7:5]   |  [63 :40 ]  |  QP_info_loc_psn         |
@@ -66,7 +68,9 @@ module udp_RoCE_connection_manager_rx #(
      * RoCE QP info
      */
     output wire        m_qp_info_valid,
-    output wire [6 :0] m_qp_info_req_type,
+    output wire [2 :0] m_qp_info_req_type,
+    output wire        m_qp_info_ack_valid,
+    output wire [2 :0] m_qp_info_ack_type,
     output wire [31:0] m_qp_info_loc_r_key,
     output wire [23:0] m_qp_info_loc_qpn,
     output wire [23:0] m_qp_info_loc_psn,
@@ -131,7 +135,9 @@ module udp_RoCE_connection_manager_rx #(
 
 
     reg qp_info_valid_reg, qp_info_valid_next;
-    reg [6 :0] qp_info_req_type_reg, qp_info_req_type_next;
+    reg [2 :0] qp_info_req_type_reg, qp_info_req_type_next;
+    reg        qp_info_ack_valid_reg, qp_info_ack_valid_next;
+    reg [2 :0] qp_info_ack_type_reg, qp_info_ack_type_next;
     reg [23:0] qp_info_loc_qpn_reg, qp_info_loc_qpn_next;
     reg [23:0] qp_info_loc_psn_reg, qp_info_loc_psn_next;
     reg [31:0] qp_info_loc_r_key_reg, qp_info_loc_r_key_next;
@@ -182,6 +188,8 @@ module udp_RoCE_connection_manager_rx #(
 
         qp_info_valid_next             = qp_info_valid_reg;
         qp_info_req_type_next          = qp_info_req_type_reg;
+        qp_info_ack_valid_next         = qp_info_ack_valid_reg;
+        qp_info_ack_type_next          = qp_info_ack_type_reg;
 
         qp_info_loc_qpn_next           = qp_info_loc_qpn_reg;
         qp_info_loc_psn_next           = qp_info_loc_psn_reg;
@@ -251,7 +259,7 @@ module udp_RoCE_connection_manager_rx #(
                     field = s_udp_payload_axis_tdata[(offset%BYTE_LANES)*8 +: 8]; \
                 end
 
-                    `_HEADER_FIELD_(0 ,  {qp_info_req_type_next, qp_info_valid_next})
+                    `_HEADER_FIELD_(0 ,  {qp_info_ack_type_next, qp_info_ack_valid_next, qp_info_req_type_next, qp_info_valid_next})
                     `_HEADER_FIELD_(1 ,  qp_info_loc_qpn_next[0*8 +: 8])
                     `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_next[1*8 +: 8])
                     `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_next[2*8 +: 8])
@@ -359,7 +367,7 @@ module udp_RoCE_connection_manager_rx #(
             state_reg                     <= state_next;
 
             metadata_valid_reg            <= metadata_valid_next;
-            s_qp_info_valid_reg        <= s_qp_info_valid_next;
+            s_qp_info_valid_reg           <= s_qp_info_valid_next;
 
             s_udp_hdr_ready_reg           <= s_udp_hdr_ready_next;
             s_udp_payload_axis_tready_reg <= s_udp_payload_axis_tready_next;
@@ -391,6 +399,10 @@ module udp_RoCE_connection_manager_rx #(
                 qp_info_listening_port_reg   <= qp_info_listening_port_next;
             end
 
+            if (qp_info_ack_valid_next) begin
+                qp_info_ack_type_reg      <= qp_info_ack_type_next;
+            end
+
             txmeta_valid_reg <= txmeta_valid_next;
             if (txmeta_valid_next) begin
                 txmeta_start_reg           <= txmeta_start_next;
@@ -411,6 +423,7 @@ module udp_RoCE_connection_manager_rx #(
     end
 
     assign m_qp_info_req_type = qp_info_req_type_reg; 
+    assign m_qp_info_ack_type = qp_info_ack_type_reg; 
     
     assign m_qp_info_loc_qpn        = qp_info_loc_qpn_reg;
     assign m_qp_info_loc_psn        = qp_info_loc_psn_reg;
@@ -437,7 +450,8 @@ module udp_RoCE_connection_manager_rx #(
 
     assign m_metadata_valid = metadata_valid_reg;
 
-    assign m_qp_info_valid = s_qp_info_valid_reg;
+    assign m_qp_info_valid     = s_qp_info_valid_reg;
+    assign m_qp_info_ack_valid = qp_info_ack_valid_reg & s_qp_info_valid_reg;
 
 endmodule
 

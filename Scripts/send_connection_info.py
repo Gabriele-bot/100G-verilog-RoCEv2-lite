@@ -63,6 +63,13 @@ REQ_MODIFY_QP_RTS = 0x3
 REQ_CLOSE_QP      = 0x4
 REQ_ERROR         = 0x7
 
+#ACK types
+ACK_NULL          = 0x0
+ACK_ACK           = 0x1
+ACK_NO_QP         = 0x2
+ACK_NAK           = 0x3
+ACK_ERROR         = 0x7
+
 
 def request_qp_info(rem_ip_addr="22.1.212.10", loc_ip_addr="22.1.212.11",loc_qpn=0x100, loc_psn=0x0, loc_r_key=0x1234, loc_base_addr=0x12345678):
 
@@ -81,8 +88,9 @@ def request_qp_info(rem_ip_addr="22.1.212.10", loc_ip_addr="22.1.212.11",loc_qpn
     REM_BASE_ADDR = 0x0
 
     REQ_TYPE = REQ_OPEN_QP
+    ACK_TYPE = ACK_NULL
 
-    qpinfo_flags = 0x1 | (REQ_TYPE << 1) #open qp request
+    qpinfo_flags = 0x1 | (REQ_TYPE << 1) | (0 << 4) | (ACK_TYPE << 5) #open qp request
 
     MESSAGE = b''
     # QP infos, only local parameters are filled
@@ -139,8 +147,9 @@ def send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     REM_BASE_ADDR = rem_base_addr
 
     REQ_TYPE = REQ_SEND_QP_INFO
+    ACK_TYPE = ACK_NULL
 
-    qpinfo_flags = 0x1 | (REQ_TYPE << 1)
+    qpinfo_flags = 0x1 | (REQ_TYPE << 1) | (0 << 4) | (ACK_TYPE << 5)  # open qp request
 
     MESSAGE = b''
 
@@ -188,8 +197,9 @@ def modify_qp_rts(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_k
     REM_BASE_ADDR = rem_base_addr
 
     REQ_TYPE = REQ_MODIFY_QP_RTS
+    ACK_TYPE = ACK_NULL
 
-    qpinfo_flags = 0x1 | (REQ_TYPE << 1)
+    qpinfo_flags = 0x1 | (REQ_TYPE << 1) | (0 << 4) | (ACK_TYPE << 5)  # open qp request
 
     MESSAGE = b''
 
@@ -247,8 +257,9 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     REM_BASE_ADDR = rem_base_addr
 
     REQ_TYPE = REQ_CLOSE_QP
+    ACK_TYPE = ACK_NULL
 
-    qpinfo_flags = 0x1 | (REQ_TYPE << 1)
+    qpinfo_flags = 0x1 | (REQ_TYPE << 1) | (0 << 4) | (ACK_TYPE << 5)  # open qp request
 
     MESSAGE = b''
 
@@ -313,8 +324,9 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     FREQUENCY = freq
 
     REQ_TYPE = REQ_NULL
+    ACK_TYPE = ACK_NULL
 
-    qpinfo_flags = 0x0 | (REQ_TYPE << 1)
+    qpinfo_flags = 0x0 | (REQ_TYPE << 1) | (0 << 4) | (ACK_TYPE << 5)  # open qp request
 
     txmeta_flags = 0x1 | (start_flag << 1) | (immd_flag << 2) | (txtype_flag << 3)
     print(txtype_flag)
@@ -360,6 +372,13 @@ def decode_udp_packet(pkt):
         0x04: 'REQ_CLOSE_QP',
         0x07: 'REQ_ERROR'
     }
+    ACK_codes = {
+        0x00: 'ACK_NULL',
+        0x01: 'ACK_ACK',
+        0x02: 'ACK_NO_QP',
+        0x03: 'ACK_NAK',
+        0x07: 'ACK_ERROR'
+    }
 
     qpinfo_flags = struct.unpack('<B', payload[0:1])[0]
     LOC_QPN = struct.unpack('<L', payload[1:5])[0]
@@ -374,12 +393,16 @@ def decode_udp_packet(pkt):
     REM_BASE_ADDR = struct.unpack('<Q', payload[37:45])[0]
     REM_IP_ADDRESS_INT = struct.unpack('<L', payload[45:49])[0]
 
-    req_code = qpinfo_flags>>1
+    req_code = (qpinfo_flags>>1) & 0x07
+    ack_valid = (qpinfo_flags>>4) & 0x01
+    ack_code = (qpinfo_flags>>5) & 0x07
 
-    if req_code != REQ_ERROR:
-        print('OPERATION COMPLETED SUCCESSFULLY!')
-    else:
-        print('ERROR OBSERVED!')
+    if (ack_valid == 1):
+        if ack_code == ACK_ACK:
+            print('OPERATION COMPLETED SUCCESSFULLY!')
+        else:
+            print('ERROR OBSERVED with error code ', ACK_codes[ack_code])
+
 
     print('CODE REQUEST:', REQ_codes[req_code])
 

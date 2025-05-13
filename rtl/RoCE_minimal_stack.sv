@@ -395,7 +395,7 @@ module RoCE_minimal_stack #(
 
     wire        qp_init_valid;
 
-    wire [6 :0] qp_init_req_type;
+    wire [2 :0] qp_init_req_type;
     wire [31:0] qp_init_dma_transfer_length;
     wire [23:0] qp_init_rem_qpn;
     wire [23:0] qp_init_loc_qpn;

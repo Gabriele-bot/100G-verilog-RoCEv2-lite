@@ -83,21 +83,35 @@ package RoCE_params;
         time2clk(1e3/5e5, NET_CLOCK_PERIOD),  // 500 kHz
         time2clk(1e3/1e6, NET_CLOCK_PERIOD),  // 1 MHz
         time2clk(1e3/5e6, NET_CLOCK_PERIOD),  // 5 MHz
-        time2clk(1e3/1e7, NET_CLOCK_PERIOD)  // 10 MHz
+        time2clk(1e3/1e7, NET_CLOCK_PERIOD)   // 10 MHz
 
     };
 
     /*
     Connection manager parameters
     */
+     /*
+    Local QP number starts from 2**8 and goes up to 2**8 + 2**(MAX_QUEUE_PAIRS)
+    */
+    parameter MAX_QUEUE_PAIRS = 4;
+
+    parameter MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
     //REQUESTS types
     parameter
-    REQ_NULL          = 7'h0,
-    REQ_OPEN_QP       = 7'h1,
-    REQ_SEND_QP_INFO  = 7'h2,
-    REQ_MODIFY_QP_RTS = 7'h3,
-    REQ_CLOSE_QP      = 7'h4,
-    REQ_ERROR         = 7'h7;
+    REQ_NULL          = 3'h0,
+    REQ_OPEN_QP       = 3'h1,
+    REQ_SEND_QP_INFO  = 3'h2,
+    REQ_MODIFY_QP_RTS = 3'h3,
+    REQ_CLOSE_QP      = 3'h4,
+    REQ_ERROR         = 3'h7;
+
+    //ACK types
+    parameter
+    ACK_NULL          = 3'h0,
+    ACK_ACK           = 3'h1,
+    ACK_NO_QP         = 3'h2, //No QP available
+    ACK_NAK           = 3'h3,
+    ACK_ERROR         = 3'h7;    
 
 
     parameter [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
