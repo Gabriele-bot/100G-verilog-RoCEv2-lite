@@ -177,6 +177,8 @@ module udp_RoCE_connection_manager_new #(
     wire [23:0] s_qpn;
     wire [23:0] m_qpn;
 
+    wire busy_rx, busy_tx;
+
     assign s_qpn_fifo_valid = s_qpn_fifo_valid_reg;
     assign m_qpn_fifo_ready = m_qpn_fifo_ready_reg;
 
@@ -231,7 +233,7 @@ module udp_RoCE_connection_manager_new #(
         .m_txmeta_is_immediate(m_txmeta_is_immediate),
         .m_txmeta_tx_type     (m_txmeta_tx_type),
 
-        .busy(busy)
+        .busy(busy_rx)
     );
 
 
@@ -275,7 +277,7 @@ module udp_RoCE_connection_manager_new #(
         .m_udp_payload_axis_tready(m_udp_payload_axis_tready),
         .m_udp_payload_axis_tlast (m_udp_payload_axis_tlast),
         .m_udp_payload_axis_tuser (m_udp_payload_axis_tuser),
-        .busy(busy),
+        .busy(busy_tx),
 
         .cfg_udp_source_port(cfg_udp_source_port)
     );

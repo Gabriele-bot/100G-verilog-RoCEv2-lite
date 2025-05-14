@@ -182,6 +182,8 @@ architecture rtl of lbusrxaxistx400g is
     alias lbus_rxenain5fs0 : STD_LOGIC is lbus_rxenain5;
     alias lbus_rxenain6fs0 : STD_LOGIC is lbus_rxenain6;
 
+    alias lbus_rxvldinfs0 : STD_LOGIC is lbus_rxvldin0;
+
     signal lbus_rxenain0fs1 : STD_LOGIC;
     signal lbus_rxenain1fs1 : STD_LOGIC;
     signal lbus_rxenain2fs1 : STD_LOGIC;
@@ -190,6 +192,8 @@ architecture rtl of lbusrxaxistx400g is
     signal lbus_rxenain5fs1 : STD_LOGIC;
     signal lbus_rxenain6fs1 : STD_LOGIC;
     signal lbus_rxenain7fs1 : STD_LOGIC;
+
+    signal lbus_rxvldinfs1 : STD_LOGIC;
 
     signal aligned_rxenain0 : STD_LOGIC;
     signal aligned_rxenain1 : STD_LOGIC;
@@ -200,6 +204,8 @@ architecture rtl of lbusrxaxistx400g is
     signal aligned_rxenain6 : STD_LOGIC;
     signal aligned_rxenain7 : STD_LOGIC;
 
+    signal aligned_rxvldin : STD_LOGIC;
+
     signal CurrentAlignment : STD_LOGIC_VECTOR(2 downto 0);
 
 begin
@@ -208,11 +214,11 @@ begin
     begin
         if rising_edge(lbus_rxclk) then
             -- Whenever there is an EOP we signal TLAST
-            --axis_tx_tlast  <= lbus_rxvldin0 and (aligned_rxeopin0 or aligned_rxeopin1 or aligned_rxeopin2 or aligned_rxeopin3 or aligned_rxeopin4 or aligned_rxeopin5 or aligned_rxeopin6 or aligned_rxeopin7);
-            axis_tx_tlast  <= (aligned_rxeopin0 or aligned_rxeopin1 or aligned_rxeopin2 or aligned_rxeopin3 or aligned_rxeopin4 or aligned_rxeopin5 or aligned_rxeopin6 or aligned_rxeopin7);
+            axis_tx_tlast  <= aligned_rxvldin and (aligned_rxeopin0 or aligned_rxeopin1 or aligned_rxeopin2 or aligned_rxeopin3 or aligned_rxeopin4 or aligned_rxeopin5 or aligned_rxeopin6 or aligned_rxeopin7);
+            --axis_tx_tlast  <= (aligned_rxeopin0 or aligned_rxeopin1 or aligned_rxeopin2 or aligned_rxeopin3 or aligned_rxeopin4 or aligned_rxeopin5 or aligned_rxeopin6 or aligned_rxeopin7);
             -- When ever there is an enable we signal TVALID			
-            --axis_tx_tvalid <= lbus_rxvldin0 and (aligned_rxenain0  or aligned_rxenain1 or aligned_rxenain2 or aligned_rxenain3 or aligned_rxenain4  or aligned_rxenain5 or aligned_rxenain6 or aligned_rxenain7);
-            axis_tx_tvalid <= (aligned_rxenain0  or aligned_rxenain1 or aligned_rxenain2 or aligned_rxenain3 or aligned_rxenain4  or aligned_rxenain5 or aligned_rxenain6 or aligned_rxenain7);
+            axis_tx_tvalid <= aligned_rxvldin and (aligned_rxenain0  or aligned_rxenain1 or aligned_rxenain2 or aligned_rxenain3 or aligned_rxenain4  or aligned_rxenain5 or aligned_rxenain6 or aligned_rxenain7);
+            --axis_tx_tvalid <= (aligned_rxenain0  or aligned_rxenain1 or aligned_rxenain2 or aligned_rxenain3 or aligned_rxenain4  or aligned_rxenain5 or aligned_rxenain6 or aligned_rxenain7);
             if ((aligned_rxeopin0 = '1') or (aligned_rxeopin1 = '1') or (aligned_rxeopin2 = '1') or (aligned_rxeopin3 = '1') or (aligned_rxeopin4 = '1') or (aligned_rxeopin5 = '1') or (aligned_rxeopin6 = '1') or (aligned_rxeopin7 = '1')) then
                 -- Flag an error signal on TUSER if there was an error and TLAST is valid 
                 axis_tx_tuser <= lbus_rxerrin0 or lbus_rxerrin1 or lbus_rxerrin2 or lbus_rxerrin3 or lbus_rxerrin4 or lbus_rxerrin5 or lbus_rxerrin6 or lbus_rxerrin7;
@@ -263,6 +269,8 @@ begin
             lbus_rxenain6fs1  <= lbus_rxenain6;
             lbus_rxenain7fs1  <= lbus_rxenain7;
 
+            lbus_rxvldinfs1 <= lbus_rxvldin0;
+
             -- Determine the alignment using a barrel shifter
             case (CurrentAlignment) is
                 when b"000" =>
@@ -302,6 +310,8 @@ begin
                     aligned_rxenain5  <= lbus_rxenain5fs1;
                     aligned_rxenain6  <= lbus_rxenain6fs1;
                     aligned_rxenain7  <= lbus_rxenain7fs1;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1;
 
                 when b"001" =>
                     -- Data is aligned to 16 byte boundary
@@ -414,6 +424,9 @@ begin
                     aligned_rxenain5  <= lbus_rxenain0fs0;
                     aligned_rxenain6  <= lbus_rxenain1fs0;
                     aligned_rxenain7  <= lbus_rxenain2fs0;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1 or lbus_rxvldinfs0; 
+
                 when b"100" =>
                     -- Data is aligned to 64 byte boundary
                     aligned_rxdatain0 <= lbus_rxdatain4fs1;
@@ -451,6 +464,9 @@ begin
                     aligned_rxenain5  <= lbus_rxenain1fs0;
                     aligned_rxenain6  <= lbus_rxenain2fs0;
                     aligned_rxenain7  <= lbus_rxenain3fs0;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1 or lbus_rxvldinfs0;
+
                 when b"101" =>
                     -- Data is aligned to 80 byte boundary
                     aligned_rxdatain0 <= lbus_rxdatain5fs1;
@@ -488,6 +504,9 @@ begin
                     aligned_rxenain5  <= lbus_rxenain2fs0;
                     aligned_rxenain6  <= lbus_rxenain3fs0;
                     aligned_rxenain7  <= lbus_rxenain4fs0;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1 or lbus_rxvldinfs0;
+
                 when b"110" =>
                     -- Data is aligned to 96 byte boundary
                     aligned_rxdatain0 <= lbus_rxdatain6fs1;
@@ -525,6 +544,9 @@ begin
                     aligned_rxenain5  <= lbus_rxenain3fs0;
                     aligned_rxenain6  <= lbus_rxenain4fs0;
                     aligned_rxenain7  <= lbus_rxenain5fs0;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1 or lbus_rxvldinfs0;
+
                 when b"111" =>
                     -- Data is aligned to 112 byte boundary
                     aligned_rxdatain0 <= lbus_rxdatain7fs1;
@@ -562,6 +584,9 @@ begin
                     aligned_rxenain5  <= lbus_rxenain4fs0;
                     aligned_rxenain6  <= lbus_rxenain5fs0;
                     aligned_rxenain7  <= lbus_rxenain6fs0;
+
+                    aligned_rxvldin  <= lbus_rxvldinfs1 or lbus_rxvldinfs0;
+
                 when others =>
                     null;
             end case;

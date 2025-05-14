@@ -2,7 +2,7 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 module RoCE_udp_tx  #(
-    parameter DATA_WIDTH          = 256 
+    parameter DATA_WIDTH          = 256
 ) (
     input wire clk,
     input wire rst,
@@ -357,18 +357,11 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
     endfunction
 
 
+
+
     always @* begin
         shift_roce_payload_96_axis_tdata[95:0]   = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 96];
         shift_roce_payload_96_axis_tkeep[11:0]   = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 12];
-
-        shift_roce_payload_128_axis_tdata[127:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 128];
-        shift_roce_payload_128_axis_tkeep[15:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 16];
-
-        shift_roce_payload_224_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 224];
-        shift_roce_payload_224_axis_tkeep[27:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 28];
-
-        shift_roce_payload_256_axis_tdata[255:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 256];
-        shift_roce_payload_256_axis_tkeep[31:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 32];
 
         if (shift_roce_payload_96_extra_cycle_reg) begin
             shift_roce_payload_96_axis_tdata[DATA_WIDTH   - 1 : 96]   = 0;
@@ -385,6 +378,11 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             shift_roce_payload_96_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
             shift_roce_payload_96_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
         end
+    end
+
+    always @* begin
+        shift_roce_payload_128_axis_tdata[127:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 128];
+        shift_roce_payload_128_axis_tkeep[15:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 16];
 
         if (shift_roce_payload_128_extra_cycle_reg) begin
             shift_roce_payload_128_axis_tdata[DATA_WIDTH   - 1 : 128]   = 0;
@@ -401,6 +399,11 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             shift_roce_payload_128_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
             shift_roce_payload_128_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
         end
+    end
+
+    always @* begin
+        shift_roce_payload_224_axis_tdata[223:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 224];
+        shift_roce_payload_224_axis_tkeep[27:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 28];
 
         if (shift_roce_payload_224_extra_cycle_reg) begin
             shift_roce_payload_224_axis_tdata[DATA_WIDTH   - 1 : 224] = 0;
@@ -417,24 +420,49 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
             shift_roce_payload_224_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
             shift_roce_payload_224_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
         end
-
-        if (shift_roce_payload_256_extra_cycle_reg) begin
-            shift_roce_payload_256_axis_tdata[DATA_WIDTH   - 1 : 256] = 256'd0;
-            shift_roce_payload_256_axis_tkeep[DATA_WIDTH/8 - 1 : 32 ]   = 32'd0;
-            shift_roce_payload_256_axis_tlast  = 1'b1;
-            shift_roce_payload_256_axis_tuser  = save_roce_payload_axis_tuser_reg;
-            shift_roce_payload_256_axis_tvalid = 1'b1;
-            shift_roce_payload_256_s_tready = flush_save;
-        end else begin
-            shift_roce_payload_256_axis_tdata[DATA_WIDTH   - 1 : 256] = s_roce_payload_axis_tdata[0 +: DATA_WIDTH   - 256];
-            shift_roce_payload_256_axis_tkeep[DATA_WIDTH/8 - 1 : 32 ] = s_roce_payload_axis_tkeep[0 +: DATA_WIDTH/8 - 32 ];
-            shift_roce_payload_256_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
-            shift_roce_payload_256_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
-            shift_roce_payload_256_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
-            shift_roce_payload_256_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
-        end
-
     end
+
+    generate
+        if (DATA_WIDTH == 256) begin
+            always @* begin
+                shift_roce_payload_256_axis_tdata[255:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 256];
+                shift_roce_payload_256_axis_tkeep[31:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 32];
+
+                if (shift_roce_payload_256_extra_cycle_reg) begin
+                    shift_roce_payload_256_axis_tlast  = 1'b1;
+                    shift_roce_payload_256_axis_tuser  = save_roce_payload_axis_tuser_reg;
+                    shift_roce_payload_256_axis_tvalid = 1'b1;
+                    shift_roce_payload_256_s_tready = flush_save;
+                end else begin
+                    shift_roce_payload_256_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
+                    shift_roce_payload_256_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
+                    shift_roce_payload_256_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+                    shift_roce_payload_256_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+                end
+            end
+        end else begin
+            always @* begin
+                shift_roce_payload_256_axis_tdata[255:0] = save_roce_payload_axis_tdata_reg[DATA_WIDTH   - 1 -: 256];
+                shift_roce_payload_256_axis_tkeep[31:0]  = save_roce_payload_axis_tkeep_reg[DATA_WIDTH/8 - 1 -: 32];
+
+                if (shift_roce_payload_256_extra_cycle_reg) begin
+                    shift_roce_payload_256_axis_tdata[DATA_WIDTH   - 1 : 256] = 256'd0;
+                    shift_roce_payload_256_axis_tkeep[DATA_WIDTH/8 - 1 : 32 ]   = 32'd0;
+                    shift_roce_payload_256_axis_tlast  = 1'b1;
+                    shift_roce_payload_256_axis_tuser  = save_roce_payload_axis_tuser_reg;
+                    shift_roce_payload_256_axis_tvalid = 1'b1;
+                    shift_roce_payload_256_s_tready = flush_save;
+                end else begin
+                    shift_roce_payload_256_axis_tdata[DATA_WIDTH   - 1 : 256] = s_roce_payload_axis_tdata[0 +: DATA_WIDTH   - 256];
+                    shift_roce_payload_256_axis_tkeep[DATA_WIDTH/8 - 1 : 32 ] = s_roce_payload_axis_tkeep[0 +: DATA_WIDTH/8 - 32 ];
+                    shift_roce_payload_256_axis_tlast = (s_roce_payload_axis_tlast && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
+                    shift_roce_payload_256_axis_tuser = (s_roce_payload_axis_tuser && (s_roce_payload_axis_tkeep[DATA_WIDTH/8 - 1 -: 32] == 0));
+                    shift_roce_payload_256_axis_tvalid = s_roce_payload_axis_tvalid && s_roce_payload_axis_tready_reg;
+                    shift_roce_payload_256_s_tready = !(s_roce_payload_axis_tlast && s_roce_payload_axis_tvalid && transfer_in_save) && !save_roce_payload_axis_tlast_reg;
+                end
+            end
+        end
+    endgenerate
 
     always @* begin
         state_next                           = STATE_IDLE;

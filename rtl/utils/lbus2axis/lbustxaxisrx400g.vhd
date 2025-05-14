@@ -32,6 +32,7 @@ entity lbustxaxisrx400g is
         axis_rx_tuser   : in  STD_LOGIC;
         -- Outputs to L-BUS interface
         lbus_tx_rdyout  : in  STD_LOGIC;
+        lbus_tx_vldout  : out STD_LOGIC;
         -- Segment 0
         lbus_txdataout0 : out STD_LOGIC_VECTOR(127 downto 0);
         lbus_txenaout0  : out STD_LOGIC;
@@ -107,8 +108,10 @@ architecture rtl of lbustxaxisrx400g is
             lbus_dataout : out STD_LOGIC_VECTOR(127 downto 0)
         );
     end component mapaxisdatatolbus400g;
-    signal paxis_tvalid : std_logic;
-    signal new_frame    : std_logic;
+    signal paxis_tvalid : STD_LOGIC;
+
+    signal axis_tvalid_del : STD_LOGIC;
+    signal new_frame       : STD_LOGIC;
 
 begin
 
@@ -123,6 +126,15 @@ begin
     lbus_txsopout5 <= '0';
     lbus_txsopout6 <= '0';
     lbus_txsopout7 <= '0';
+
+    process(lbus_txclk)
+    begin
+        if rising_edge(lbus_txclk) then
+            axis_tvalid_del <= axis_rx_tvalid;
+        end if;
+    end process;
+
+    lbus_tx_vldout <= axis_tvalid_del;
     
     seg0mtymapping_i : maptokeeptomty
         port map(
