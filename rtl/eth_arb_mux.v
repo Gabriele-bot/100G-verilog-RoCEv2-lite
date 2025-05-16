@@ -238,8 +238,8 @@ module eth_arb_mux #(
       if (s_eth_payload_axis_tlast[grant_encoded]) begin
         frame_next = 1'b0;
       end
-    end else if (single_frame_pkt_reg) begin
-      frame_next = 1'b0;
+    //end else if (single_frame_pkt_reg) begin
+      //frame_next = 1'b0;
     end
 
     // case if frame_next is stuck to 1'b1
