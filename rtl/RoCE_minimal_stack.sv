@@ -1362,6 +1362,7 @@ module RoCE_minimal_stack #(
         end
     endgenerate
 
+    /*
     RoCE_udp_tx #(
     .DATA_WIDTH(DATA_WIDTH)
     ) RoCE_udp_tx_instance (
@@ -1439,7 +1440,142 @@ module RoCE_minimal_stack #(
         .error_payload_early_termination(error_payload_early_termination),
         .RoCE_udp_port(RoCE_udp_port)
     );
+    */
+    RoCE_udp_tx_simple #(
+    .DATA_WIDTH(DATA_WIDTH)
+    ) RoCE_udp_tx_instance (
+        .clk                            (clk),
+        .rst                            (rst),
+        .s_roce_bth_valid               (roce_bth_valid),
+        .s_roce_bth_ready               (roce_bth_ready),
+        .s_roce_bth_op_code             (roce_bth_op_code),
+        .s_roce_bth_p_key               (roce_bth_p_key),
+        .s_roce_bth_psn                 (roce_bth_psn),
+        .s_roce_bth_dest_qp             (roce_bth_dest_qp),
+        .s_roce_bth_ack_req             (roce_bth_ack_req),
+        //.s_roce_reth_valid              (roce_reth_valid),
+        //.s_roce_reth_ready              (roce_reth_ready),
+        .s_roce_reth_v_addr             (roce_reth_v_addr),
+        .s_roce_reth_r_key              (roce_reth_r_key),
+        .s_roce_reth_length             (roce_reth_length),
+        //.s_roce_immdh_valid             (roce_immdh_valid),
+        //.s_roce_immdh_ready             (roce_immdh_ready),
+        .s_roce_immdh_data              (roce_immdh_data),
+        //.s_eth_dest_mac                 (48'd0),
+        //.s_eth_src_mac                  (48'd0),
+        //.s_eth_type                     (16'd0),
+        .s_ip_version                   (4'd4),
+        .s_ip_ihl                       (4'd0),
+        .s_ip_dscp                      (6'd0),
+        .s_ip_ecn                       (2'd0),
+        .s_ip_identification            (16'd0),
+        .s_ip_flags                     (3'b001),
+        .s_ip_fragment_offset           (13'd0),
+        .s_ip_ttl                       (8'h40),
+        .s_ip_protocol                  (8'h11),
+        .s_ip_header_checksum           (16'd0),
+        .s_ip_source_ip                 (loc_ip_addr),
+        .s_ip_dest_ip                   (ip_dest_ip),
+        .s_udp_source_port              (ROCE_UDP_TX_SOURCE_PORT),
+        .s_udp_dest_port                (RoCE_udp_port),
+        .s_udp_length                   (udp_length),
+        .s_udp_checksum                 (16'h0000),
+        .s_roce_payload_axis_tdata      (m_roce_payload_axis_tdata),
+        .s_roce_payload_axis_tkeep      (m_roce_payload_axis_tkeep),
+        .s_roce_payload_axis_tvalid     (m_roce_payload_axis_tvalid),
+        .s_roce_payload_axis_tready     (m_roce_payload_axis_tready),
+        .s_roce_payload_axis_tlast      (m_roce_payload_axis_tlast),
+        .s_roce_payload_axis_tuser      (m_roce_payload_axis_tuser),
+        .m_udp_hdr_valid                (roce_tx_udp_hdr_valid),
+        .m_udp_hdr_ready                (roce_tx_udp_hdr_ready),
+        //.m_eth_dest_mac                 (roce_tx_eth_dest_mac),
+        //.m_eth_src_mac                  (roce_tx_eth_src_mac),
+        //.m_eth_type                     (roce_tx_eth_type),
+        .m_ip_version                   (roce_tx_ip_version),
+        .m_ip_ihl                       (roce_tx_ip_ihl),
+        .m_ip_dscp                      (roce_tx_ip_dscp),
+        .m_ip_ecn                       (roce_tx_ip_ecn),
+        .m_ip_length                    (roce_tx_ip_length),
+        .m_ip_identification            (roce_tx_ip_identification),
+        .m_ip_flags                     (roce_tx_ip_flags),
+        .m_ip_fragment_offset           (roce_tx_ip_fragment_offset),
+        .m_ip_ttl                       (roce_tx_ip_ttl),
+        .m_ip_protocol                  (roce_tx_ip_protocol),
+        .m_ip_header_checksum           (roce_tx_ip_header_checksum),
+        .m_ip_source_ip                 (roce_tx_ip_source_ip),
+        .m_ip_dest_ip                   (roce_tx_ip_dest_ip),
+        .m_udp_source_port              (roce_tx_udp_source_port),
+        .m_udp_dest_port                (roce_tx_udp_dest_port),
+        .m_udp_length                   (roce_tx_udp_length),
+        .m_udp_checksum                 (roce_tx_udp_checksum),
+        .m_udp_payload_axis_tdata       (roce_tx_udp_payload_axis_tdata),
+        .m_udp_payload_axis_tkeep       (roce_tx_udp_payload_axis_tkeep),
+        .m_udp_payload_axis_tvalid      (roce_tx_udp_payload_axis_tvalid),
+        .m_udp_payload_axis_tready      (roce_tx_udp_payload_axis_tready),
+        .m_udp_payload_axis_tlast       (roce_tx_udp_payload_axis_tlast),
+        .m_udp_payload_axis_tuser       (roce_tx_udp_payload_axis_tuser)
+    );
 
+    wire [(12+4)*8-1:0] rx_bth_aeth_hdr;
+
+    header_stripper #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .OUT_HEADER_WIDTH(12+4),
+        .IN_HEADER_WIDTH(1)
+    ) header_stripper_instance (
+        .clk(clk),
+        .rst(rst),
+        .s_hdr_valid(rx_udp_RoCE_hdr_valid),
+        .s_hdr_ready(rx_udp_RoCE_hdr_ready),
+        .s_hdr_in(0),
+        .s_payload_axis_tdata (rx_udp_RoCE_payload_axis_tdata),
+        .s_payload_axis_tkeep (rx_udp_RoCE_payload_axis_tkeep),
+        .s_payload_axis_tvalid(rx_udp_RoCE_payload_axis_tvalid),
+        .s_payload_axis_tready(rx_udp_RoCE_payload_axis_tready),
+        .s_payload_axis_tlast (rx_udp_RoCE_payload_axis_tlast),
+        .s_payload_axis_tuser (rx_udp_RoCE_payload_axis_tuser),
+        .m_hdr_valid(m_roce_rx_to_dropper_bth_valid),
+        .m_hdr_ready(1'b1),
+        .m_hdr_pt(),
+        .m_hdr_out(rx_bth_aeth_hdr),
+        .m_payload_axis_tdata (),
+        .m_payload_axis_tkeep (),
+        .m_payload_axis_tvalid(),
+        .m_payload_axis_tready(1'b1),
+        .m_payload_axis_tlast (),
+        .m_payload_axis_tuser (),
+        .busy(),
+        .error_header_early_termination(),
+        .error_payload_early_termination()
+    );
+
+    assign m_roce_rx_to_dropper_bth_op_code[0*8+:8] = rx_bth_aeth_hdr[0*8+:8];
+
+    //assign temp = rx_bth_aeth_hdr[1*8+0];
+
+    assign m_roce_rx_to_dropper_bth_p_key[1*8+:8]   = rx_bth_aeth_hdr[2*8+:8];
+    assign m_roce_rx_to_dropper_bth_p_key[0*8+:8]   = rx_bth_aeth_hdr[3*8+:8];
+
+    //assign temp = rx_bth_aeth_hdr[4*8+0];
+
+    assign m_roce_rx_to_dropper_bth_dest_qp[2*8+:8] = rx_bth_aeth_hdr[5*8+:8];
+    assign m_roce_rx_to_dropper_bth_dest_qp[1*8+:8] = rx_bth_aeth_hdr[6*8+:8];
+    assign m_roce_rx_to_dropper_bth_dest_qp[0*8+:8] = rx_bth_aeth_hdr[7*8+:8];
+
+    //assign temp = rx_bth_aeth_hdr[8*8+0];
+
+    assign m_roce_rx_to_dropper_bth_psn[2*8+:8] = rx_bth_aeth_hdr[9*8+:8];
+    assign m_roce_rx_to_dropper_bth_psn[1*8+:8] = rx_bth_aeth_hdr[10*8+:8];
+    assign m_roce_rx_to_dropper_bth_psn[0*8+:8] = rx_bth_aeth_hdr[11*8+:8];
+
+    assign m_roce_rx_to_dropper_aeth_syndrome[0*8+:8] = rx_bth_aeth_hdr[12*8+:8];
+
+    assign m_roce_rx_to_dropper_aeth_msn[2*8+:8] = rx_bth_aeth_hdr[13*8+:8];
+    assign m_roce_rx_to_dropper_aeth_msn[1*8+:8] = rx_bth_aeth_hdr[14*8+:8];
+    assign m_roce_rx_to_dropper_aeth_msn[0*8+:8] = rx_bth_aeth_hdr[15*8+:8];
+
+    assign m_roce_rx_to_dropper_aeth_valid = m_roce_rx_to_dropper_bth_valid && m_roce_rx_to_dropper_bth_op_code==RC_RDMA_ACK;
+    /*
     RoCE_udp_rx #(
         .DATA_WIDTH(DATA_WIDTH),
         .ENABLE_ICRC_CHECK(1'b0)
@@ -1508,6 +1644,7 @@ module RoCE_minimal_stack #(
         .busy(),
         .error_header_early_termination()
     );
+    */
 
     udp_RoCE_connection_manager_new #(
         .DATA_WIDTH(DATA_WIDTH),
@@ -1597,9 +1734,9 @@ module RoCE_minimal_stack #(
         .rst(rst),
         .s_udp_hdr_valid          ({tx_udp_cm_hdr_valid, roce_tx_udp_hdr_valid}),
         .s_udp_hdr_ready          ({tx_udp_cm_hdr_ready, roce_tx_udp_hdr_ready}),
-        .s_eth_dest_mac           ({48'd0, roce_tx_eth_dest_mac}),
-        .s_eth_src_mac            ({48'd0, roce_tx_eth_src_mac}),
-        .s_eth_type               ({16'd0, roce_tx_eth_type}),
+        .s_eth_dest_mac           ({48'd0, 48'd0}),
+        .s_eth_src_mac            ({48'd0, 48'd0}),
+        .s_eth_type               ({16'd0, 16'd0}),
         .s_ip_version             ({4'd4, roce_tx_ip_version}),
         .s_ip_ihl                 ({4'd0, roce_tx_ip_ihl}),
         .s_ip_dscp                ({6'd0, roce_tx_ip_dscp}),
