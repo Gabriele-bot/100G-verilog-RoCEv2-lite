@@ -332,7 +332,7 @@ always @* begin
         // start of frame
         frame_next = 1'b1;
 
-        single_frame_pkt_next = s_udp_payload_axis_tlast[grant_encoded];
+        single_frame_pkt_next = s_udp_payload_axis_tvalid[grant_encoded] & s_udp_payload_axis_tlast[grant_encoded];
 
         s_udp_hdr_ready_next = grant;
 
