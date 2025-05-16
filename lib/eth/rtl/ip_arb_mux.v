@@ -314,7 +314,7 @@ module ip_arb_mux #(
 
       s_ip_hdr_ready_next = grant;
 
-      single_frame_pkt_next = s_ip_payload_axis_tlast[grant_encoded];
+      single_frame_pkt_next = s_ip_payload_axis_tvalid[grant_encoded] & s_ip_payload_axis_tlast[grant_encoded];
 
       m_ip_hdr_valid_next = 1'b1;
       m_eth_dest_mac_next = s_eth_dest_mac[grant_encoded*48+:48];
