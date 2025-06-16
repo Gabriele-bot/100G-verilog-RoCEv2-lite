@@ -575,7 +575,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
-                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
+                    word_count_next = m_udp_length_reg - keep2count(m_udp_payload_axis_tkeep_int) -
                     16'd8; // udp hdr
 
 
@@ -644,7 +644,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
-                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
+                    word_count_next = m_udp_length_reg - keep2count(m_udp_payload_axis_tkeep_int) -
                     16'd8; // udp hdr
 
                     if (s_udp_length <= (DATA_WIDTH/8 +8)) begin // full frame+ udp header length (8 bytes) 
@@ -723,7 +723,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
-                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
+                    word_count_next = m_udp_length_reg - keep2count(m_udp_payload_axis_tkeep_int) -
                     16'd8; // udp hdr
 
                     if (s_udp_length <= (DATA_WIDTH/8+8)) begin // full frame + udp header length (8 bytes) 
@@ -808,7 +808,7 @@ the UDP headers, and transmits the complete UDP payload on an AXI interface.
 
                     s_roce_payload_axis_tready_next = m_udp_payload_axis_tready_int_early;
 
-                    word_count_next = s_udp_length - keep2count(m_udp_payload_axis_tkeep_int) -
+                    word_count_next = m_udp_length_reg - keep2count(m_udp_payload_axis_tkeep_int) -
                     16'd8; // udp hdr
 
                     if (s_udp_length <= (DATA_WIDTH/8+8)) begin // full frame  + udp header length (8 bytes) 
