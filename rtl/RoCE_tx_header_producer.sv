@@ -804,24 +804,48 @@ module RoCE_tx_header_producer #(
             roce_reth_valid_reg  <= roce_reth_valid_next;
             roce_immdh_valid_reg <= roce_immdh_valid_next;
 
-            roce_bth_op_code_reg <= roce_bth_op_code_next;
-            roce_bth_p_key_reg   <= roce_bth_p_key_next;
-            roce_bth_psn_reg     <= roce_bth_psn_next;
-            roce_bth_dest_qp_reg <= roce_bth_dest_qp_next;
-            roce_bth_src_qp_reg  <= roce_bth_src_qp_next;
-            roce_bth_ack_req_reg <= roce_bth_ack_req_next;
+            if (roce_bth_valid_next) begin
+                
 
-            roce_reth_v_addr_reg <= roce_reth_v_addr_next;
-            roce_reth_r_key_reg  <= roce_reth_r_key_next;
-            roce_reth_length_reg <= roce_reth_length_next;
+                roce_bth_op_code_reg <= roce_bth_op_code_next;
+                roce_bth_p_key_reg   <= roce_bth_p_key_next;
+                roce_bth_psn_reg     <= roce_bth_psn_next;
+                roce_bth_dest_qp_reg <= roce_bth_dest_qp_next;
+                roce_bth_src_qp_reg  <= roce_bth_src_qp_next;
+                roce_bth_ack_req_reg <= roce_bth_ack_req_next;
 
-            roce_immdh_data_reg  <= roce_immdh_data_next;
+                roce_reth_v_addr_reg <= roce_reth_v_addr_next;
+                roce_reth_r_key_reg  <= roce_reth_r_key_next;
+                roce_reth_length_reg <= roce_reth_length_next;
 
-            ip_source_ip_reg     <= ip_source_ip_next;
-            ip_dest_ip_reg       <= ip_dest_ip_next;
-            udp_source_port_reg  <= udp_source_port_next;
-            udp_dest_port_reg    <= udp_dest_port_next;
-            udp_length_reg       <= udp_length_next;
+                roce_immdh_data_reg  <= roce_immdh_data_next;
+
+                ip_source_ip_reg     <= ip_source_ip_next;
+                ip_dest_ip_reg       <= ip_dest_ip_next;
+                udp_source_port_reg  <= udp_source_port_next;
+                udp_dest_port_reg    <= udp_dest_port_next;
+                udp_length_reg       <= udp_length_next;
+            end else begin
+
+                roce_bth_op_code_reg <= roce_bth_op_code_reg;
+                roce_bth_p_key_reg   <= roce_bth_p_key_reg;
+                roce_bth_psn_reg     <= roce_bth_psn_reg;
+                roce_bth_dest_qp_reg <= roce_bth_dest_qp_reg;
+                roce_bth_src_qp_reg  <= roce_bth_src_qp_reg;
+                roce_bth_ack_req_reg <= roce_bth_ack_req_reg;
+
+                roce_reth_v_addr_reg <= roce_reth_v_addr_reg;
+                roce_reth_r_key_reg  <= roce_reth_r_key_reg;
+                roce_reth_length_reg <= roce_reth_length_reg;
+
+                roce_immdh_data_reg  <= roce_immdh_data_reg;
+
+                ip_source_ip_reg     <= ip_source_ip_reg;
+                ip_dest_ip_reg       <= ip_dest_ip_reg;
+                udp_source_port_reg  <= udp_source_port_reg;
+                udp_dest_port_reg    <= udp_dest_port_reg;
+                udp_length_reg       <= udp_length_reg;
+            end
 
 
         end

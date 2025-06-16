@@ -72,6 +72,42 @@ module axis_data_generator #(
 
     reg  stop_transfer_reg;
 
+    wire [DATA_WIDTH   - 1 :0] s_output_reg_axis_tdata;
+    wire [DATA_WIDTH/8 - 1 :0] s_output_reg_axis_tkeep;
+    wire                       s_output_reg_axis_tvalid;
+    wire                       s_output_reg_axis_tready;
+    wire                       s_output_reg_axis_tlast;
+    wire                       s_output_reg_axis_tuser;
+
+    reg [31:0] both_up_input, both_up_output;
+    reg [31:0] valid_input,  valid_output;
+
+    always @(posedge clk) begin
+        if (rst || (~start_1 && start)) begin
+            both_up_input <= 0;
+            both_up_output <= 0;
+
+            valid_input <= 0;
+            valid_output <= 0;
+        end else begin
+            if (s_output_reg_axis_tvalid && s_output_reg_axis_tready) begin
+                both_up_input <= both_up_input + 1;
+            end
+
+            if (s_output_reg_axis_tvalid) begin
+                valid_input <= valid_input + 1;
+            end
+
+            if (m_axis_tvalid && m_axis_tready) begin
+                both_up_output <= both_up_output + 1;
+            end
+
+            if (m_axis_tvalid) begin
+                valid_output <= valid_output + 1;
+            end
+        end 
+    end
+
     /*
      * Generate payolad data
      */
@@ -92,19 +128,19 @@ module axis_data_generator #(
                 if (length_reg == 0) begin // no transfer on going
                     word_counter <= {32{1 'b1}} - WORD_WIDTH;
                     remaining_words <= 64'd0;
-                end else if (m_axis_tvalid && m_axis_tready) begin // trasnfer on going
+                end else if (s_output_reg_axis_tvalid && s_output_reg_axis_tready) begin // trasnfer on going
                     word_counter <= length_reg;
                     remaining_words <= 64'd0;
                 end else begin
                     word_counter <= length_reg - WORD_WIDTH;
                     remaining_words <= WORD_WIDTH;
                 end
-            end else if (m_axis_tvalid && m_axis_tready) begin
+            end else if (s_output_reg_axis_tvalid && s_output_reg_axis_tready) begin
                 if ((word_counter <= length)) begin
                     word_counter <= word_counter + WORD_WIDTH;
                 end
                 remaining_words <= length_reg - word_counter - WORD_WIDTH;
-                if (m_axis_tlast) begin
+                if (s_output_reg_axis_tlast) begin
                     word_counter      <= {32{1'b1}} - WORD_WIDTH;
                     length_reg        <= 32'd0;
                     remaining_words   <= 64'd0;
@@ -120,7 +156,7 @@ module axis_data_generator #(
                 word_counter <= 0;
                 remaining_words <= length_reg;
             end
-            if (m_axis_tvalid && m_axis_tready && m_axis_tlast) begin
+            if (s_output_reg_axis_tvalid && s_output_reg_axis_tready && s_output_reg_axis_tlast) begin
                 stop_transfer_reg <= 1'b0;
             end
         end
@@ -128,21 +164,49 @@ module axis_data_generator #(
 
     // TDATA
     generate
-        assign m_axis_tdata[31:0] = word_counter[31:0];
+        assign s_output_reg_axis_tdata[31:0] = word_counter[31:0];
         if (SLICES_32BIT >= 2) begin
-            assign m_axis_tdata[63:32] = ~word_counter[31:0];
+            assign s_output_reg_axis_tdata[63:32] = ~word_counter[31:0];
         end
         if (SLICES_32BIT > 2) begin
-            assign m_axis_tdata[DATA_WIDTH-1:64] = {(SLICES_32BIT-2){32'hDEADBEEF}};
+            assign s_output_reg_axis_tdata[DATA_WIDTH-1:64] = {(SLICES_32BIT-2){32'hDEADBEEF}};
         end
     endgenerate
 
     // TKEEP
-    assign m_axis_tkeep = m_axis_tlast ? (count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
+    assign s_output_reg_axis_tkeep = s_output_reg_axis_tlast ? (count2keep(remaining_words)) : {(DATA_WIDTH/8){1'b1}};
 
-    assign m_axis_tvalid = ((word_counter < length_reg) ? 1'b1 : 1'b0);
-    assign m_axis_tlast = ((word_counter + WORD_WIDTH >= length_reg) ? 1'b1 : 1'b0);
-    assign m_axis_tuser = stop_transfer_reg & m_axis_tvalid;
+    assign s_output_reg_axis_tvalid = ((word_counter < length_reg) ? 1'b1 : 1'b0);
+    assign s_output_reg_axis_tlast = ((word_counter + WORD_WIDTH >= length_reg) ? 1'b1 : 1'b0);
+    assign s_output_reg_axis_tuser = stop_transfer_reg & s_output_reg_axis_tvalid;
+
+
+    axis_register #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1)
+    ) axis_register_instance (
+        .clk(clk),
+        .rst(rst),
+
+        // AXI input
+        .s_axis_tdata (s_output_reg_axis_tdata ),
+        .s_axis_tkeep (s_output_reg_axis_tkeep ),
+        .s_axis_tvalid(s_output_reg_axis_tvalid),
+        .s_axis_tready(s_output_reg_axis_tready),
+        .s_axis_tlast (s_output_reg_axis_tlast ),
+        .s_axis_tuser (s_output_reg_axis_tuser ),
+        .s_axis_tid   (0),
+        .s_axis_tdest (0),
+
+        // AXI output
+        .m_axis_tdata (m_axis_tdata ),
+        .m_axis_tkeep (m_axis_tkeep ),
+        .m_axis_tvalid(m_axis_tvalid),
+        .m_axis_tready(m_axis_tready),
+        .m_axis_tlast (m_axis_tlast ),
+        .m_axis_tuser (m_axis_tuser )
+    );
 
 endmodule
 

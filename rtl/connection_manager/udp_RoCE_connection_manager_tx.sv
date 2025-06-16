@@ -129,7 +129,7 @@ module udp_RoCE_connection_manager_tx #(
     reg [31:0] qp_info_loc_r_key_reg;
     reg [63:0] qp_info_loc_base_addr_reg;
     reg [31:0] qp_info_loc_ip_addr_reg;
-    
+
     reg [23:0] qp_info_rem_qpn_reg;
     reg [23:0] qp_info_rem_psn_reg;
     reg [31:0] qp_info_rem_r_key_reg;
@@ -203,7 +203,8 @@ module udp_RoCE_connection_manager_tx #(
             send_qp_info_next = 1'b1;
         end
 
-        if (m_udp_payload_axis_tready_int_reg && (!OFFSET || m_udp_payload_axis_tvalid_int)) begin
+        if (m_udp_payload_axis_tready_int_reg) begin
+
             if (send_qp_info_reg) begin
                 ptr_next = ptr_reg + 1;
 
@@ -304,12 +305,12 @@ module udp_RoCE_connection_manager_tx #(
         s_qp_info_valid_del <= s_qp_info_valid && s_qp_info_ready_reg;
 
         if (store_qp_info) begin
-            qp_info_valid_reg         <= 1'b1; 
-            qp_info_req_type_reg      <= s_qp_info_req_type; 
-            qp_info_ack_valid_reg     <= s_qp_info_ack_valid; 
-            qp_info_ack_type_reg      <= s_qp_info_ack_type; 
+            qp_info_valid_reg         <= 1'b1;
+            qp_info_req_type_reg      <= s_qp_info_req_type;
+            qp_info_ack_valid_reg     <= s_qp_info_ack_valid;
+            qp_info_ack_type_reg      <= s_qp_info_ack_type;
             qp_info_loc_qpn_reg       <= s_qp_info_loc_qpn;
-            qp_info_loc_psn_reg       <= s_qp_info_loc_psn; 
+            qp_info_loc_psn_reg       <= s_qp_info_loc_psn;
             qp_info_loc_r_key_reg     <= s_qp_info_loc_r_key;
             qp_info_loc_base_addr_reg <= s_qp_info_loc_base_addr;
             qp_info_loc_ip_addr_reg   <= s_qp_info_loc_ip_addr;

@@ -1,13 +1,14 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 /*
- * AXI4-Stream RoCEv2 ICRC inserter (512 bit datapath)
+ * AXI4-Stream RoCEv2 ICRC inserter
  */
 module axis_RoCE_icrc_insert #
   (
     parameter DATA_WIDTH   = 256,
     parameter CRC_COMP_TYPE = 1, // 0 My implementation, 1 SV implementation
-    parameter N_PIPE        = 2 // pipeline reg within SV CRC module 
+    parameter N_PIPE        = 2, // pipeline reg within SV CRC module 
+    parameter OUT_REG       = 1 // output axis register to aid timings
 ) (
     input wire clk,
     input wire rst,
@@ -144,6 +145,13 @@ module axis_RoCE_icrc_insert #
     reg [1:0]    s_axis_tuser_shreg                       [CRC_COMP_LATENCY-1:0];
 
     reg          rst_crc_shreg                            [CRC_COMP_LATENCY:0];
+
+    wire [DATA_WIDTH   - 1 : 0] s_eth_payload_output_reg_axis_tdata;
+    wire [DATA_WIDTH/8 - 1 : 0] s_eth_payload_output_reg_axis_tkeep;
+    wire                        s_eth_payload_output_reg_axis_tvalid;
+    wire                        s_eth_payload_output_reg_axis_tready;
+    wire                        s_eth_payload_output_reg_axis_tlast;
+    wire                        s_eth_payload_output_reg_axis_tuser;
 
     integer i;
 
@@ -408,7 +416,7 @@ module axis_RoCE_icrc_insert #
     end
 
     genvar j;
-        
+
     generate
         for (j = 0; j <= DATA_WIDTH / 32 - 2; j = j + 1) begin
             always @* begin
@@ -646,14 +654,14 @@ module axis_RoCE_icrc_insert #
     reg [2:0] store_axis_int_to_temp_shreg;
     reg [2:0] store_axis_temp_to_output_shreg;
 
-    assign m_eth_payload_axis_tdata = m_eth_payload_axis_tdata_reg;
-    assign m_eth_payload_axis_tkeep = m_eth_payload_axis_tkeep_reg;
-    assign m_eth_payload_axis_tvalid = m_eth_payload_axis_tvalid_reg;
-    assign m_eth_payload_axis_tlast = m_eth_payload_axis_tlast_reg;
-    assign m_eth_payload_axis_tuser = m_eth_payload_axis_tuser_reg;
+    assign s_eth_payload_output_reg_axis_tdata  = m_eth_payload_axis_tdata_reg;
+    assign s_eth_payload_output_reg_axis_tkeep  = m_eth_payload_axis_tkeep_reg;
+    assign s_eth_payload_output_reg_axis_tvalid = m_eth_payload_axis_tvalid_reg;
+    assign s_eth_payload_output_reg_axis_tlast  = m_eth_payload_axis_tlast_reg;
+    assign s_eth_payload_output_reg_axis_tuser  = m_eth_payload_axis_tuser_reg;
 
     // enable ready input next cycle if output is ready or if both output registers are empty
-    assign m_eth_payload_axis_tready_int_early = m_eth_payload_axis_tready || (!temp_m_eth_payload_axis_tvalid_reg && !m_eth_payload_axis_tvalid_reg);
+    assign m_eth_payload_axis_tready_int_early = s_eth_payload_output_reg_axis_tready || (!temp_m_eth_payload_axis_tvalid_reg && !m_eth_payload_axis_tvalid_reg);
 
     always @* begin
         // transfer sink ready state to source
@@ -666,7 +674,7 @@ module axis_RoCE_icrc_insert #
 
         if (m_eth_payload_axis_tready_int_reg) begin
             // input is ready
-            if (m_eth_payload_axis_tready || !m_eth_payload_axis_tvalid_reg) begin
+            if (s_eth_payload_output_reg_axis_tready || !m_eth_payload_axis_tvalid_reg) begin
                 // output is ready or currently not valid, transfer data to output
                 m_eth_payload_axis_tvalid_next = m_eth_payload_axis_tvalid_int;
                 store_axis_int_to_output = 1'b1;
@@ -675,7 +683,7 @@ module axis_RoCE_icrc_insert #
                 temp_m_eth_payload_axis_tvalid_next = m_eth_payload_axis_tvalid_int;
                 store_axis_int_to_temp = 1'b1;
             end
-        end else if (m_eth_payload_axis_tready) begin
+        end else if (s_eth_payload_output_reg_axis_tready) begin
             // input is not ready, but output is ready
             m_eth_payload_axis_tvalid_next = temp_m_eth_payload_axis_tvalid_reg;
             temp_m_eth_payload_axis_tvalid_next = 1'b0;
@@ -722,6 +730,46 @@ module axis_RoCE_icrc_insert #
             temp_m_eth_payload_axis_tvalid_reg <= 1'b0;
         end
     end
+
+    generate
+        if (OUT_REG) begin
+
+            // to aid timings
+            axis_srl_register #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1)
+            ) rx_axis_srl_fifo (
+                .clk(clk),
+                .rst(rst),
+
+                // AXI input
+                .s_axis_tdata (s_eth_payload_output_reg_axis_tdata ),
+                .s_axis_tkeep (s_eth_payload_output_reg_axis_tkeep ),
+                .s_axis_tvalid(s_eth_payload_output_reg_axis_tvalid),
+                .s_axis_tready(s_eth_payload_output_reg_axis_tready),
+                .s_axis_tlast (s_eth_payload_output_reg_axis_tlast ),
+                .s_axis_tuser (s_eth_payload_output_reg_axis_tuser ),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (m_eth_payload_axis_tdata ),
+                .m_axis_tkeep (m_eth_payload_axis_tkeep ),
+                .m_axis_tvalid(m_eth_payload_axis_tvalid),
+                .m_axis_tready(m_eth_payload_axis_tready),
+                .m_axis_tlast (m_eth_payload_axis_tlast ),
+                .m_axis_tuser (m_eth_payload_axis_tuser )
+            );
+        end else begin
+            assign m_eth_payload_axis_tdata             = s_eth_payload_output_reg_axis_tdata ;
+            assign m_eth_payload_axis_tkeep             = s_eth_payload_output_reg_axis_tkeep ;
+            assign m_eth_payload_axis_tvalid            = s_eth_payload_output_reg_axis_tvalid;
+            assign s_eth_payload_output_reg_axis_tready = m_eth_payload_axis_tready;
+            assign m_eth_payload_axis_tlast             = s_eth_payload_output_reg_axis_tlast ;
+            assign m_eth_payload_axis_tuser             = s_eth_payload_output_reg_axis_tuser ;
+        end
+    endgenerate
 
 endmodule
 

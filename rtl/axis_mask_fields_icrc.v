@@ -4,7 +4,8 @@
 
 module axis_mask_fields_icrc #(
     parameter DATA_WIDTH = 64,
-    parameter USER_WIDTH = 1
+    parameter USER_WIDTH = 1,
+    parameter OUT_REG    = 1 // Output axis register to aid timings
 ) (
     input wire clk,
     input wire rst,
@@ -36,10 +37,10 @@ module axis_mask_fields_icrc #(
 );
 
 
-    localparam [1023:0] MASK_FIELDS = {
-    {760{1'b0}}, 264'hff00000000ffff0000000000000000000000000000ffff00ff000000000000ff00
+    localparam [4095:0] MASK_FIELDS = {
+    {3832{1'b0}}, 264'hff00000000ffff0000000000000000000000000000ffff00ff000000000000ff00
     };
-    localparam [6:0] STEPS = 1024 / DATA_WIDTH;
+    localparam [6:0] STEPS = 4096 / DATA_WIDTH;
 
 
     reg [6:0] steps_reg, steps_next;
@@ -61,6 +62,14 @@ module axis_mask_fields_icrc #(
 
     reg                          s_axis_tready_next;
     reg                          s_axis_tready_reg;
+
+    wire [DATA_WIDTH   - 1 : 0] s_output_reg_axis_tdata;
+    wire [DATA_WIDTH/8 - 1 : 0] s_output_reg_axis_tkeep;
+    wire                        s_output_reg_axis_tvalid;
+    wire                        s_output_reg_axis_tready;
+    wire                        s_output_reg_axis_tlast;
+
+    wire [DATA_WIDTH+USER_WIDTH - 1 : 0] s_output_reg_axis_tuser; // to accomodate not masked data
 
     assign s_axis_tready = s_axis_tready_reg;
 
@@ -128,16 +137,14 @@ module axis_mask_fields_icrc #(
     reg store_axis_int_to_temp;
     reg store_axis_temp_to_output;
 
-    assign m_axis_masked_tdata = m_axis_tdata_reg;
-    assign m_axis_masked_tkeep = m_axis_tkeep_reg;
-    assign m_axis_masked_tvalid = m_axis_tvalid_reg;
-    assign m_axis_masked_tlast = m_axis_tlast_reg;
-    assign m_axis_masked_tuser = m_axis_tuser_reg;
-
-    assign m_axis_not_masked_tdata = m_axis_not_masked_tdata_reg;
+    assign s_output_reg_axis_tdata = m_axis_tdata_reg;
+    assign s_output_reg_axis_tkeep = m_axis_tkeep_reg;
+    assign s_output_reg_axis_tvalid = m_axis_tvalid_reg;
+    assign s_output_reg_axis_tlast = m_axis_tlast_reg;
+    assign s_output_reg_axis_tuser = {m_axis_tuser_reg, m_axis_not_masked_tdata_reg};
 
     // enable ready input next cycle if output is ready or if both output registers are empty
-    assign m_axis_tready_int_early = m_axis_masked_tready || (!temp_m_axis_tvalid_reg && !m_axis_tvalid_reg);
+    assign m_axis_tready_int_early = s_output_reg_axis_tready || (!temp_m_axis_tvalid_reg && !m_axis_tvalid_reg);
 
     always @* begin
         // transfer sink ready state to source
@@ -150,7 +157,7 @@ module axis_mask_fields_icrc #(
 
         if (m_axis_tready_int_reg) begin
             // input is ready
-            if (m_axis_masked_tready || !m_axis_tvalid_reg) begin
+            if (s_output_reg_axis_tready || !m_axis_tvalid_reg) begin
                 // output is ready or currently not valid, transfer data to output
                 m_axis_tvalid_next = m_axis_tvalid_int;
                 store_axis_int_to_output = 1'b1;
@@ -159,7 +166,7 @@ module axis_mask_fields_icrc #(
                 temp_m_axis_tvalid_next = m_axis_tvalid_int;
                 store_axis_int_to_temp  = 1'b1;
             end
-        end else if (m_axis_masked_tready) begin
+        end else if (s_output_reg_axis_tready) begin
             // input is not ready, but output is ready
             m_axis_tvalid_next = temp_m_axis_tvalid_reg;
             temp_m_axis_tvalid_next = 1'b0;
@@ -205,15 +212,49 @@ module axis_mask_fields_icrc #(
             temp_m_axis_tvalid_reg <= 1'b0;
         end
     end
-    /*
-  assign m_axis_tdata  = m_axis_tdata_reg;
-  assign m_axis_tkeep  = m_axis_tkeep_reg;
-  assign m_axis_tvalid = m_axis_tvalid_reg;
-  //assign s_axis_tready = m_axis_tready_int;
-  assign s_axis_tready = s_axis_tready_reg;
-  assign m_axis_tlast  = m_axis_tlast_reg;
-  assign m_axis_tuser  = m_axis_tuser_reg;
-*/
+    
+    generate
+        if (OUT_REG) begin
+
+            // to aid timings
+            axis_srl_register #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .USER_ENABLE(1),
+                .USER_WIDTH(USER_WIDTH+DATA_WIDTH)
+            ) rx_axis_srl_fifo (
+                .clk(clk),
+                .rst(rst),
+
+                // AXI input
+                .s_axis_tdata (s_output_reg_axis_tdata ),
+                .s_axis_tkeep (s_output_reg_axis_tkeep ),
+                .s_axis_tvalid(s_output_reg_axis_tvalid),
+                .s_axis_tready(s_output_reg_axis_tready),
+                .s_axis_tlast (s_output_reg_axis_tlast ),
+                .s_axis_tuser (s_output_reg_axis_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (m_axis_masked_tdata ),
+                .m_axis_tkeep (m_axis_masked_tkeep ),
+                .m_axis_tvalid(m_axis_masked_tvalid),
+                .m_axis_tready(m_axis_masked_tready),
+                .m_axis_tlast (m_axis_masked_tlast ),
+                .m_axis_tuser ({m_axis_masked_tuser, m_axis_not_masked_tdata})
+            );
+        end else begin
+
+            assign m_axis_masked_tdata      = s_output_reg_axis_tdata ;
+            assign m_axis_masked_tkeep      = s_output_reg_axis_tkeep ;
+            assign m_axis_masked_tvalid     = s_output_reg_axis_tvalid;
+            assign s_output_reg_axis_tready = m_axis_masked_tready;
+            assign m_axis_masked_tlast      = s_output_reg_axis_tlast ;
+            assign {m_axis_masked_tuser, m_axis_not_masked_tdata}      = s_output_reg_axis_tuser;
+
+        end
+    endgenerate
+
 endmodule
 
 `resetall

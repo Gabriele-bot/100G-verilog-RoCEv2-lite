@@ -387,8 +387,8 @@ module RoCE_minimal_stack #(
 
 
     // redirect udp rx traffic either to CM or RoCE RX
-    wire s_select_udp  = (s_udp_dest_port != 16'h12B7);
-    wire s_select_roce = (s_udp_dest_port == 16'h12B7);
+    wire s_select_udp  = s_udp_dest_port != 16'h12B7 ? 1'b1 : 1'b0;
+    wire s_select_roce = s_udp_dest_port == 16'h12B7 ? 1'b1 : 1'b0;
 
     reg s_select_udp_reg = 1'b0;
     reg s_select_roce_reg = 1'b0;
@@ -965,6 +965,7 @@ module RoCE_minimal_stack #(
                 .psn_diff(psn_diff),
                 .used_memory(used_memory),
                 // Config
+                .cfg_valid(qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
                 .timeout_period(timeout_period),
                 .retry_count(retry_count),
                 .rnr_retry_count(rnr_retry_count),
@@ -1362,7 +1363,7 @@ module RoCE_minimal_stack #(
         end
     endgenerate
 
-    /*
+    
     RoCE_udp_tx #(
     .DATA_WIDTH(DATA_WIDTH)
     ) RoCE_udp_tx_instance (
@@ -1440,7 +1441,8 @@ module RoCE_minimal_stack #(
         .error_payload_early_termination(error_payload_early_termination),
         .RoCE_udp_port(RoCE_udp_port)
     );
-    */
+    
+    /*
     RoCE_udp_tx_simple #(
     .DATA_WIDTH(DATA_WIDTH)
     ) RoCE_udp_tx_instance (
@@ -1515,12 +1517,13 @@ module RoCE_minimal_stack #(
         .m_udp_payload_axis_tlast       (roce_tx_udp_payload_axis_tlast),
         .m_udp_payload_axis_tuser       (roce_tx_udp_payload_axis_tuser)
     );
+    */
 
     wire [(12+4)*8-1:0] rx_bth_aeth_hdr;
 
     header_stripper #(
         .DATA_WIDTH(DATA_WIDTH),
-        .OUT_HEADER_WIDTH(12+4),
+        .OUT_HEADER_WIDTH(12+4), // BTA ETH
         .IN_HEADER_WIDTH(1)
     ) header_stripper_instance (
         .clk(clk),
@@ -1922,7 +1925,7 @@ module RoCE_minimal_stack #(
     reg        wr_req_is_immediate;
     reg        wr_req_tx_type;
     reg [31:0] messages_to_trasnfer;
-    reg [27:0] address_offset;
+    reg [15:0] address_offset;
 
     reg [31:0] txmeta_frequency_reg;
     reg [63:0] transmit_wait_ctnr; // wait counter trasnfering at a given frequency
@@ -1989,7 +1992,7 @@ module RoCE_minimal_stack #(
                 wr_req_dma_length     <= txmeta_dma_transfer;
                 messages_to_trasnfer  <= txmeta_n_transfers;
                 txmeta_frequency_reg  <= txmeta_frequency;
-                address_offset        <= 28'd0;
+                address_offset        <= 16'd0;
                 transfer_ongoing      <= 1'b1;
             end
 
@@ -2012,9 +2015,9 @@ module RoCE_minimal_stack #(
                 if (s_wr_req_valid && s_wr_req_ready) begin
                     messages_to_trasnfer <= messages_to_trasnfer - 32'd1;
                     if (wr_req_dma_length <= 32'h10000000) begin
-                        address_offset <= address_offset + wr_req_dma_length[27:0];
+                        address_offset <= address_offset + wr_req_dma_length[15:0];
                     end else begin
-                        address_offset <= 28'd0;
+                        address_offset <= 16'd0;
                     end
                 end
             end else begin
