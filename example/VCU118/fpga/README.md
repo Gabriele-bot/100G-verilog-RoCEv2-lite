@@ -1,40 +1,40 @@
-# Verilog Ethernet VCU118 Example Design
+# Markdown syntax guide
+# VCU118 Example Design
 
 ## Introduction
 
 This example design targets the Xilinx VCU118 FPGA board.
 
-The design by default listens to UDP port 1234 at IP address 192.168.1.128 and
-will echo back any packets received.  The design will also respond correctly
-to ARP requests.  The design also enables the gigabit Ethernet interface for
-testing with a QSFP loopback adapter.  
+Three designs:
+*  fpga: 25Gbps target 1 RoCE module (1 QSFP, lane 0 is used)
+*  fpga_10g: 10Gbps target 1 RoCE module (1 QSFP, lane 0 is used)
+*  fpga_8x25: 25Gbps target 8 RoCE module (2 QSFPs)
 
+### Project infos
 *  FPGA: xcvu9p-flga2104-2L-e
 *  PHY: 25G BASE-R PHY IP core and internal GTY transceiver
 
 ## How to build
-
+Modify the the Makefile to change the target project.  
 Run make to build.  Ensure that the Xilinx Vivado toolchain components are
 in PATH.  
 
 ## How to test
 
-Run make program to program the VCU118 board with Vivado.  Then run
+Program the VCU118 board with Vivado and chenge the IP address if needed (default is `22.1.212.10`).  Then run
 
-    netcat -u 192.168.1.128 1234
+    ping 22.1.212.10
 
-to open a UDP connection to port 1234.  Any text entered into netcat will be
-echoed back after pressing enter.
+Or run this command to arping the board (you might need to be a sudoer)  
 
-It is also possible to use hping to test the design by running
+    arping -c 10 -w 10 -I <network_interface> 22.1.212.10
 
-    hping 192.168.1.128 -2 -p 1234 -d 1024
+To open a Queue Pair run the command (script is in the `Scripts` folder :D).
 
-Note that the gigabit PHY is also enabled for debugging.  The gigabit port can
-be inserted into the 25G data path between the 25G MAC and 25G PHY so that the
-25G interface can be tested with a QSFP loopback adapter.  Turn on SW12.1 to
-insert the gigabit port into the 25G data path, or off to bypass the gigabit
-port.  Turn on SW12.2 to place the port in the TX path or off to place the
-port in the RX path.  
+    python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -r 1
+    python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 3
 
+If succeded you can start sending data, you need an application for that otherwise the NIC won't send any ACKs.. this is up to you on how to develop the softwre part.  
+To send dummy data you can use this command
 
+    python3 send_connection_info.py -ir '22.1.212.10' -il '22.1.212.11' -rq 256 -r 0 -s -l 16000 -n 100

@@ -473,7 +473,7 @@ module RoCE_minimal_stack #(
     wire [31:0] m_framer_rem_ip_addr;
     wire [63:0] m_framer_rem_addr;
     wire        m_framer_is_immediate;
-    wire        m_framer_immediate_data;
+    wire [31:0] m_framer_immediate_data;
     wire        m_framer_trasfer_type;
 
 
