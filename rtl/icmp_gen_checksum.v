@@ -174,6 +174,9 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
 
     parameter HEADER_FIFO_ADDR_WIDTH = $clog2(HEADER_FIFO_DEPTH);
 
+    parameter HDR_TEMP_SUM_DEPTH = ADDER_STEPS >= 4 ? ADDER_STEPS/4 : 1;
+    parameter HDR_TEMP_SUM_STEPS = ADDER_STEPS >= 4 ? 4 : ADDER_STEPS;
+
     localparam [2:0]
     STATE_IDLE         = 3'd0,
     STATE_SUM_HEADER   = 3'd1,
@@ -206,8 +209,8 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
     reg [21:0] checksum_temp_reg [ADDER_STEPS-1 :0];
     reg [21:0] checksum_temp_next [ADDER_STEPS-1 :0];
 
-    reg [21:0] checksum_temp_part_reg [ADDER_STEPS/4-1 :0];
-    reg [21:0] checksum_temp_part_next [ADDER_STEPS/4-1 :0];
+    reg [21:0] checksum_temp_part_reg [HDR_TEMP_SUM_DEPTH-1 :0];
+    reg [21:0] checksum_temp_part_next [HDR_TEMP_SUM_DEPTH-1 :0];
 
     reg [47:0] eth_dest_mac_reg = 48'd0;
     reg [47:0] eth_src_mac_reg = 48'd0;
@@ -260,7 +263,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
             checksum_temp_reg[j] = 22'd0;
         end
 
-        for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+        for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
             checksum_temp_part_reg[i] = 22'd0;
         end
     end
@@ -352,7 +355,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
     reg [3:0]  m_ip_ihl_reg = 4'd0;
     reg [5:0]  m_ip_dscp_reg = 6'd0;
     reg [1:0]  m_ip_ecn_reg = 2'd0;
-    reg [7:0]  m_ip_length_reg = 16'd0;
+    reg [15:0] m_ip_length_reg = 16'd0;
     reg [15:0] m_ip_identification_reg = 16'd0;
     reg [2:0]  m_ip_flags_reg = 3'd0;
     reg [12:0] m_ip_fragment_offset_reg = 13'd0;
@@ -531,7 +534,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
             checksum_temp_next[j] = checksum_temp_reg[j];
         end
 
-        for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+        for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
             checksum_temp_part_next[i] = checksum_temp_part_reg[i];
         end
 
@@ -578,7 +581,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                     checksum_temp_next[j] = 22'd0;
                 end
 
-                for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+                for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
                     checksum_temp_part_next[i] = 22'd0;
                 end
 
@@ -612,15 +615,15 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                     end
 
                     // Second step
-                    for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+                    for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
                         checksum_temp_part_next[i] = 22'd0;
-                        for (j = 0; j < 4; j = j + 1) begin
-                            checksum_temp_part_next[i] = checksum_temp_part_next[i] + checksum_temp_reg[i*4 + j];
+                        for (j = 0; j < HDR_TEMP_SUM_STEPS; j = j + 1) begin
+                            checksum_temp_part_next[i] = checksum_temp_part_next[i] + checksum_temp_reg[i*HDR_TEMP_SUM_STEPS + j];
                         end
                     end
 
                     checksum_next = checksum_reg;
-                    for (j = 0; j < ADDER_STEPS/4; j = j + 1) begin
+                    for (j = 0; j < HDR_TEMP_SUM_DEPTH; j = j + 1) begin
                         checksum_next = checksum_next + checksum_temp_part_reg[j];
                     end
 
@@ -642,15 +645,15 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                     checksum_temp_next[j] = 22'd0;
                 end
 
-                for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+                for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
                     checksum_temp_part_next[i] = 22'd0;
-                    for (j = 0; j < 4; j = j + 1) begin
-                        checksum_temp_part_next[i] = checksum_temp_part_next[i] + checksum_temp_reg[i*4 + j];
+                    for (j = 0; j < HDR_TEMP_SUM_STEPS; j = j + 1) begin
+                        checksum_temp_part_next[i] = checksum_temp_part_next[i] + checksum_temp_reg[i*HDR_TEMP_SUM_STEPS + j];
                     end
                 end
 
                 checksum_next = checksum_reg;
-                for (j = 0; j < ADDER_STEPS/4; j = j + 1) begin
+                for (j = 0; j < HDR_TEMP_SUM_DEPTH; j = j + 1) begin
                     checksum_next = checksum_next + checksum_temp_part_reg[j];
                 end
 
@@ -658,7 +661,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
             end
             STATE_FINISH_SUM_2: begin
                 checksum_next = checksum_reg;
-                for (j = 0; j < ADDER_STEPS/4; j = j + 1) begin
+                for (j = 0; j < HDR_TEMP_SUM_DEPTH; j = j + 1) begin
                     checksum_next = checksum_next + checksum_temp_part_reg[j];
                 end
 
@@ -689,7 +692,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                 checksum_temp_reg[j] <= 22'd0;
             end
 
-            for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+            for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
                 checksum_temp_part_reg[i] <= 22'd0;
             end
         end else begin
@@ -713,7 +716,7 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
             checksum_temp_reg[j] <= checksum_temp_next[j];
         end
 
-        for (i = 0; i < ADDER_STEPS/4; i = i + 1) begin
+        for (i = 0; i < HDR_TEMP_SUM_DEPTH; i = i + 1) begin
             checksum_temp_part_reg[i] <= checksum_temp_part_next[i];
         end
 
