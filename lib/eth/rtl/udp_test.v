@@ -215,6 +215,13 @@ module udp_test #(
   wire        tx_udp_payload_axis_tlast;
   wire        tx_udp_payload_axis_tuser;
 
+  wire [DATA_WIDTH-1:0] m_ip_payload_fifo_axis_tdata ;
+  wire [KEEP_WIDTH-1:0] m_ip_payload_fifo_axis_tkeep ;
+  wire                  m_ip_payload_fifo_axis_tvalid;
+  wire                  m_ip_payload_fifo_axis_tready;
+  wire                  m_ip_payload_fifo_axis_tlast ;
+  wire                  m_ip_payload_fifo_axis_tuser ;
+
   udp_ip_rx_test #(
     .DATA_WIDTH(DATA_WIDTH)
   ) udp_ip_rx_inst (
@@ -439,13 +446,12 @@ module udp_test #(
       assign tx_udp_dest_port = s_udp_dest_port;
       assign tx_udp_length = s_udp_length;
       assign tx_udp_checksum = s_udp_checksum;
-      assign tx_udp_payload_axis_tdata = s_udp_payload_axis_tdata;
-      assign tx_udp_payload_axis_tkeep = s_udp_payload_axis_tkeep;
+      assign tx_udp_payload_axis_tdata  = s_udp_payload_axis_tdata;
+      assign tx_udp_payload_axis_tkeep  = s_udp_payload_axis_tkeep;
       assign tx_udp_payload_axis_tvalid = s_udp_payload_axis_tvalid;
-      assign s_udp_payload_axis_tready = tx_udp_payload_axis_tready;
-      assign tx_udp_payload_axis_tlast = s_udp_payload_axis_tlast;
-      assign tx_udp_payload_axis_tuser = s_udp_payload_axis_tuser;
-
+      assign s_udp_payload_axis_tready  = tx_udp_payload_axis_tready;
+      assign tx_udp_payload_axis_tlast  = s_udp_payload_axis_tlast;
+      assign tx_udp_payload_axis_tuser  = s_udp_payload_axis_tuser;
     end
 
   endgenerate
@@ -503,12 +509,12 @@ module udp_test #(
       .m_ip_source_ip(m_ip_source_ip),
       .m_ip_dest_ip(m_ip_dest_ip),
       .m_is_roce_packet(m_is_roce_packet),
-      .m_ip_payload_axis_tdata(m_ip_payload_axis_tdata),
-      .m_ip_payload_axis_tkeep(m_ip_payload_axis_tkeep),
-      .m_ip_payload_axis_tvalid(m_ip_payload_axis_tvalid),
-      .m_ip_payload_axis_tready(m_ip_payload_axis_tready),
-      .m_ip_payload_axis_tlast(m_ip_payload_axis_tlast),
-      .m_ip_payload_axis_tuser(m_ip_payload_axis_tuser),
+      .m_ip_payload_axis_tdata (m_ip_payload_fifo_axis_tdata ),
+      .m_ip_payload_axis_tkeep (m_ip_payload_fifo_axis_tkeep ),
+      .m_ip_payload_axis_tvalid(m_ip_payload_fifo_axis_tvalid),
+      .m_ip_payload_axis_tready(m_ip_payload_fifo_axis_tready),
+      .m_ip_payload_axis_tlast (m_ip_payload_fifo_axis_tlast ),
+      .m_ip_payload_axis_tuser (m_ip_payload_fifo_axis_tuser ),
       // Status signals
       .busy(tx_busy),
       //.error_payload_early_termination(tx_error_payload_early_termination),
@@ -516,9 +522,48 @@ module udp_test #(
       .RoCE_udp_port(RoCE_udp_port)
   );
 
+  axis_fifo #(
+        .DEPTH(1024),
+        .DATA_WIDTH(DATA_WIDTH),
+        .KEEP_ENABLE(1),
+        .KEEP_WIDTH(KEEP_WIDTH),
+        .LAST_ENABLE(1),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1),
+        .FRAME_FIFO(0)
+    )
+    payload_fifo (
+        .clk(clk),
+        .rst(rst),
+        // AXI input
+        .s_axis_tdata (m_ip_payload_fifo_axis_tdata ),
+        .s_axis_tkeep (m_ip_payload_fifo_axis_tkeep ),
+        .s_axis_tvalid(m_ip_payload_fifo_axis_tvalid),
+        .s_axis_tready(m_ip_payload_fifo_axis_tready),
+        .s_axis_tlast (m_ip_payload_fifo_axis_tlast ),
+        .s_axis_tuser (m_ip_payload_fifo_axis_tuser ),
+
+        .s_axis_tid(0),
+        .s_axis_tdest(0),
+        // AXI output
+        .m_axis_tdata (m_ip_payload_axis_tdata ),
+        .m_axis_tkeep (m_ip_payload_axis_tkeep ),
+        .m_axis_tvalid(m_ip_payload_axis_tvalid),
+        .m_axis_tready(m_ip_payload_axis_tready),
+        .m_axis_tlast (m_ip_payload_axis_tlast ),
+        .m_axis_tuser (m_ip_payload_axis_tuser ),
+        // Status
+        .status_overflow(),
+        .status_bad_frame(),
+        .status_good_frame()
+    );
+
   // TODO Fix this
   assign tx_error_payload_early_termination = 1'b0; 
 
 endmodule
 
 `resetall
+

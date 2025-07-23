@@ -341,7 +341,7 @@ module icmp_echo_reply #(
 
     icmp_checksum_gen #(
       .DATA_WIDTH(DATA_WIDTH),
-      .ADDER_STEPS(max(4, (2**$clog2(DATA_WIDTH/64)))),
+      .ADDER_STEPS(max(2, (2**$clog2(DATA_WIDTH/64)))),
       .PAYLOAD_FIFO_DEPTH(CHECKSUM_PAYLOAD_FIFO_DEPTH),
       .HEADER_FIFO_DEPTH (CHECKSUM_HEADER_FIFO_DEPTH)
       ) icmp_checksum_gen_test_inst (
