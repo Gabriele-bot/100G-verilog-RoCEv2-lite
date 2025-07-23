@@ -19,6 +19,7 @@ module RoCE_simple_work_queue #
     input  wire [31:0] s_wr_req_dma_length,
     input  wire [63:0] s_wr_req_addr_offset,
     input  wire        s_wr_req_is_immediate,
+    input  wire [31:0] s_wr_req_immediate_data,
     input  wire        s_wr_req_tx_type,
 
     // query qp context
@@ -47,6 +48,7 @@ module RoCE_simple_work_queue #
     output wire [31:0] m_rem_ip_addr,
     output wire [63:0] m_rem_addr,
     output wire        m_is_immediate,
+    output wire [31:0] m_immediate_data,
     output wire        m_trasfer_type
 );
 
@@ -62,13 +64,14 @@ module RoCE_simple_work_queue #
     QP_STATE_ERROR    = 3'd6;
 
 
-    localparam [9:0] WORK_QUEUE_LENGTH_WIDTH = 2**($clog2(24+32+64+1+1));
+    localparam [9:0] WORK_QUEUE_LENGTH_WIDTH = 2**($clog2(24+32+64+32+1+1));
 
-    localparam LOC_QPN_OFFSET     = 0;
-    localparam DMA_LENGTH_OFFSET  = 24;
-    localparam ADDR_OFF_OFFSET    = 56;
-    localparam IMMEDIATE_OFFSET   = 120;
-    localparam TXTYPE_OFFSET      = 121;
+    localparam LOC_QPN_OFFSET        = 0;
+    localparam DMA_LENGTH_OFFSET     = 24;
+    localparam ADDR_OFF_OFFSET       = 56;
+    localparam IMMEDIATE_DATA_OFFSET = 120;
+    localparam IMMEDIATE_OFFSET      = 152;
+    localparam TXTYPE_OFFSET         = 153;
 
     localparam [2:0]
     STATE_IDLE  = 3'd0,
@@ -84,6 +87,7 @@ module RoCE_simple_work_queue #
     reg [31:0] m_dma_length_fifo_out_reg;
     reg [63:0] m_rem_addr_offset_fifo_out_reg;
     reg        m_is_immediate_fifo_out_reg;
+    reg [31:0] m_immediate_data_fifo_out_reg;
     reg        m_trasfer_type_fifo_out_reg;
 
     reg        m_dma_meta_valid_reg;
@@ -96,6 +100,7 @@ module RoCE_simple_work_queue #
     reg [31:0] m_rem_ip_addr_reg;
     reg [63:0] m_rem_addr_reg;
     reg        m_is_immediate_reg;
+    reg [31:0] m_immediate_data_reg;
     reg        m_trasfer_type_reg;
 
     wire WQE_fifo_out_valid;
@@ -107,15 +112,16 @@ module RoCE_simple_work_queue #
 
     always @* begin
         WQE[WORK_QUEUE_LENGTH_WIDTH-1 :0]  = 0; //default
-        WQE[LOC_QPN_OFFSET    +: 24] = s_wr_req_loc_qp;
-        WQE[DMA_LENGTH_OFFSET +: 32] = s_wr_req_dma_length;
-        WQE[ADDR_OFF_OFFSET   +: 64] = s_wr_req_addr_offset;
-        WQE[IMMEDIATE_OFFSET]        = s_wr_req_is_immediate;
-        WQE[TXTYPE_OFFSET]           = s_wr_req_tx_type;
+        WQE[LOC_QPN_OFFSET        +: 24] = s_wr_req_loc_qp;
+        WQE[DMA_LENGTH_OFFSET     +: 32] = s_wr_req_dma_length;
+        WQE[ADDR_OFF_OFFSET       +: 64] = s_wr_req_addr_offset;
+        WQE[IMMEDIATE_DATA_OFFSET +: 32] = s_wr_req_immediate_data;
+        WQE[IMMEDIATE_OFFSET]            = s_wr_req_is_immediate;
+        WQE[TXTYPE_OFFSET]               = s_wr_req_tx_type;
     end
 
     axis_fifo #(
-        .DEPTH(WORK_QUEUE_LENGTH_WIDTH/8*QUEUE_LENGTH),
+        .DEPTH(QUEUE_LENGTH),
         .DATA_WIDTH(WORK_QUEUE_LENGTH_WIDTH),
         .KEEP_ENABLE(0),
         .LAST_ENABLE(0),
@@ -141,7 +147,7 @@ module RoCE_simple_work_queue #
         .m_axis_tdata (WQE_fifo_out),
         .m_axis_tkeep (),
         .m_axis_tvalid(WQE_fifo_out_valid),
-        .m_axis_tready(WQE_fifo_out_ready), //TODO add read enable logic
+        .m_axis_tready(WQE_fifo_out_ready),
         .m_axis_tlast (),
         .m_axis_tid   (),
         .m_axis_tdest (),
@@ -208,8 +214,9 @@ module RoCE_simple_work_queue #
 
     always @(posedge clk) begin
         if (WQE_fifo_out_valid && WQE_fifo_out_ready) begin
-            m_dma_length_fifo_out_reg       <= WQE_fifo_out[DMA_LENGTH_OFFSET +: 32];
-            m_rem_addr_offset_fifo_out_reg  <= WQE_fifo_out[ADDR_OFF_OFFSET   +: 64];
+            m_dma_length_fifo_out_reg       <= WQE_fifo_out[DMA_LENGTH_OFFSET     +: 32];
+            m_rem_addr_offset_fifo_out_reg  <= WQE_fifo_out[ADDR_OFF_OFFSET       +: 64];
+            m_immediate_data_fifo_out_reg   <= WQE_fifo_out[IMMEDIATE_DATA_OFFSET +: 32];
             m_is_immediate_fifo_out_reg     <= WQE_fifo_out[IMMEDIATE_OFFSET];
             m_trasfer_type_fifo_out_reg     <= WQE_fifo_out[TXTYPE_OFFSET];
 
@@ -217,15 +224,16 @@ module RoCE_simple_work_queue #
         end
 
         if (s_qp_context_valid) begin
-            m_rem_qpn_reg      <= s_qp_rem_qpn;
-            m_loc_qpn_reg      <= s_qp_loc_qpn;
-            m_rem_psn_reg      <= s_qp_rem_psn;
-            m_dma_length_reg   <= m_dma_length_fifo_out_reg;
-            m_r_key_reg        <= s_qp_r_key;
-            m_rem_addr_reg     <= s_qp_rem_addr + m_rem_addr_offset_fifo_out_reg;
-            m_rem_ip_addr_reg  <= s_qp_rem_ip_addr;
-            m_is_immediate_reg <= m_is_immediate_fifo_out_reg;
-            m_trasfer_type_reg <= m_trasfer_type_fifo_out_reg;
+            m_rem_qpn_reg        <= s_qp_rem_qpn;
+            m_loc_qpn_reg        <= s_qp_loc_qpn;
+            m_rem_psn_reg        <= s_qp_rem_psn;
+            m_dma_length_reg     <= m_dma_length_fifo_out_reg;
+            m_r_key_reg          <= s_qp_r_key;
+            m_rem_addr_reg       <= s_qp_rem_addr + m_rem_addr_offset_fifo_out_reg;
+            m_rem_ip_addr_reg    <= s_qp_rem_ip_addr;
+            m_immediate_data_reg <= m_immediate_data_fifo_out_reg;
+            m_is_immediate_reg   <= m_is_immediate_fifo_out_reg;
+            m_trasfer_type_reg   <= m_trasfer_type_fifo_out_reg;
         end
 
     end
@@ -238,6 +246,7 @@ module RoCE_simple_work_queue #
     assign m_r_key          = m_r_key_reg;
     assign m_rem_ip_addr    = m_rem_ip_addr_reg;
     assign m_rem_addr       = m_rem_addr_reg;
+    assign m_immediate_data = m_immediate_data_reg;
     assign m_is_immediate   = m_is_immediate_reg;
     assign m_trasfer_type   = m_trasfer_type_reg;
 

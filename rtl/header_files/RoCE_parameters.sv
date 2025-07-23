@@ -10,6 +10,8 @@ package RoCE_params;
         time2clk = time_value*1e6/clock_period;
     endfunction
 
+    parameter [15:0] CM_LISTEN_UDP_PORT = 16'h4321;
+
     /*
     RoCE OP CODES
     */
@@ -33,57 +35,57 @@ package RoCE_params;
 
     // Infiniband specification Vol 1 realeas 1.4 page 354
     parameter [0:31][31:0] RNR_TIMER_VALUES = {
-    time2clk(655.36, NET_CLOCK_PERIOD),
-    time2clk(0.01,   NET_CLOCK_PERIOD),
-    time2clk(0.02,   NET_CLOCK_PERIOD),
-    time2clk(0.03,   NET_CLOCK_PERIOD),
-    time2clk(0.04,   NET_CLOCK_PERIOD),
-    time2clk(0.06,   NET_CLOCK_PERIOD),
-    time2clk(0.08,   NET_CLOCK_PERIOD),
-    time2clk(0.12,   NET_CLOCK_PERIOD),
-    time2clk(0.16,   NET_CLOCK_PERIOD),
-    time2clk(0.24,   NET_CLOCK_PERIOD),
-    time2clk(0.32,   NET_CLOCK_PERIOD),
-    time2clk(0.48,   NET_CLOCK_PERIOD),
-    time2clk(0.64,   NET_CLOCK_PERIOD),
-    time2clk(0.96,   NET_CLOCK_PERIOD),
-    time2clk(1.28,   NET_CLOCK_PERIOD),
-    time2clk(1.92,   NET_CLOCK_PERIOD),
-    time2clk(2.56,   NET_CLOCK_PERIOD),
-    time2clk(3.84,   NET_CLOCK_PERIOD),
-    time2clk(5.12,   NET_CLOCK_PERIOD),
-    time2clk(7.68,   NET_CLOCK_PERIOD),
-    time2clk(10.24,  NET_CLOCK_PERIOD),
-    time2clk(15.36,  NET_CLOCK_PERIOD),
-    time2clk(20.48,  NET_CLOCK_PERIOD),
-    time2clk(30.72,  NET_CLOCK_PERIOD),
-    time2clk(40.98,  NET_CLOCK_PERIOD),
-    time2clk(61.44,  NET_CLOCK_PERIOD),
-    time2clk(81.92,  NET_CLOCK_PERIOD),
-    time2clk(122.88, NET_CLOCK_PERIOD),
-    time2clk(163.84, NET_CLOCK_PERIOD),
-    time2clk(245.76, NET_CLOCK_PERIOD),
-    time2clk(327.68, NET_CLOCK_PERIOD),
-    time2clk(491.52, NET_CLOCK_PERIOD)
+    time2clk(655.36, RoCE_CLOCK_PERIOD),
+    time2clk(0.01,   RoCE_CLOCK_PERIOD),
+    time2clk(0.02,   RoCE_CLOCK_PERIOD),
+    time2clk(0.03,   RoCE_CLOCK_PERIOD),
+    time2clk(0.04,   RoCE_CLOCK_PERIOD),
+    time2clk(0.06,   RoCE_CLOCK_PERIOD),
+    time2clk(0.08,   RoCE_CLOCK_PERIOD),
+    time2clk(0.12,   RoCE_CLOCK_PERIOD),
+    time2clk(0.16,   RoCE_CLOCK_PERIOD),
+    time2clk(0.24,   RoCE_CLOCK_PERIOD),
+    time2clk(0.32,   RoCE_CLOCK_PERIOD),
+    time2clk(0.48,   RoCE_CLOCK_PERIOD),
+    time2clk(0.64,   RoCE_CLOCK_PERIOD),
+    time2clk(0.96,   RoCE_CLOCK_PERIOD),
+    time2clk(1.28,   RoCE_CLOCK_PERIOD),
+    time2clk(1.92,   RoCE_CLOCK_PERIOD),
+    time2clk(2.56,   RoCE_CLOCK_PERIOD),
+    time2clk(3.84,   RoCE_CLOCK_PERIOD),
+    time2clk(5.12,   RoCE_CLOCK_PERIOD),
+    time2clk(7.68,   RoCE_CLOCK_PERIOD),
+    time2clk(10.24,  RoCE_CLOCK_PERIOD),
+    time2clk(15.36,  RoCE_CLOCK_PERIOD),
+    time2clk(20.48,  RoCE_CLOCK_PERIOD),
+    time2clk(30.72,  RoCE_CLOCK_PERIOD),
+    time2clk(40.98,  RoCE_CLOCK_PERIOD),
+    time2clk(61.44,  RoCE_CLOCK_PERIOD),
+    time2clk(81.92,  RoCE_CLOCK_PERIOD),
+    time2clk(122.88, RoCE_CLOCK_PERIOD),
+    time2clk(163.84, RoCE_CLOCK_PERIOD),
+    time2clk(245.76, RoCE_CLOCK_PERIOD),
+    time2clk(327.68, RoCE_CLOCK_PERIOD),
+    time2clk(491.52, RoCE_CLOCK_PERIOD)
     };
 
     parameter [0:15][31:0] FREQ_CLK_COUNTER_VALUES = {
     64'd0,
-    time2clk(1e3/1, NET_CLOCK_PERIOD),   // 1 Hz
-    time2clk(1e3/5, NET_CLOCK_PERIOD),   // 5 Hz
-    time2clk(1e3/10, NET_CLOCK_PERIOD),  // 10 Hz
-    time2clk(1e3/50, NET_CLOCK_PERIOD),  // 50 Hz
-    time2clk(1e3/100, NET_CLOCK_PERIOD), // 100 Hz
-    time2clk(1e3/500, NET_CLOCK_PERIOD), // 500 Hz
-    time2clk(1e3/1e3, NET_CLOCK_PERIOD), // 1 kHz
-    time2clk(1e3/5e3, NET_CLOCK_PERIOD), // 5 kHz
-    time2clk(1e3/1e4, NET_CLOCK_PERIOD), // 10 kHz
-    time2clk(1e3/5e4, NET_CLOCK_PERIOD), // 50 kHz
-    time2clk(1e3/1e5, NET_CLOCK_PERIOD), // 100 kHz
-    time2clk(1e3/5e5, NET_CLOCK_PERIOD), // 500 kHz
-    time2clk(1e3/1e6, NET_CLOCK_PERIOD), // 1 MHz
-    time2clk(1e3/5e6, NET_CLOCK_PERIOD), // 5 MHz
-    time2clk(1e3/1e7, NET_CLOCK_PERIOD)  // 10 MHz
+    time2clk(1e3/1,   RoCE_CLOCK_PERIOD),   // 1 Hz
+    time2clk(1e3/5,   RoCE_CLOCK_PERIOD),   // 5 Hz
+    time2clk(1e3/10,  RoCE_CLOCK_PERIOD),  // 10 Hz
+    time2clk(1e3/50,  RoCE_CLOCK_PERIOD),  // 50 Hz
+    time2clk(1e3/100, RoCE_CLOCK_PERIOD), // 100 Hz
+    time2clk(1e3/500, RoCE_CLOCK_PERIOD), // 500 Hz
+    time2clk(1e3/1e3, RoCE_CLOCK_PERIOD), // 1 kHz
+    time2clk(1e3/5e3, RoCE_CLOCK_PERIOD), // 5 kHz
+    time2clk(1e3/1e4, RoCE_CLOCK_PERIOD), // 10 kHz
+    time2clk(1e3/5e4, RoCE_CLOCK_PERIOD), // 50 kHz
+    time2clk(1e3/1e5, RoCE_CLOCK_PERIOD), // 100 kHz
+    time2clk(1e3/5e5, RoCE_CLOCK_PERIOD), // 500 kHz
+    time2clk(1e3/1e6, RoCE_CLOCK_PERIOD), // 1 MHz
+    time2clk(1e3/5e6, RoCE_CLOCK_PERIOD), // 5 MHz
+    time2clk(1e3/1e7, RoCE_CLOCK_PERIOD)  // 10 MHz
 
     };
 

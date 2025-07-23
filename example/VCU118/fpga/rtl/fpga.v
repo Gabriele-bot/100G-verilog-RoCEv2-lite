@@ -80,8 +80,8 @@ module fpga (
     output wire [3:0] qsfp2_tx_n,
     input  wire [3:0] qsfp2_rx_p,
     input  wire [3:0] qsfp2_rx_n,
-    // input  wire       qsfp2_mgt_refclk_0_p,
-    // input  wire       qsfp2_mgt_refclk_0_n,
+    input  wire       qsfp2_mgt_refclk_0_p,
+    input  wire       qsfp2_mgt_refclk_0_n,
     // input  wire       qsfp2_mgt_refclk_1_p,
     // input  wire       qsfp2_mgt_refclk_1_n,
     // output wire       qsfp2_recclk_p,
@@ -103,8 +103,8 @@ wire clk_125mhz_int;
 wire rst_125mhz_int;
 
 // Internal 390.625 MHz clock
-wire clk_390mhz_int;
-wire rst_390mhz_int;
+wire [7:0] clk_390mhz_int;
+wire [7:0] rst_390mhz_int;
 
 wire mmcm_rst;
 wire mmcm_locked;
@@ -216,8 +216,8 @@ debounce_switch #(
     .RATE(156000)
 )
 debounce_switch_inst (
-    .clk(clk_390mhz_int),
-    .rst(rst_390mhz_int),
+    .clk(clk_390mhz_int[0]),
+    .rst(rst_390mhz_int[0]),
     .in({btnu,
         btnl,
         btnd,
@@ -287,8 +287,22 @@ wire        qsfp1_rx_rst_4_int;
 wire [63:0] qsfp1_rxd_4_int;
 wire [7:0]  qsfp1_rxc_4_int;
 
-assign clk_390mhz_int = qsfp1_tx_clk_1_int;
-assign rst_390mhz_int = qsfp1_tx_rst_1_int;
+assign clk_390mhz_int[0] = qsfp1_tx_clk_1_int;
+assign rst_390mhz_int[0] = qsfp1_tx_rst_1_int;
+assign clk_390mhz_int[1] = qsfp1_tx_clk_2_int;
+assign rst_390mhz_int[1] = qsfp1_tx_rst_2_int;
+assign clk_390mhz_int[2] = qsfp1_tx_clk_3_int;
+assign rst_390mhz_int[2] = qsfp1_tx_rst_3_int;
+assign clk_390mhz_int[3] = qsfp1_tx_clk_4_int;
+assign rst_390mhz_int[3] = qsfp1_tx_rst_4_int;
+assign clk_390mhz_int[4] = qsfp2_tx_clk_1_int;
+assign rst_390mhz_int[4] = qsfp2_tx_rst_1_int;
+assign clk_390mhz_int[5] = qsfp2_tx_clk_2_int;
+assign rst_390mhz_int[5] = qsfp2_tx_rst_2_int;
+assign clk_390mhz_int[6] = qsfp2_tx_clk_3_int;
+assign rst_390mhz_int[6] = qsfp2_tx_rst_3_int;
+assign clk_390mhz_int[7] = qsfp2_tx_clk_4_int;
+assign rst_390mhz_int[7] = qsfp2_tx_rst_4_int;
 
 wire qsfp1_rx_block_lock_1;
 wire qsfp1_rx_block_lock_2;
@@ -296,6 +310,8 @@ wire qsfp1_rx_block_lock_3;
 wire qsfp1_rx_block_lock_4;
 
 wire qsfp1_mgt_refclk;
+
+wire qsfp2_mgt_refclk;
 
 IBUFDS_GTE4 ibufds_gte4_qsfp1_mgt_refclk_0_inst (
     .I     (qsfp1_mgt_refclk_0_p),
@@ -305,8 +321,18 @@ IBUFDS_GTE4 ibufds_gte4_qsfp1_mgt_refclk_0_inst (
     .ODIV2 ()
 );
 
-eth_xcvr_phy_quad_wrapper
-qsfp1_phy_inst (
+IBUFDS_GTE4 ibufds_gte4_qsfp2_mgt_refclk_0_inst (
+    .I     (qsfp2_mgt_refclk_0_p),
+    .IB    (qsfp2_mgt_refclk_0_n),
+    .CEB   (1'b0),
+    .O     (qsfp2_mgt_refclk),
+    .ODIV2 ()
+);
+
+eth_xcvr_phy_quad_wrapper#(
+    //.TX_SERDES_PIPELINE(2),
+    //.RX_SERDES_PIPELINE(2)
+) qsfp1_phy_inst (
     .xcvr_ctrl_clk(clk_125mhz_int),
     .xcvr_ctrl_rst(rst_125mhz_int),
 
@@ -443,8 +469,10 @@ wire qsfp2_rx_block_lock_2;
 wire qsfp2_rx_block_lock_3;
 wire qsfp2_rx_block_lock_4;
 
-eth_xcvr_phy_quad_wrapper
-qsfp2_phy_inst (
+eth_xcvr_phy_quad_wrapper #(
+    //.TX_SERDES_PIPELINE(2),
+    //.RX_SERDES_PIPELINE(2)
+) qsfp2_phy_inst (
     .xcvr_ctrl_clk(clk_125mhz_int),
     .xcvr_ctrl_rst(rst_125mhz_int),
 
@@ -456,7 +484,7 @@ qsfp2_phy_inst (
     /*
      * PLL
      */
-    .xcvr_gtrefclk00_in(qsfp1_mgt_refclk),
+    .xcvr_gtrefclk00_in(qsfp2_mgt_refclk),
 
     /*
      * Serial data

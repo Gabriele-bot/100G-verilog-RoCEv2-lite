@@ -127,8 +127,6 @@ module udp_RoCE_connection_manager_rx #(
     reg s_udp_hdr_ready_reg = 1'b0, s_udp_hdr_ready_next;
     reg s_udp_payload_axis_tready_reg = 1'b0, s_udp_payload_axis_tready_next;
 
-    reg m_udp_hdr_valid_reg = 1'b0, m_udp_hdr_valid_next;
-
     reg busy_reg = 1'b0;
 
     reg [15:0] udp_port_reg, udp_port_next;
@@ -159,13 +157,13 @@ module udp_RoCE_connection_manager_rx #(
     reg [31:0] txmeta_dma_lentgh_reg, txmeta_dma_lentgh_next;
     reg [31:0] txmeta_frequency_reg, txmeta_frequency_next;
 
-    reg s_qp_info_valid_reg, s_qp_info_valid_next;
+    reg m_qp_info_valid_reg, m_qp_info_valid_next;
 
 
     reg metadata_valid_reg, metadata_valid_next;
 
-    assign s_udp_hdr_ready = ~rst;
-    assign s_udp_payload_axis_tready = ~rst;
+    assign s_udp_hdr_ready = s_udp_hdr_ready_reg;
+    assign s_udp_payload_axis_tready = s_udp_payload_axis_tready_reg;
 
     assign busy = busy_reg;
 
@@ -175,8 +173,6 @@ module udp_RoCE_connection_manager_rx #(
 
         s_udp_hdr_ready_next           = 1'b0;
         s_udp_payload_axis_tready_next = 1'b0;
-
-        m_udp_hdr_valid_next           = m_udp_hdr_valid_reg;
 
         metadata_valid_next            = metadata_valid_reg;
         qp_info_valid_next          = qp_info_valid_reg;
@@ -214,14 +210,14 @@ module udp_RoCE_connection_manager_rx #(
         txmeta_n_transfers_next        = txmeta_n_transfers_reg;
         txmeta_frequency_next          = txmeta_frequency_reg;
 
-        s_qp_info_valid_next  = 1'b0;
+        m_qp_info_valid_next  = 1'b0;
 
         case (state_reg)
             STATE_IDLE: begin
                 metadata_valid_next    = 1'b0;
                 qp_info_valid_next  = 1'b0;
                 // idle state - wait for header
-                s_udp_hdr_ready_next = !m_udp_hdr_valid_next;
+                s_udp_hdr_ready_next = !m_qp_info_valid_next;
 
                 read_qp_info_next = read_qp_info_reg;
                 ptr_next = ptr_reg;
@@ -331,7 +327,7 @@ module udp_RoCE_connection_manager_rx #(
                     if (ptr_reg == (QP_INFO_SIZE-1)/BYTE_LANES && (!KEEP_ENABLE || s_udp_payload_axis_tkeep[(QP_INFO_SIZE-1)%BYTE_LANES])) begin
                         if (s_udp_payload_axis_tlast) begin
                             metadata_valid_next   = txmeta_valid_next;
-                            s_qp_info_valid_next = qp_info_valid_next;
+                            m_qp_info_valid_next = qp_info_valid_next;
                             read_qp_info_next = 1'b0;
                         end
                     end
@@ -339,8 +335,8 @@ module udp_RoCE_connection_manager_rx #(
 
 
                     if (s_udp_payload_axis_tlast) begin
-                        m_udp_hdr_valid_next = 1'b0;
-                        s_udp_hdr_ready_next = !m_udp_hdr_valid_next;
+                        //m_qp_info_valid_next = 1'b0;
+                        s_udp_hdr_ready_next = !m_qp_info_valid_next;
                         s_udp_payload_axis_tready_next = 1'b0;
                         ptr_next                       = 0;
                         state_next = STATE_IDLE;
@@ -359,7 +355,7 @@ module udp_RoCE_connection_manager_rx #(
             state_reg                     <= STATE_IDLE;
             s_udp_hdr_ready_reg           <= 1'b0;
             s_udp_payload_axis_tready_reg <= 1'b0;
-            m_udp_hdr_valid_reg           <= 1'b0;
+            m_qp_info_valid_reg           <= 1'b0;
             busy_reg                      <= 1'b0;
             metadata_valid_reg            <= 1'b0;
 
@@ -367,15 +363,13 @@ module udp_RoCE_connection_manager_rx #(
             state_reg                     <= state_next;
 
             metadata_valid_reg            <= metadata_valid_next;
-            s_qp_info_valid_reg           <= s_qp_info_valid_next;
+            m_qp_info_valid_reg           <= m_qp_info_valid_next;
 
             s_udp_hdr_ready_reg           <= s_udp_hdr_ready_next;
             s_udp_payload_axis_tready_reg <= s_udp_payload_axis_tready_next;
 
             ptr_reg                       <= ptr_next;
             read_qp_info_reg           <= read_qp_info_next;
-
-            m_udp_hdr_valid_reg           <= m_udp_hdr_valid_next;
 
             udp_port_reg                  <= udp_port_next;
 
@@ -422,9 +416,9 @@ module udp_RoCE_connection_manager_rx #(
 
     end
 
-    assign m_qp_info_req_type = qp_info_req_type_reg; 
-    assign m_qp_info_ack_type = qp_info_ack_type_reg; 
-    
+    assign m_qp_info_req_type = qp_info_req_type_reg;
+    assign m_qp_info_ack_type = qp_info_ack_type_reg;
+
     assign m_qp_info_loc_qpn        = qp_info_loc_qpn_reg;
     assign m_qp_info_loc_psn        = qp_info_loc_psn_reg;
     assign m_qp_info_loc_r_key      = qp_info_loc_r_key_reg;
@@ -438,7 +432,7 @@ module udp_RoCE_connection_manager_rx #(
     assign m_qp_info_rem_ip_addr    = qp_info_rem_ip_addr_reg;
 
     assign m_qp_info_listening_port = qp_info_listening_port_reg;
-    
+
     assign m_txmeta_loc_qpn        = txmeta_loc_qpn_reg;
     assign m_txmeta_dma_transfer   = txmeta_dma_lentgh_reg;
     assign m_txmeta_n_transfers    = txmeta_n_transfers_reg;
@@ -450,8 +444,8 @@ module udp_RoCE_connection_manager_rx #(
 
     assign m_metadata_valid = metadata_valid_reg;
 
-    assign m_qp_info_valid     = s_qp_info_valid_reg;
-    assign m_qp_info_ack_valid = qp_info_ack_valid_reg & s_qp_info_valid_reg;
+    assign m_qp_info_valid     = m_qp_info_valid_reg;
+    assign m_qp_info_ack_valid = qp_info_ack_valid_reg & m_qp_info_valid_reg;
 
 endmodule
 

@@ -246,7 +246,7 @@ end
 endgenerate
 
 sync_reset #(
-    .N(4)
+    .N(6)
 )
 tx_reset_sync_inst (
     .clk(phy_tx_clk),
@@ -255,7 +255,7 @@ tx_reset_sync_inst (
 );
 
 sync_reset #(
-    .N(4)
+    .N(6)
 )
 rx_reset_sync_inst (
     .clk(phy_rx_clk),

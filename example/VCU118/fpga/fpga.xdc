@@ -105,35 +105,35 @@ set_input_delay 0 [get_ports {sw[*]}]
 #set_output_delay 0 [get_ports {pmod1[*]}]
 
 # UART
-set_property -dict {LOC BB21 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports uart_txd]
-set_property -dict {LOC AW25 IOSTANDARD LVCMOS18} [get_ports uart_rxd]
-set_property -dict {LOC BB22 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports uart_rts]
-set_property -dict {LOC AY25 IOSTANDARD LVCMOS18} [get_ports uart_cts]
+#set_property -dict {LOC BB21 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports uart_txd]
+#set_property -dict {LOC AW25 IOSTANDARD LVCMOS18} [get_ports uart_rxd]
+#set_property -dict {LOC BB22 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports uart_rts]
+#set_property -dict {LOC AY25 IOSTANDARD LVCMOS18} [get_ports uart_cts]
 
-set_false_path -to [get_ports {uart_txd uart_rts}]
-set_output_delay 0 [get_ports {uart_txd uart_rts}]
-set_false_path -from [get_ports {uart_rxd uart_cts}]
-set_input_delay 0 [get_ports {uart_rxd uart_cts}]
+#set_false_path -to [get_ports {uart_txd uart_rts}]
+#set_output_delay 0 [get_ports {uart_txd uart_rts}]
+#set_false_path -from [get_ports {uart_rxd uart_cts}]
+#set_input_delay 0 [get_ports {uart_rxd uart_cts}]
 
 # Gigabit Ethernet SGMII PHY
-set_property -dict {LOC AU24 IOSTANDARD LVDS} [get_ports phy_sgmii_rx_p]
-set_property -dict {LOC AV24 IOSTANDARD LVDS} [get_ports phy_sgmii_rx_n]
-set_property -dict {LOC AU21 IOSTANDARD LVDS} [get_ports phy_sgmii_tx_p]
-set_property -dict {LOC AV21 IOSTANDARD LVDS} [get_ports phy_sgmii_tx_n]
-set_property -dict {LOC AT22 IOSTANDARD LVDS} [get_ports phy_sgmii_clk_p]
-set_property -dict {LOC AU22 IOSTANDARD LVDS} [get_ports phy_sgmii_clk_n]
-set_property -dict {LOC BA21 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_reset_n]
-set_property -dict {LOC AR24 IOSTANDARD LVCMOS18} [get_ports phy_int_n]
-set_property -dict {LOC AR23 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_mdio]
-set_property -dict {LOC AV23 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_mdc]
+#set_property -dict {LOC AU24 IOSTANDARD LVDS} [get_ports phy_sgmii_rx_p]
+#set_property -dict {LOC AV24 IOSTANDARD LVDS} [get_ports phy_sgmii_rx_n]
+#set_property -dict {LOC AU21 IOSTANDARD LVDS} [get_ports phy_sgmii_tx_p]
+#set_property -dict {LOC AV21 IOSTANDARD LVDS} [get_ports phy_sgmii_tx_n]
+#set_property -dict {LOC AT22 IOSTANDARD LVDS} [get_ports phy_sgmii_clk_p]
+#set_property -dict {LOC AU22 IOSTANDARD LVDS} [get_ports phy_sgmii_clk_n]
+#set_property -dict {LOC BA21 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_reset_n]
+#set_property -dict {LOC AR24 IOSTANDARD LVCMOS18} [get_ports phy_int_n]
+#set_property -dict {LOC AR23 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_mdio]
+#set_property -dict {LOC AV23 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports phy_mdc]
 
 # 625 MHz ref clock from SGMII PHY
 #create_clock -period 1.600 -name phy_sgmii_clk [get_ports phy_sgmii_clk_p]
 
-set_false_path -to [get_ports {phy_reset_n phy_mdio phy_mdc}]
-set_output_delay 0 [get_ports {phy_reset_n phy_mdio phy_mdc}]
-set_false_path -from [get_ports {phy_int_n phy_mdio}]
-set_input_delay 0 [get_ports {phy_int_n phy_mdio}]
+#set_false_path -to [get_ports {phy_reset_n phy_mdio phy_mdc}]
+#set_output_delay 0 [get_ports {phy_reset_n phy_mdio phy_mdc}]
+#set_false_path -from [get_ports {phy_int_n phy_mdio}]
+#set_input_delay 0 [get_ports {phy_int_n phy_mdio}]
 
 # QSFP28 Interfaces
 set_property -dict {LOC Y2  } [get_ports {qsfp1_rx_p[0]}] ;# MGTYRXP0_231 GTYE4_CHANNEL_X1Y48 / GTYE4_COMMON_X1Y12
@@ -188,8 +188,8 @@ set_property -dict {LOC M2  } [get_ports {qsfp2_rx_p[3]}] ;# MGTYRXP3_232 GTYE4_
 set_property -dict {LOC M1  } [get_ports {qsfp2_rx_n[3]}] ;# MGTYRXN3_232 GTYE4_CHANNEL_X1Y55 / GTYE4_COMMON_X1Y13
 set_property -dict {LOC H7  } [get_ports {qsfp2_tx_p[3]}] ;# MGTYTXP3_232 GTYE4_CHANNEL_X1Y55 / GTYE4_COMMON_X1Y13
 set_property -dict {LOC H6  } [get_ports {qsfp2_tx_n[3]}] ;# MGTYTXN3_232 GTYE4_CHANNEL_X1Y55 / GTYE4_COMMON_X1Y13
-#set_property -dict {LOC R9  } [get_ports qsfp2_mgt_refclk_0_p] ;# MGTREFCLK0P_232 from U104.13
-#set_property -dict {LOC R8  } [get_ports qsfp2_mgt_refclk_0_n] ;# MGTREFCLK0N_232 from U104.14
+set_property -dict {LOC R9  } [get_ports qsfp2_mgt_refclk_0_p] ;# MGTREFCLK0P_232 from U104.13
+set_property -dict {LOC R8  } [get_ports qsfp2_mgt_refclk_0_n] ;# MGTREFCLK0N_232 from U104.14
 #set_property -dict {LOC N9  } [get_ports qsfp2_mgt_refclk_1_p] ;# MGTREFCLK1P_232 from U57.35
 #set_property -dict {LOC N8  } [get_ports qsfp2_mgt_refclk_1_n] ;# MGTREFCLK1N_232 from U57.34
 #set_property -dict {LOC AP23 IOSTANDARD LVDS} [get_ports qsfp2_recclk_p] ;# to U57.12
@@ -209,13 +209,13 @@ set_false_path -from [get_ports {qsfp2_modprsl qsfp2_intl}]
 set_input_delay 0 [get_ports {qsfp2_modprsl qsfp2_intl}]
 
 # I2C interface
-set_property -dict {LOC AM24 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports i2c_scl]
-set_property -dict {LOC AL24 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports i2c_sda]
+#set_property -dict {LOC AM24 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports i2c_scl]
+#set_property -dict {LOC AL24 IOSTANDARD LVCMOS18 SLEW SLOW DRIVE 8} [get_ports i2c_sda]
 
-set_false_path -to [get_ports {i2c_sda i2c_scl}]
-set_output_delay 0 [get_ports {i2c_sda i2c_scl}]
-set_false_path -from [get_ports {i2c_sda i2c_scl}]
-set_input_delay 0 [get_ports {i2c_sda i2c_scl}]
+#set_false_path -to [get_ports {i2c_sda i2c_scl}]
+#set_output_delay 0 [get_ports {i2c_sda i2c_scl}]
+#set_false_path -from [get_ports {i2c_sda i2c_scl}]
+#set_input_delay 0 [get_ports {i2c_sda i2c_scl}]
 
 # PCIe Interface
 #set_property -dict {LOC AA4  } [get_ports {pcie_rx_p[0]}]  ;# MGTYRXP3_227 GTYE4_CHANNEL_X1Y35 / GTYE4_COMMON_X1Y8

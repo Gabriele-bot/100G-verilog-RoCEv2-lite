@@ -24,9 +24,7 @@ module generic_arb_mux #(
   input wire clk,
   input wire rst,
 
-  /*
-   * IP frame inputs
-   */
+  
   input  wire [           S_COUNT-1:0]           s_hdr_valid,
   output wire [           S_COUNT-1:0]           s_hdr_ready,
   input  wire [        S_COUNT*HEADER_WIDTH*8-1:0] s_hdr,
@@ -39,20 +37,18 @@ module generic_arb_mux #(
   input  wire [S_COUNT*DEST_WIDTH-1:0]           s_payload_axis_tdest,
   input  wire [S_COUNT*USER_WIDTH-1:0]           s_payload_axis_tuser,
 
-  /*
-   * IP frame output
-   */
-  output wire                                    m_hdr_valid,
-  input  wire                                    m_hdr_ready,
-  output wire [        S_COUNT*HEADER_WIDTH*8-1:0] m_hdr,
-  output wire [DATA_WIDTH-1:0] m_payload_axis_tdata,
-  output wire [KEEP_WIDTH-1:0] m_payload_axis_tkeep,
-  output wire                  m_payload_axis_tvalid,
-  input  wire                  m_payload_axis_tready,
-  output wire                  m_payload_axis_tlast,
-  output wire [  ID_WIDTH-1:0] m_payload_axis_tid,
-  output wire [DEST_WIDTH-1:0] m_payload_axis_tdest,
-  output wire [USER_WIDTH-1:0] m_payload_axis_tuser
+  
+  output wire                       m_hdr_valid,
+  input  wire                       m_hdr_ready,
+  output wire [HEADER_WIDTH*8-1:0]  m_hdr,
+  output wire [DATA_WIDTH-1:0]      m_payload_axis_tdata,
+  output wire [KEEP_WIDTH-1:0]      m_payload_axis_tkeep,
+  output wire                       m_payload_axis_tvalid,
+  input  wire                       m_payload_axis_tready,
+  output wire                       m_payload_axis_tlast,
+  output wire [  ID_WIDTH-1:0]      m_payload_axis_tid,
+  output wire [DEST_WIDTH-1:0]      m_payload_axis_tdest,
+  output wire [USER_WIDTH-1:0]      m_payload_axis_tuser
 );
 
   parameter CL_S_COUNT = $clog2(S_COUNT);

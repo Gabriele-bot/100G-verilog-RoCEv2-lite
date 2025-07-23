@@ -6,11 +6,29 @@ FPGA_ARCH = virtexuplus
 
 # Files for synthesis
 SYN_FILES = rtl/fpga.v
-SYN_FILES += rtl/fpga_core.v
+SYN_FILES += rtl/fpga_core_8x25.v
 SYN_FILES += rtl/eth_xcvr_phy_wrapper.v
 SYN_FILES += rtl/eth_xcvr_phy_quad_wrapper.v
 SYN_FILES += rtl/debounce_switch.v
 SYN_FILES += rtl/sync_signal.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_mac_10g_fifo.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_mac_10g.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/mac_ctrl_tx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/mac_ctrl_rx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/mac_pause_ctrl_tx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/mac_pause_ctrl_rx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/axis_xgmii_rx_64.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/axis_xgmii_tx_64.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx_if.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx_frame_sync.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx_ber_mon.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx_watchdog.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_tx.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_tx_if.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/xgmii_baser_dec_64.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/xgmii_baser_enc_64.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/lfsr.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/eth_demux.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/eth_arb_mux.v
@@ -61,9 +79,6 @@ SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_dma.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_register_wr.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_register_rd.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_register.v
-SYN_FILES += ip/cmac_gty_wrapper.v
-SYN_FILES += ip/cmac_gty_ch_wrapper.v
-SYN_FILES += ip/cmac_pad.v
 
 
 # RoCE Files
@@ -89,15 +104,15 @@ SYN_FILES +=  lib/RoCE/rtl/utils/simple_dpram.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_simple_work_queue.sv
 SYN_FILES +=  lib/RoCE/rtl/RoCE_minimal_stack.sv
 
-
 #CRC FILES
-
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_pkg.vhd
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/CRC32/CRC32_D512_matrix.vhd
 SYN_FILES += lib/RoCE/lib/FAST_CRC32/Experimental/CRC32_matrix_pipeline.vhd
 SYN_FILES += lib/RoCE/lib/Tbps_CRC/core_src/crc.svh
 SYN_FILES += lib/RoCE/lib/Tbps_CRC/core_src/crc_byteEn.sv
 
+# impl only constraint files
+IMPL_XDC_FILES  = ip/constraints/stack_8x25_pblocks.tcl
 
 # XDC files
 XDC_FILES = fpga.xdc
@@ -105,15 +120,8 @@ XDC_FILES += lib/RoCE/lib/eth/syn/vivado/eth_mac_fifo.tcl
 XDC_FILES += lib/RoCE/lib/eth/lib/axis/syn/vivado/axis_async_fifo.tcl
 XDC_FILES += lib/RoCE/lib/eth/lib/axis/syn/vivado/sync_reset.tcl
 
-# impl only constraint files
-IMPL_XDC_FILES  = ip/constraints/cmac_gty_wrapper.tcl
-IMPL_XDC_FILES += ip/constraints/cmac_gty_ch_wrapper.tcl
-IMPL_XDC_FILES += ip/constraints/cmac_placement.xdc
-
 # IP
-#IP_TCL_FILES = ip/gig_ethernet_pcs_pma_0.tcl
-IP_TCL_FILES = ip/cmac_usplus.tcl
-IP_TCL_FILES += ip/cmac_gty.tcl
+IP_TCL_FILES = ip/eth_xcvr_gt.tcl
 IP_TCL_FILES += ip/vio_ext_rst.tcl
 IP_TCL_FILES += ip/vio_roce_cfg.tcl
 IP_TCL_FILES += ip/vio_throughput.tcl
@@ -122,9 +130,9 @@ IP_TCL_FILES += ip/vio_retrans_debug.tcl
 IP_TCL_FILES += ip/vio_axis_monitor.tcl
 IP_TCL_FILES += ip/ila_axis.tcl
 
-
 # Configuration
-#CONFIG_TCL_FILES = ./config.tcl
+CONFIG_TCL_FILES = ./config.tcl
+
 
 include ../common/vivado.mk
 

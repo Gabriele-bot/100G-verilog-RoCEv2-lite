@@ -40,8 +40,8 @@ module fpga_core #
      * Clock: 390.625 MHz
      * Synchronous reset
      */
-    input  wire       clk,
-    input  wire       rst,
+    input  wire [7:0] clk,
+    input  wire [7:0] rst,
 
     /*
      * GPIO
@@ -291,11 +291,11 @@ wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0  };
 
 wire clear_arp_cache;
 
-wire [12:0] pmtu;
+wire [2:0] pmtu;
 wire [15:0] RoCE_udp_port;
   
   vio_roce_ip_cfg vio_roce_ip_cfg (
-    .clk(clk),
+    .clk(clk[0]),
     .probe_out0(pmtu),
     .probe_out1(RoCE_udp_port),
     .probe_out2(local_ip),
@@ -322,66 +322,13 @@ assign tx_ip_payload_axis_tvalid = 0;
 assign tx_ip_payload_axis_tlast = 0;
 assign tx_ip_payload_axis_tuser = 0;
 
-// Loop back UDP
-wire match_cond = rx_udp_dest_port == 1234;
-wire no_match = !match_cond;
-
-reg match_cond_reg = 0;
-reg no_match_reg = 0;
-
-always @(posedge clk) begin
-    if (rst) begin
-        match_cond_reg <= 0;
-        no_match_reg <= 0;
-    end else begin
-        if (rx_udp_payload_axis_tvalid) begin
-            if ((!match_cond_reg && !no_match_reg) ||
-                (rx_udp_payload_axis_tvalid && rx_udp_payload_axis_tready && rx_udp_payload_axis_tlast)) begin
-                match_cond_reg <= match_cond;
-                no_match_reg <= no_match;
-            end
-        end else begin
-            match_cond_reg <= 0;
-            no_match_reg <= 0;
-        end
-    end
-end
-
-/*
-assign tx_udp_hdr_valid = rx_udp_hdr_valid && match_cond;
-assign rx_udp_hdr_ready = (tx_eth_hdr_ready && match_cond) || no_match;
-assign tx_udp_ip_dscp = 0;
-assign tx_udp_ip_ecn = 0;
-assign tx_udp_ip_ttl = 64;
-assign tx_udp_ip_source_ip = local_ip;
-assign tx_udp_ip_dest_ip = rx_udp_ip_source_ip;
-assign tx_udp_source_port = rx_udp_dest_port;
-assign tx_udp_dest_port = rx_udp_source_port;
-assign tx_udp_length = rx_udp_length;
-assign tx_udp_checksum = 0;
-
-assign tx_udp_payload_axis_tdata = tx_fifo_udp_payload_axis_tdata;
-assign tx_udp_payload_axis_tkeep = tx_fifo_udp_payload_axis_tkeep;
-assign tx_udp_payload_axis_tvalid = tx_fifo_udp_payload_axis_tvalid;
-assign tx_fifo_udp_payload_axis_tready = tx_udp_payload_axis_tready;
-assign tx_udp_payload_axis_tlast = tx_fifo_udp_payload_axis_tlast;
-assign tx_udp_payload_axis_tuser = tx_fifo_udp_payload_axis_tuser;
-
-assign rx_fifo_udp_payload_axis_tdata = rx_udp_payload_axis_tdata;
-assign rx_fifo_udp_payload_axis_tkeep = rx_udp_payload_axis_tkeep;
-assign rx_fifo_udp_payload_axis_tvalid = rx_udp_payload_axis_tvalid && match_cond_reg;
-assign rx_udp_payload_axis_tready = (rx_fifo_udp_payload_axis_tready && match_cond_reg) || no_match_reg;
-assign rx_fifo_udp_payload_axis_tlast = rx_udp_payload_axis_tlast;
-assign rx_fifo_udp_payload_axis_tuser = rx_udp_payload_axis_tuser;
-
-*/
 
 // Place first payload byte onto LEDs
 reg valid_last = 0;
 reg [7:0] led_reg = 0;
 
-always @(posedge clk) begin
-    if (rst) begin
+always @(posedge clk[0]) begin
+    if (rst[0]) begin
         led_reg <= 0;
     end else begin
         valid_last <= tx_udp_payload_axis_tvalid;
@@ -425,8 +372,8 @@ eth_mac_10g_fifo_inst (
     .rx_rst(qsfp1_rx_rst_1),
     .tx_clk(qsfp1_tx_clk_1),
     .tx_rst(qsfp1_tx_rst_1),
-    .logic_clk(clk),
-    .logic_rst(rst),
+    .logic_clk(clk[0]),
+    .logic_rst(rst[0]),
 
     .tx_axis_tdata(mac_tx_axis_tdata),
     .tx_axis_tkeep(mac_tx_axis_tkeep),
@@ -496,8 +443,8 @@ eth_axis_rx #(
     .DATA_WIDTH(64)
 )
 eth_axis_rx_inst (
-    .clk(clk),
-    .rst(rst),
+    .clk(clk[0]),
+    .rst(rst[0]),
     // AXI input
     .s_axis_tdata(rx_axis_tdata),
     .s_axis_tkeep(rx_axis_tkeep),
@@ -522,24 +469,12 @@ eth_axis_rx_inst (
     .error_header_early_termination()
 );
 
-/*
-ila_axis_64 ila_eth_tx(
-    .clk(clk),
-    .probe0(tx_axis_tdata),
-    .probe1(tx_axis_tkeep),
-    .probe2(tx_axis_tvalid),
-    .probe3(tx_axis_tready),
-    .probe4(tx_axis_tlast),
-    .probe5(tx_axis_tuser)
-);
-*/
-
 eth_axis_tx #(
     .DATA_WIDTH(64)
 )
 eth_axis_tx_inst (
-    .clk(clk),
-    .rst(rst),
+    .clk(clk[0]),
+    .rst(rst[0]),
     // Ethernet frame input
     .s_eth_hdr_valid(tx_eth_hdr_valid),
     .s_eth_hdr_ready(tx_eth_hdr_ready),
@@ -563,11 +498,13 @@ eth_axis_tx_inst (
     .busy()
 );
 
-udp_complete_64 #(
-      .UDP_CHECKSUM_GEN_ENABLE(0)
+udp_complete_test #(
+      .DATA_WIDTH(64),
+      .UDP_CHECKSUM_GEN_ENABLE(0),
+      .ROCE_ICRC_INSERTER(1)
   ) udp_complete_inst (
-    .clk(clk),
-    .rst(rst),
+    .clk(clk[0]),
+    .rst(rst[0]),
     // Ethernet frame input
     .s_eth_hdr_valid(rx_eth_hdr_valid),
     .s_eth_hdr_ready(rx_eth_hdr_ready),
@@ -730,13 +667,14 @@ assign rx_fifo_udp_payload_axis_tready = 1'b1;
   */
 
  // ROCE TX inst
-  RoCE_minimal_stack_64 #(
+  RoCE_minimal_stack #(
+      .DATA_WIDTH(64),
       .DEBUG(1),
       .RETRANSMISSION(1),
-      .RETRANSMISSION_ADDR_BUFFER_WIDTH(19) // 2**19 * 8 bits / 25Gbps = 167 us of buffering (best case scenario, every frame is full)
+      .RETRANSMISSION_ADDR_BUFFER_WIDTH(18) // 2**18 * 8 bits / 25Gbps = 83 us of buffering (best case scenario, every frame is full)
   ) RoCE_minimal_stack_64_instance (
-      .clk(clk),
-      .rst(rst),
+      .clk(clk[0]),
+      .rst(rst[0]),
       .s_udp_hdr_valid(rx_udp_hdr_valid),
       .s_udp_hdr_ready(rx_udp_hdr_ready),
       .s_eth_dest_mac(rx_udp_eth_dest_mac),
@@ -799,7 +737,8 @@ assign rx_fifo_udp_payload_axis_tready = 1'b1;
       .RoCE_udp_port(RoCE_udp_port),
       .loc_ip_addr(local_ip),
       .timeout_period(64'd20000), //2.6 ns * 20000 = 52 ns
-      .retry_count(4'd14)
+      .retry_count(3'd7),
+      .rnr_retry_count(3'd7)
   );
 
 endmodule
