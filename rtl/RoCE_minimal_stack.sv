@@ -94,7 +94,7 @@ module RoCE_minimal_stack #(
     output wire [63:0] s_qp_spy_rem_addr,
     output wire [31:0] s_qp_spy_rem_ip_addr,
     output wire [7:0]  s_qp_spy_syndrome,
- 
+
 
     /*
      * Status signals
@@ -613,8 +613,6 @@ module RoCE_minimal_stack #(
     );
 
 
-
-
     // redirect udp rx traffic either to CM or RoCE RX
 
     wire s_select_cm   = s_udp_dest_port == CM_LISTEN_UDP_PORT ? 1'b1 : 1'b0;
@@ -691,99 +689,52 @@ module RoCE_minimal_stack #(
     (s_select_roce_reg && rx_udp_RoCE_payload_axis_tready) ||
     (s_select_none_reg);
 
-
-
-    wire [DATA_WIDTH -1  :0]    s_payload_fifo_temp_axis_tdata;
-    wire [DATA_WIDTH/8 -1:0]    s_payload_fifo_temp_axis_tkeep;
-    wire                        s_payload_fifo_temp_axis_tvalid;
-    wire                        s_payload_fifo_temp_axis_tready;
-    wire                        s_payload_fifo_temp_axis_tlast;
-    wire                        s_payload_fifo_temp_axis_tuser;
-
-    axis_fifo #(
-        .DEPTH(4096),
-        .DATA_WIDTH(DATA_WIDTH),
-        .KEEP_ENABLE(1),
-        .KEEP_WIDTH(DATA_WIDTH/8),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .FRAME_FIFO(0)
-    ) input_axis_fifo (
-        .clk(clk),
-        .rst(rst),
-
-        // AXI input
-        .s_axis_tdata(s_payload_axis_tdata),
-        .s_axis_tkeep(s_payload_axis_tkeep),
-        .s_axis_tvalid(s_payload_axis_tvalid),
-        .s_axis_tready(s_payload_axis_tready),
-        .s_axis_tlast(s_payload_axis_tlast),
-        .s_axis_tid(0),
-        .s_axis_tdest(0),
-        .s_axis_tuser(s_payload_axis_tuser),
-
-        // AXI output
-        .m_axis_tdata (s_payload_fifo_axis_tdata ),
-        .m_axis_tkeep (s_payload_fifo_axis_tkeep ),
-        .m_axis_tvalid(s_payload_fifo_axis_tvalid),
-        .m_axis_tready(s_payload_fifo_axis_tready),
-        .m_axis_tlast (s_payload_fifo_axis_tlast ),
-        .m_axis_tuser (s_payload_fifo_axis_tuser ),
-
-        // Status
-        .status_overflow  (),
-        .status_bad_frame (),
-        .status_good_frame()
-    );
-
     axis_packet_framer #(
     .DATA_WIDTH(DATA_WIDTH)
     ) axis_packet_framer_instance (
         .clk(clk),
         .rst(rst),
 
-        .s_dma_meta_valid          (s_dma_meta_valid),
-        .s_dma_meta_ready          (s_dma_meta_ready),
-        .s_dma_length              (s_dma_length),
-        .s_rem_qpn                 (s_rem_qpn),
-        .s_loc_qpn                 (s_loc_qpn),
-        .s_rem_psn                 (s_rem_psn),
-        .s_r_key                   (s_r_key),
-        .s_rem_ip_addr             (s_rem_ip_addr),
-        .s_rem_addr                (s_rem_addr),
-        .s_is_immediate            (s_is_immediate),
-        .s_immediate_data          (s_immediate_data),
-        .s_trasfer_type            (s_trasfer_type),
+        .s_dma_meta_valid(s_dma_meta_valid),
+        .s_dma_meta_ready(s_dma_meta_ready),
+        .s_dma_length    (s_dma_length),
+        .s_rem_qpn       (s_rem_qpn),
+        .s_loc_qpn       (s_loc_qpn),
+        .s_rem_psn       (s_rem_psn),
+        .s_r_key         (s_r_key),
+        .s_rem_ip_addr   (s_rem_ip_addr),
+        .s_rem_addr      (s_rem_addr),
+        .s_is_immediate  (s_is_immediate),
+        .s_immediate_data(s_immediate_data),
+        .s_trasfer_type  (s_trasfer_type),
 
-        .s_axis_tdata (s_payload_fifo_axis_tdata ),
-        .s_axis_tkeep (s_payload_fifo_axis_tkeep ),
-        .s_axis_tvalid(s_payload_fifo_axis_tvalid),
-        .s_axis_tready(s_payload_fifo_axis_tready),
-        .s_axis_tlast (s_payload_fifo_axis_tlast ),
-        .s_axis_tuser (s_payload_fifo_axis_tuser ),
+        .s_axis_tdata    (s_payload_axis_tdata ),
+        .s_axis_tkeep    (s_payload_axis_tkeep ),
+        .s_axis_tvalid   (s_payload_axis_tvalid),
+        .s_axis_tready   (s_payload_axis_tready),
+        .s_axis_tlast    (s_payload_axis_tlast ),
+        .s_axis_tuser    (s_payload_axis_tuser ),
 
-        .m_dma_meta_valid          (m_framer_dma_meta_valid),
-        .m_dma_meta_ready          (m_framer_dma_meta_ready),
-        .m_dma_length              (m_framer_dma_length),
-        .m_rem_qpn                 (m_framer_rem_qpn),
-        .m_loc_qpn                 (m_framer_loc_qpn),
-        .m_rem_psn                 (m_framer_rem_psn),
-        .m_r_key                   (m_framer_r_key),
-        .m_rem_ip_addr             (m_framer_rem_ip_addr),
-        .m_rem_addr                (m_framer_rem_addr),
-        .m_is_immediate            (m_framer_is_immediate),
-        .m_immediate_data          (m_framer_immediate_data),
-        .m_trasfer_type            (m_framer_trasfer_type),
+        .m_dma_meta_valid(m_framer_dma_meta_valid),
+        .m_dma_meta_ready(m_framer_dma_meta_ready),
+        .m_dma_length    (m_framer_dma_length),
+        .m_rem_qpn       (m_framer_rem_qpn),
+        .m_loc_qpn       (m_framer_loc_qpn),
+        .m_rem_psn       (m_framer_rem_psn),
+        .m_r_key         (m_framer_r_key),
+        .m_rem_ip_addr   (m_framer_rem_ip_addr),
+        .m_rem_addr      (m_framer_rem_addr),
+        .m_is_immediate  (m_framer_is_immediate),
+        .m_immediate_data(m_framer_immediate_data),
+        .m_trasfer_type  (m_framer_trasfer_type),
 
-        .m_axis_tdata (m_payload_fifo_axis_tdata ),
-        .m_axis_tkeep (m_payload_fifo_axis_tkeep ),
-        .m_axis_tvalid(m_payload_fifo_axis_tvalid),
-        .m_axis_tready(m_payload_fifo_axis_tready),
-        .m_axis_tlast (m_payload_fifo_axis_tlast ),
-        .m_axis_tuser (m_payload_fifo_axis_tuser ),
-        .pmtu(pmtu)
+        .m_axis_tdata    (m_payload_fifo_axis_tdata ),
+        .m_axis_tkeep    (m_payload_fifo_axis_tkeep ),
+        .m_axis_tvalid   (m_payload_fifo_axis_tvalid),
+        .m_axis_tready   (m_payload_fifo_axis_tready),
+        .m_axis_tlast    (m_payload_fifo_axis_tlast ),
+        .m_axis_tuser    (m_payload_fifo_axis_tuser ),
+        .pmtu            (pmtu)
     );
 
     RoCE_tx_header_producer #(
