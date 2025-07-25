@@ -79,6 +79,23 @@ module RoCE_minimal_stack #(
     input  wire                         m_udp_payload_axis_tready,
     output wire                         m_udp_payload_axis_tlast,
     output wire                         m_udp_payload_axis_tuser,
+
+    // QP state spy
+    input wire         m_qp_context_spy,
+    input wire [23:0]  m_qp_local_qpn_spy,
+    output wire        s_qp_spy_context_valid,
+    output wire [2 :0] s_qp_spy_state,
+    output wire [23:0] s_qp_spy_rem_qpn,
+    output wire [23:0] s_qp_spy_loc_qpn,
+    output wire [23:0] s_qp_spy_rem_psn,
+    output wire [23:0] s_qp_spy_rem_acked_psn,
+    output wire [23:0] s_qp_spy_loc_psn,
+    output wire [31:0] s_qp_spy_r_key,
+    output wire [63:0] s_qp_spy_rem_addr,
+    output wire [31:0] s_qp_spy_rem_ip_addr,
+    output wire [7:0]  s_qp_spy_syndrome,
+ 
+
     /*
      * Status signals
      */
@@ -414,22 +431,6 @@ module RoCE_minimal_stack #(
     wire [31:0] s_qp_req_r_key;
     wire [63:0] s_qp_req_rem_addr;
     wire [31:0] s_qp_req_rem_ip_addr;
-
-    // QP state spy
-    wire        m_qp_context_spy;
-    wire [23:0] m_qp_local_qpn_spy;
-
-    wire        s_qp_spy_context_valid;
-    wire [2 :0] s_qp_spy_state;
-    wire [23:0] s_qp_spy_rem_qpn;
-    wire [23:0] s_qp_spy_loc_qpn;
-    wire [23:0] s_qp_spy_rem_psn;
-    wire [23:0] s_qp_spy_rem_acked_psn;
-    wire [23:0] s_qp_spy_loc_psn;
-    wire [31:0] s_qp_spy_r_key;
-    wire [63:0] s_qp_spy_rem_addr;
-    wire [31:0] s_qp_spy_rem_ip_addr;
-    wire [7:0]  s_qp_spy_syndrome;
 
     wire stop_transfer;
     reg  stop_transfer_reg;
@@ -1952,25 +1953,6 @@ module RoCE_minimal_stack #(
 
     generate
         if (DEBUG) begin
-
-            vio_qp_state_spy VIO_roce_qp_state_spy (
-                .clk(clk),
-                .probe_in0 (s_qp_spy_context_valid),
-                .probe_in1 (s_qp_spy_state),
-                .probe_in2 (s_qp_spy_r_key),
-                .probe_in3 (s_qp_spy_rem_qpn),
-                .probe_in4 (s_qp_spy_loc_qpn),
-                .probe_in5 (s_qp_spy_rem_psn),
-                .probe_in6 (s_qp_spy_rem_acked_psn),
-                .probe_in7 (s_qp_spy_loc_psn),
-                .probe_in8 (s_qp_spy_rem_ip_addr),
-                .probe_in9 (s_qp_spy_rem_addr),
-                .probe_in10(s_qp_spy_syndrome),
-                .probe_out0(m_qp_context_spy),
-                .probe_out1(m_qp_local_qpn_spy)
-            );
-
-
 
             localparam MONITOR_WINDOW_SIZE_BITS = 27;
 

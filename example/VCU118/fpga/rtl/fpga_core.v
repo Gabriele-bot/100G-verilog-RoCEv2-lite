@@ -293,6 +293,39 @@ wire clear_arp_cache;
 
 wire [2:0] pmtu;
 wire [15:0] RoCE_udp_port;
+
+// QP state spy
+wire        m_qp_context_spy;
+wire [23:0] m_qp_local_qpn_spy;
+
+wire        s_qp_spy_context_valid;
+wire [2 :0] s_qp_spy_state;
+wire [23:0] s_qp_spy_rem_qpn;
+wire [23:0] s_qp_spy_loc_qpn;
+wire [23:0] s_qp_spy_rem_psn;
+wire [23:0] s_qp_spy_rem_acked_psn;
+wire [23:0] s_qp_spy_loc_psn;
+wire [31:0] s_qp_spy_r_key;
+wire [63:0] s_qp_spy_rem_addr;
+wire [31:0] s_qp_spy_rem_ip_addr;
+wire [7:0]  s_qp_spy_syndrome;
+
+  vio_qp_state_spy VIO_roce_qp_state_spy (
+    .clk(clk[0]),
+    .probe_in0 (s_qp_spy_context_valid),
+    .probe_in1 (s_qp_spy_state),
+    .probe_in2 (s_qp_spy_r_key),
+    .probe_in3 (s_qp_spy_rem_qpn),
+    .probe_in4 (s_qp_spy_loc_qpn),
+    .probe_in5 (s_qp_spy_rem_psn),
+    .probe_in6 (s_qp_spy_rem_acked_psn),
+    .probe_in7 (s_qp_spy_loc_psn),
+    .probe_in8 (s_qp_spy_rem_ip_addr),
+    .probe_in9 (s_qp_spy_rem_addr),
+    .probe_in10(s_qp_spy_syndrome),
+    .probe_out0(m_qp_context_spy),
+    .probe_out1(m_qp_local_qpn_spy)
+  );
   
   vio_roce_ip_cfg vio_roce_ip_cfg (
     .clk(clk[0]),
@@ -731,11 +764,29 @@ assign rx_fifo_udp_payload_axis_tready = 1'b1;
       .m_udp_payload_axis_tready(tx_udp_payload_axis_tready),
       .m_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
       .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
+      
+      // QP spy output
+      .m_qp_context_spy         (m_qp_context_spy),
+      .m_qp_local_qpn_spy       (m_qp_local_qpn_spy),
+      .s_qp_spy_context_valid   (s_qp_spy_context_valid),
+      .s_qp_spy_state           (s_qp_spy_state),
+      .s_qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
+      .s_qp_spy_loc_qpn         (s_qp_spy_loc_qpn),
+      .s_qp_spy_rem_psn         (s_qp_spy_rem_psn),
+      .s_qp_spy_rem_acked_psn   (s_qp_spy_rem_acked_psn),
+      .s_qp_spy_loc_psn         (s_qp_spy_loc_psn),
+      .s_qp_spy_r_key           (s_qp_spy_r_key),
+      .s_qp_spy_rem_addr        (s_qp_spy_rem_addr),
+      .s_qp_spy_rem_ip_addr     (s_qp_spy_rem_ip_addr),
+      .s_qp_spy_syndrome        (s_qp_spy_syndrome),
+
+
+
       .busy(),
       .error_payload_early_termination(),
-      .pmtu(pmtu),
-      .RoCE_udp_port(RoCE_udp_port),
-      .loc_ip_addr(local_ip),
+      .pmtu           (pmtu),
+      .RoCE_udp_port  (RoCE_udp_port),
+      .loc_ip_addr    (local_ip),
       .timeout_period(64'd20000), //2.6 ns * 20000 = 52 ns
       .retry_count(3'd7),
       .rnr_retry_count(3'd7)

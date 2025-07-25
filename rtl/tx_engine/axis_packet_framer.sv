@@ -18,7 +18,7 @@ module axis_packet_framer #(
      */
     input  wire       s_dma_meta_valid,
     output wire       s_dma_meta_ready,
-    input wire [31:0] s_dma_length, // used on for WRITE operations
+    input wire [31:0] s_dma_length, // used for WRITE operations
     input wire [23:0] s_rem_qpn,
     input wire [23:0] s_loc_qpn,
     input wire [23:0] s_rem_psn,
@@ -42,7 +42,7 @@ module axis_packet_framer #(
      */
     output wire        m_dma_meta_valid,
     input  wire        m_dma_meta_ready,
-    output wire [31:0] m_dma_length, // used on for WRITE operations
+    output wire [31:0] m_dma_length, // used for WRITE operations
     output wire [23:0] m_rem_qpn,
     output wire [23:0] m_loc_qpn,
     output wire [23:0] m_rem_psn,
@@ -59,7 +59,7 @@ module axis_packet_framer #(
     output  wire                       m_axis_tvalid,
     input   wire                       m_axis_tready,
     output  wire                       m_axis_tlast,
-    output  wire  [14              :0] m_axis_tuser, // bad frame, current packet type, next packet type, length (13bits)
+    output  wire  [14              :0] m_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
 
     // config
     input wire [2:0] pmtu

@@ -32,7 +32,7 @@ module RoCE_tx_header_producer #(
     input  wire                      s_axis_tvalid,
     output wire                      s_axis_tready,
     input  wire                      s_axis_tlast,
-    input  wire [14              :0] s_axis_tuser, // bad frame, packet type, length (13bits)
+    input  wire [14              :0] s_axis_tuser,// length (13bits), last packet in tranfer, bad frame 
 
 
     /*
