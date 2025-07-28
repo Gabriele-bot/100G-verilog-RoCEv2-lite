@@ -19,10 +19,11 @@ module RoCE_tx_header_producer #(
     input wire [23:0] s_rem_psn,
     input wire [31:0] s_r_key,
     input wire [31:0] s_rem_ip_addr,
+    input wire [15:0] s_src_udp_port,
     input wire [63:0] s_rem_addr,
     input wire        s_is_immediate,
     input wire [31:0] s_immediate_data,
-    input wire        s_trasfer_type, // 0 SEND 1 RDMA_WRITE 
+    input wire        s_transfer_type, // 0 SEND 1 RDMA_WRITE 
 
     /*
      * AXIS input
@@ -143,12 +144,12 @@ module RoCE_tx_header_producer #(
     reg m_roce_immdh_valid_reg = 1'b0, m_roce_immdh_valid_next;
 
 
-    reg [7:0] roce_bth_op_code_next, roce_bth_op_code_reg;
+    reg [7:0]  roce_bth_op_code_next, roce_bth_op_code_reg;
     reg [15:0] roce_bth_p_key_next, roce_bth_p_key_reg;
     reg [23:0] roce_bth_psn_next, roce_bth_psn_reg;
     reg [23:0] roce_bth_dest_qp_next, roce_bth_dest_qp_reg;
     reg [23:0] roce_bth_src_qp_next, roce_bth_src_qp_reg;
-    reg roce_bth_ack_req_next, roce_bth_ack_req_reg;
+    reg        roce_bth_ack_req_next, roce_bth_ack_req_reg;
 
     reg [63:0] roce_reth_v_addr_next, roce_reth_v_addr_reg;
     reg [31:0] roce_reth_r_key_next, roce_reth_r_key_reg;
@@ -159,15 +160,15 @@ module RoCE_tx_header_producer #(
     reg [47:0] eth_dest_mac_next, eth_dest_mac_reg;
     reg [47:0] eth_src_mac_next, eth_src_mac_reg;
     reg [15:0] eth_type_next, eth_type_reg;
-    reg [3:0] ip_version_next, ip_version_reg;
-    reg [3:0] ip_ihl_next, ip_ihl_reg;
-    reg [5:0] ip_dscp_next, ip_dscp_reg;
-    reg [1:0] ip_ecn_next, ip_ecn_reg;
+    reg [3:0]  ip_version_next, ip_version_reg;
+    reg [3:0]  ip_ihl_next, ip_ihl_reg;
+    reg [5:0]  ip_dscp_next, ip_dscp_reg;
+    reg [1:0]  ip_ecn_next, ip_ecn_reg;
     reg [15:0] ip_identification_next, ip_identification_reg;
-    reg [2:0] ip_flags_next, ip_flags_reg;
+    reg [2:0]  ip_flags_next, ip_flags_reg;
     reg [12:0] ip_fragment_offset_next, ip_fragment_offset_reg;
-    reg [7:0] ip_ttl_next, ip_ttl_reg;
-    reg [7:0] ip_protocol_next, ip_protocol_reg;
+    reg [7:0]  ip_ttl_next, ip_ttl_reg;
+    reg [7:0]  ip_protocol_next, ip_protocol_reg;
     reg [15:0] ip_header_checksum_next, ip_header_checksum_reg;
     reg [31:0] ip_source_ip_next, ip_source_ip_reg;
     reg [31:0] ip_dest_ip_next, ip_dest_ip_reg;
@@ -179,27 +180,17 @@ module RoCE_tx_header_producer #(
     reg [12:0] packet_length_next, packet_length_reg;
 
 
-    reg [170:0] qp_info;
-    //assign qp_info[2:0]     = 3'b010;  //qp_state
-    //assign qp_info[26:3]    = 24'h000016;  //loc_qpn
-    //assign qp_info[50:27]   = 24'h543210;  //rem_psn
-    //assign qp_info[74:51]   = 24'h012345;  //loc_psn
-    //assign qp_info[106:52]  = 32'h11223344;  //r_key
-    //assign qp_info[170:107] = 64'h000000000000;  //vaddr
-
-    reg [154:0] qp_conn;
-    //assign qp_conn[23:0]  = 24'h000017;  //loc_qpn
-    //assign qp_conn[47:24] = 24'h000016;  //rem_qpn
-    //assign qp_conn[79:48] = 32'h0BD40116;  //rem_ip_addr
-    //assign qp_conn[95:80] = ROCE_UDP_PORT;  //rem_udp_port
-
-    reg [ 95:0] tx_metadata;
-    //assign tx_metadata[31:0]  = 32'd3200;  //dma_length
-    //assign tx_metadata[95:32] = 64'h00001122334455;  //rem_addr
-
-    reg is_immediate_reg;
-    reg [31:0] immediate_data_reg;
-    reg trasfer_type_reg;
+    reg [63:0] s_rem_addr_reg;
+    reg [31:0] s_r_key_reg   ;
+    reg [23:0] s_rem_psn_reg ;
+    reg [23:0] s_rem_qpn_reg ;
+    reg [23:0] s_loc_qpn_reg ;
+    reg [31:0] s_rem_ip_addr_reg;
+    reg [15:0] s_src_udp_port_reg;
+    reg [31:0] s_dma_length_reg;
+    reg [31:0] s_immediate_data_reg;
+    reg        s_is_immediate_reg;
+    reg        s_transfer_type_reg;
 
     //reg [31:0] remaining_length_next, remaining_length_reg;
     reg [13:0] packet_inst_length_next, packet_inst_length_reg; // MAX 16384
@@ -343,18 +334,18 @@ module RoCE_tx_header_producer #(
                         state_next            = STATE_ONLY;
 
                         roce_bth_valid_next   = 1'b1;
-                        roce_reth_valid_next  = trasfer_type_reg;
-                        roce_immdh_valid_next = is_immediate_reg;
+                        roce_reth_valid_next  = s_transfer_type_reg;
+                        roce_immdh_valid_next = s_is_immediate_reg;
 
                         ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = qp_conn[79:48];
+                        ip_dest_ip_next       = s_rem_addr_reg;
 
-                        udp_source_port_next  = LOC_UDP_PORT;
+                        udp_source_port_next  = s_src_udp_port_reg;
                         udp_dest_port_next    = RoCE_udp_port;
 
 
-                        if (is_immediate_reg) begin
-                            if (trasfer_type_reg) begin // RDMA_WRITE, need to add RETH
+                        if (s_is_immediate_reg) begin
+                            if (s_transfer_type_reg) begin // RDMA_WRITE, need to add RETH
                                 udp_length_next = s_axis_tuser[14:2] + 12 + 16 + 4 + 8;
                                 roce_bth_op_code_next = RC_RDMA_WRITE_ONLY_IMD;
                             end else begin
@@ -363,7 +354,7 @@ module RoCE_tx_header_producer #(
                             end
                             // dma length (less than PMTU) + BTH + RETH + + IMMDH + UDP HEADER 
                         end else begin
-                            if (trasfer_type_reg) begin // RDMA_WRITE, need to add RETH
+                            if (s_transfer_type_reg) begin // RDMA_WRITE, need to add RETH
                                 udp_length_next = s_axis_tuser[14:2] + 12 + 16 + 8;
                                 roce_bth_op_code_next = RC_RDMA_WRITE_ONLY;
                             end else begin
@@ -374,56 +365,49 @@ module RoCE_tx_header_producer #(
                         end
 
                         roce_bth_p_key_next   = 16'hFFFF;
-                        roce_bth_psn_next     = qp_info[74:51];
-                        roce_bth_dest_qp_next = qp_conn[47:24];
+                        roce_bth_psn_next     = s_rem_psn_reg;
+                        roce_bth_dest_qp_next = s_rem_qpn_reg;
+                        roce_bth_src_qp_next  = s_loc_qpn_reg;
                         roce_bth_ack_req_next = 1'b1;
-                        roce_reth_v_addr_next = tx_metadata[95:32];
-                        roce_reth_r_key_next  = qp_info[106:75];
-                        roce_reth_length_next = tx_metadata[31:0];
-                        roce_immdh_data_next  = immediate_data_reg;
+                        roce_reth_v_addr_next = s_rem_addr_reg;
+                        roce_reth_r_key_next  = s_r_key_reg;
+                        roce_reth_length_next = s_dma_length_reg;
+                        roce_immdh_data_next  = s_immediate_data_reg;
 
-                        psn_next              = qp_info[74:51];
+                        psn_next              = s_rem_psn_reg;
 
                     end else begin // frame length equal to pmtu and not last packet--> FIRST
                         state_next            = STATE_FIRST;
 
                         roce_bth_valid_next   = 1'b1;
-                        roce_reth_valid_next  = trasfer_type_reg;
-                        roce_immdh_valid_next = is_immediate_reg;
-
-                        ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = qp_conn[79:48];
-
-                        udp_source_port_next  = LOC_UDP_PORT;
-                        udp_dest_port_next    = RoCE_udp_port;
-
-                        roce_bth_valid_next   = 1'b1;
-                        roce_reth_valid_next  = trasfer_type_reg;
+                        roce_reth_valid_next  = s_transfer_type_reg;
                         roce_immdh_valid_next = 1'b0;
 
                         ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = qp_conn[79:48];
+                        ip_dest_ip_next       = s_rem_ip_addr_reg;
 
-                        udp_source_port_next  = LOC_UDP_PORT;
+                        udp_source_port_next  = s_src_udp_port_reg;
                         udp_dest_port_next    = RoCE_udp_port;
-                        if (trasfer_type_reg) begin
+
+                        if (s_transfer_type_reg) begin
                             udp_length_next       = pmtu_val + 12 + 16 + 8;
                         end else begin
                             udp_length_next       = pmtu_val + 12 + 8; // for SEND  
                         end
                         // PMTU + BTH + RETH + UDP HEADER
 
-                        roce_bth_op_code_next = trasfer_type_reg ? RC_RDMA_WRITE_FIRST : RC_SEND_FIRST;
+                        roce_bth_op_code_next = s_transfer_type_reg ? RC_RDMA_WRITE_FIRST : RC_SEND_FIRST;
                         roce_bth_p_key_next   = 16'hFFFF;
-                        roce_bth_psn_next     = qp_info[74:51];
-                        roce_bth_dest_qp_next = qp_conn[47:24];
+                        roce_bth_psn_next     = s_rem_psn_reg;
+                        roce_bth_dest_qp_next = s_rem_qpn_reg;
+                        roce_bth_src_qp_next  = s_loc_qpn_reg;
                         roce_bth_ack_req_next = 1'b1;
-                        roce_reth_v_addr_next = tx_metadata[95:32];
-                        roce_reth_r_key_next  = qp_info[106:75];
-                        roce_reth_length_next = tx_metadata[31:0];
-                        roce_immdh_data_next  = immediate_data_reg;
+                        roce_reth_v_addr_next = s_rem_addr_reg;
+                        roce_reth_r_key_next  = s_r_key_reg;
+                        roce_reth_length_next = s_dma_length_reg;
+                        roce_immdh_data_next  = s_immediate_data_reg;
 
-                        psn_next              = qp_info[74:51];
+                        psn_next              = s_rem_psn_reg;
                     end
                 end
 
@@ -474,30 +458,30 @@ module RoCE_tx_header_producer #(
                 if (s_axis_tready && s_axis_tvalid) begin
                     roce_bth_valid_next = 1'b1;
                     roce_reth_valid_next = 1'b0;
-                    roce_immdh_valid_next = is_immediate_reg && s_axis_tuser[1]; // put immediate val only if LAST packet
+                    roce_immdh_valid_next = s_is_immediate_reg && s_axis_tuser[1]; // put immediate val only if LAST packet
 
                     ip_source_ip_next     = loc_ip_addr;
-                    ip_dest_ip_next       = qp_conn[79:48];
+                    ip_dest_ip_next       = s_rem_ip_addr_reg;
 
-                    udp_source_port_next  = LOC_UDP_PORT;
+                    udp_source_port_next  = s_src_udp_port_reg;
                     udp_dest_port_next    = RoCE_udp_port;
 
-                    if (is_immediate_reg && s_axis_tuser[1]) begin
+                    if (s_is_immediate_reg && s_axis_tuser[1]) begin
                         udp_length_next = s_axis_tuser[14:2] + 12 + 8 + 4;
                         // remaining length + BTH + IMMEDIATE + UDP HEADER
                     end else begin
                         udp_length_next = s_axis_tuser[14:2] + 12 + 8;
                         // remaining length + BTH + UDP HEADER
                     end
-                    if (trasfer_type_reg) begin
+                    if (s_transfer_type_reg) begin
                         if (s_axis_tuser[1]) begin
-                            roce_bth_op_code_next = is_immediate_reg ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
+                            roce_bth_op_code_next = s_is_immediate_reg ? RC_RDMA_WRITE_LAST_IMD : RC_RDMA_WRITE_LAST;
                         end else begin
                             roce_bth_op_code_next = RC_RDMA_WRITE_MIDDLE;
                         end
                     end else begin
                         if (s_axis_tuser[1]) begin
-                            roce_bth_op_code_next = is_immediate_reg ? RC_SEND_LAST_IMD : RC_SEND_LAST;
+                            roce_bth_op_code_next = s_is_immediate_reg ? RC_SEND_LAST_IMD : RC_SEND_LAST;
                         end else begin
                             roce_bth_op_code_next = RC_SEND_MIDDLE;
                         end
@@ -506,9 +490,10 @@ module RoCE_tx_header_producer #(
                     roce_bth_p_key_next   = 16'hFFFF;
                     psn_next              = psn_reg + 1;
                     roce_bth_psn_next     = psn_reg + 1;
-                    roce_bth_dest_qp_next = qp_conn[47:24];
+                    roce_bth_dest_qp_next = s_rem_qpn_reg;
+                    roce_bth_src_qp_next  = s_loc_qpn_reg;
                     roce_bth_ack_req_next = 1'b1;
-                    roce_immdh_data_next  = immediate_data_reg;
+                    roce_immdh_data_next  = s_immediate_data_reg;
 
                     packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
                     total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
@@ -616,11 +601,8 @@ module RoCE_tx_header_producer #(
 
         if (rst) begin
             state_reg   <= STATE_IDLE;
-            qp_info     <= 171'h0;
-            qp_conn     <= 155'h0;
-            tx_metadata <= 80'h0;
 
-            immediate_data_reg <= 32'd0;
+            s_immediate_data_reg <= 32'd0;
 
             packet_inst_length_reg       <= 14'd0;
             total_packet_inst_length_reg <= 32'd0;
@@ -674,27 +656,21 @@ module RoCE_tx_header_producer #(
             psn_reg <= psn_next;
 
             if (store_parameters) begin
-                qp_info <= {{64{1'b0}}, s_r_key, s_rem_psn, s_rem_qpn, 24'h000016, 3'b010};
-                //assign qp_info[2:0]     = 3'b010;  //qp_state
-                //assign qp_info[26:3]    = 24'h000016;  //loc_qpn
-                //assign qp_info[50:27]   = 24'h543210;  //rem_psn
-                //assign qp_info[74:51]   = 24'h012345;  //loc_psn
-                //assign qp_info[106:75]  = 32'h11223344;  //r_key
-                //assign qp_info[170:107] = 64'h000000000000;  //vaddr
+                s_rem_addr_reg <= s_rem_addr;
+                s_r_key_reg    <= s_r_key;
+                s_rem_qpn_reg  <= s_rem_qpn;
+                s_loc_qpn_reg  <= s_loc_qpn;
+                s_rem_psn_reg  <= s_rem_psn;
 
-                qp_conn <= {RoCE_udp_port, s_rem_ip_addr, s_rem_qpn, 24'h000017};
-                //assign qp_conn[23:0]  = 24'h000017;  //loc_qpn
-                //assign qp_conn[47:24] = 24'h000016;  //rem_qpn
-                //assign qp_conn[79:48] = 32'h0BD40116;  //rem_ip_addr
-                //assign qp_conn[95:80] = ROCE_UDP_PORT;  //rem_udp_port
+                s_rem_ip_addr_reg  <= s_rem_ip_addr;
+                s_src_udp_port_reg <= s_src_udp_port;
 
-                tx_metadata <= {s_rem_addr, s_dma_length};
-                //assign tx_metadata[31:0]  = 32'd3200;  //dma_length
-                //assign tx_metadata[79:32] = 64'h001122334455;  //rem_addr
+                s_dma_length_reg <= s_dma_length;
+                s_rem_addr_reg   <= s_rem_addr;
 
-                is_immediate_reg <= s_is_immediate;
-                trasfer_type_reg <= s_trasfer_type;
-                immediate_data_reg <= s_immediate_data;
+                s_is_immediate_reg <= s_is_immediate;
+                s_transfer_type_reg <= s_transfer_type;
+                s_immediate_data_reg <= s_immediate_data;
             end
 
 

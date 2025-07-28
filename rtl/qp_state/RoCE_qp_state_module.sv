@@ -58,11 +58,18 @@ module RoCE_qp_state_module #(
   output wire [63:0] qp_spy_rem_addr,
   output wire [7 :0] qp_spy_syndrome,
 
-  input wire        s_dma_meta_valid ,
-  input wire [31:0] s_meta_dma_length,
-  input wire [23:0] s_meta_rem_qpn   ,
-  input wire [23:0] s_meta_loc_qpn   ,
-  input wire [23:0] s_meta_rem_psn   ,
+  //input wire        s_dma_meta_valid ,
+  //input wire [31:0] s_meta_dma_length,
+  //input wire [23:0] s_meta_rem_qpn   ,
+  //input wire [23:0] s_meta_loc_qpn   ,
+  //input wire [23:0] s_meta_rem_psn   ,
+
+  // TX BTH
+  input  wire        s_roce_tx_bth_valid,
+  input  wire [ 7:0] s_roce_tx_bth_op_code,
+  input  wire [23:0] s_roce_tx_bth_psn,
+  input  wire [23:0] s_roce_tx_bth_src_qp,
+  input  wire [23:0] s_roce_tx_bth_dest_qp,
 
   // RX BTH
   input  wire        s_roce_rx_bth_valid,
@@ -296,15 +303,16 @@ module RoCE_qp_state_module #(
           qp_aeth_syndrome_next = {1'b1, 2'b00, 5'b11111}; // 8'h9F
           qp_close_ptr_next = qp_close_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
           state_next = STATE_ERROR_QP;
-        end else if (s_dma_meta_valid) begin
-          if (s_meta_loc_qpn[23:8] == 16'd1 && s_meta_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-            if (|(s_meta_dma_length[11:0] & length_pmtu_mask) == 1'b0) begin
-              qp_update_rem_psn_next = s_meta_rem_psn + (s_meta_dma_length >> pmtu_shift);
-            end else begin
-              qp_update_rem_psn_next = s_meta_rem_psn + (s_meta_dma_length >> pmtu_shift) + 1;
+        end else if (s_roce_tx_bth_valid) begin
+          if (s_roce_tx_bth_src_qp[23:8] == 16'd1 && s_roce_tx_bth_src_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+            if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY|| s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD
+            || s_roce_tx_bth_op_code == RC_SEND_LAST       || s_roce_tx_bth_op_code == RC_SEND_LAST_IMD       || s_roce_tx_bth_op_code == RC_SEND_ONLY      || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD
+            ) begin
+              qp_update_rem_psn_next = s_roce_tx_bth_psn + 24'd1;
+              qp_update_ptr_next = s_roce_tx_bth_src_qp[MAX_QUEUE_PAIRS_WIDTH-1:0];
+              state_next = STATE_UPDATE_QP;
             end
-            qp_update_ptr_next = s_meta_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
-            state_next = STATE_UPDATE_QP;
+
           end
         end else if (qp_init_valid) begin
           store_qp_info = 1'b1;

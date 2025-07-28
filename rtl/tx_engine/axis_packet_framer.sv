@@ -14,52 +14,44 @@ module axis_packet_framer #(
     input wire rst,
 
     /*
-     * RoCE DMA transfer parameters in
+     * Input request
      */
-    input  wire       s_dma_meta_valid,
-    output wire       s_dma_meta_ready,
-    input wire [31:0] s_dma_length, // used for WRITE operations
-    input wire [23:0] s_rem_qpn,
-    input wire [23:0] s_loc_qpn,
-    input wire [23:0] s_rem_psn,
-    input wire [31:0] s_r_key,
-    input wire [31:0] s_rem_ip_addr,
-    input wire [63:0] s_rem_addr,
-    input wire        s_is_immediate,
-    input wire [31:0] s_immediate_data,
-    input wire        s_trasfer_type, // 0 SEND 1 RDMA_WRITE 
+    input  wire                         s_wr_req_valid,
+    output wire                         s_wr_req_ready,
+    input  wire [23:0]                  s_wr_req_loc_qp,
+    input  wire [31:0]                  s_wr_req_dma_length,
+    input  wire [63:0]                  s_wr_req_addr_offset,
+    input  wire                         s_wr_req_is_immediate,
+    input  wire [31:0]                  s_wr_req_immediate_data,
+    input  wire                         s_wr_req_tx_type,
 
     // axis stream
-    input   wire [DATA_WIDTH   - 1 :0] s_axis_tdata,
-    input   wire [DATA_WIDTH/8 - 1 :0] s_axis_tkeep,
-    input   wire                       s_axis_tvalid,
-    output  wire                       s_axis_tready,
-    input   wire                       s_axis_tlast,
-    input   wire                       s_axis_tuser,
+    input   wire [DATA_WIDTH   - 1 :0]  s_axis_tdata,
+    input   wire [DATA_WIDTH/8 - 1 :0]  s_axis_tkeep,
+    input   wire                        s_axis_tvalid,
+    output  wire                        s_axis_tready,
+    input   wire                        s_axis_tlast,
+    input   wire                        s_axis_tuser,
 
     /*
-     * RoCE DMA transfer parameters out
+     * Output request
      */
-    output wire        m_dma_meta_valid,
-    input  wire        m_dma_meta_ready,
-    output wire [31:0] m_dma_length, // used for WRITE operations
-    output wire [23:0] m_rem_qpn,
-    output wire [23:0] m_loc_qpn,
-    output wire [23:0] m_rem_psn,
-    output wire [31:0] m_r_key,
-    output wire [31:0] m_rem_ip_addr,
-    output wire [63:0] m_rem_addr,
-    output wire        m_is_immediate,
-    output wire [31:0] m_immediate_data,
-    output wire        m_trasfer_type, // 0 SEND 1 RDMA_WRITE 
+    input wire                          m_wr_req_ready,
+    output  wire                        m_wr_req_valid,
+    output  wire [23:0]                 m_wr_req_loc_qp,
+    output  wire [31:0]                 m_wr_req_dma_length,
+    output  wire [63:0]                 m_wr_req_addr_offset,
+    output  wire                        m_wr_req_is_immediate,
+    output  wire [31:0]                 m_wr_req_immediate_data,
+    output  wire                        m_wr_req_tx_type, 
 
     // axis stream
-    output  wire [DATA_WIDTH   - 1 :0] m_axis_tdata,
-    output  wire [DATA_WIDTH/8 - 1 :0] m_axis_tkeep,
-    output  wire                       m_axis_tvalid,
-    input   wire                       m_axis_tready,
-    output  wire                       m_axis_tlast,
-    output  wire  [14              :0] m_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
+    output  wire [DATA_WIDTH   - 1 :0]  m_axis_tdata,
+    output  wire [DATA_WIDTH/8 - 1 :0]  m_axis_tkeep,
+    output  wire                        m_axis_tvalid,
+    input   wire                        m_axis_tready,
+    output  wire                        m_axis_tlast,
+    output  wire  [14              :0]  m_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
 
     // config
     input wire [2:0] pmtu
@@ -108,12 +100,11 @@ module axis_packet_framer #(
     reg [12:0] length_shift_register [1:0];
     reg last_frame;
 
-    wire  s_dma_meta_reg_valid, m_dma_meta_reg_valid;
-    wire  s_dma_meta_reg_ready, m_dma_meta_reg_ready;
-    wire [265:0] s_dma_metadata, m_dma_metadata;
+    wire [153:0] s_wr_req, m_wr_req;
+    reg  s_wr_req_reg_ready, s_wr_req_reg_valid;
 
-    reg  s_dma_meta_ready_reg = 1'b0, s_dma_meta_ready_next;
-    reg  m_dma_meta_valid_reg = 1'b0, m_dma_meta_valid_next;
+    reg  s_wr_req_ready_reg = 1'b0, s_wr_req_ready_next;
+    reg  m_wr_req_valid_reg = 1'b0, m_wr_req_valid_next;
 
     wire [DATA_WIDTH   - 1 : 0] s_axis_fifo_tdata;
     wire [DATA_WIDTH/8 - 1 : 0] s_axis_fifo_tkeep;
@@ -168,22 +159,22 @@ module axis_packet_framer #(
     always @(*) begin
         state_next = STATE_GET_METADATA;
 
-        s_dma_meta_ready_next         = 1'b0;
+        s_wr_req_ready_next         = 1'b0;
 
         case (state_reg)
             STATE_GET_METADATA: begin
-                s_dma_meta_ready_next               = s_dma_meta_reg_ready;
-                if (s_dma_meta_ready & s_dma_meta_valid) begin
+                s_wr_req_ready_next               = s_wr_req_reg_ready;
+                if (s_wr_req_ready & s_wr_req_valid) begin
                     state_next = STATE_GET_DATA;
-                    s_dma_meta_ready_next         = 1'b0;
+                    s_wr_req_ready_next         = 1'b0;
                 end
             end
             STATE_GET_DATA: begin
                 if (s_axis_tvalid && s_axis_tready && s_axis_tlast) begin
-                    s_dma_meta_ready_next  = s_dma_meta_reg_ready;
+                    s_wr_req_ready_next  = s_wr_req_reg_ready;
                     state_next = STATE_GET_METADATA;
                 end else begin
-                    s_dma_meta_ready_next         = 1'b0;
+                    s_wr_req_ready_next         = 1'b0;
                     state_next = STATE_GET_DATA;
                 end
             end
@@ -195,10 +186,10 @@ module axis_packet_framer #(
             word_counter      <= 0;
             transfer_ongoing  <= 1'b0;
             state_reg <= STATE_GET_METADATA;
-            s_dma_meta_ready_reg <= 1'b0;
+            s_wr_req_ready_reg <= 1'b0;
         end else begin
             state_reg <= state_next;
-            s_dma_meta_ready_reg <= s_dma_meta_ready_next;
+            s_wr_req_ready_reg <= s_wr_req_ready_next;
             if (m_axis_fifo_tvalid && m_axis_fifo_tready) begin
                 if (m_axis_fifo_tlast) begin
                     transfer_ongoing <= 1'b0;
@@ -316,37 +307,25 @@ module axis_packet_framer #(
         .m_axis_tready(m_axis_fifo_tvalid && m_axis_fifo_tready && m_axis_fifo_tlast)
     );
 
-    assign s_dma_metadata = {
-    s_dma_length,
-    s_rem_qpn,
-    s_loc_qpn,
-    s_rem_psn,
-    s_r_key,
-    s_rem_ip_addr,
-    s_rem_addr,
-    s_is_immediate,
-    s_immediate_data,
-    s_trasfer_type};
-
-    assign s_dma_meta_reg_valid = s_dma_meta_valid;
-    assign s_dma_meta_ready = s_dma_meta_ready_reg;
+    assign s_wr_req_reg_valid = s_wr_req_valid;
+    assign s_wr_req_ready     = s_wr_req_ready_reg;
 
     // DMA meta fifo
     axis_fifo #(
         .DEPTH(128),
-        .DATA_WIDTH(266),
+        .DATA_WIDTH(154),
         .KEEP_ENABLE(0),
         .LAST_ENABLE(0),
         .DEST_ENABLE(0),
         .USER_ENABLE(0)
-    ) input_dma_meta_reg (
+    ) input_wr_req_reg (
         .clk(clk),
         .rst(rst),
 
         // AXI input
-        .s_axis_tdata (s_dma_metadata),
-        .s_axis_tvalid(s_dma_meta_reg_valid),
-        .s_axis_tready(s_dma_meta_reg_ready),
+        .s_axis_tdata (s_wr_req),
+        .s_axis_tvalid(s_wr_req_reg_valid),
+        .s_axis_tready(s_wr_req_reg_ready),
         .s_axis_tkeep (0),
         .s_axis_tlast (0),
         .s_axis_tuser (0),
@@ -354,23 +333,25 @@ module axis_packet_framer #(
         .s_axis_tdest (0),
 
         // AXI output
-        .m_axis_tdata (m_dma_metadata),
-        .m_axis_tvalid(m_dma_meta_valid),
-        .m_axis_tready(m_dma_meta_ready)
+        .m_axis_tdata (m_wr_req),
+        .m_axis_tvalid(m_wr_req_valid),
+        .m_axis_tready(m_wr_req_ready)
     );
 
 
+    assign s_wr_req = { s_wr_req_loc_qp,
+                        s_wr_req_dma_length,
+                        s_wr_req_addr_offset,
+                        s_wr_req_immediate_data,
+                        s_wr_req_is_immediate,
+                        s_wr_req_tx_type};
 
-    assign m_trasfer_type = m_dma_metadata[0];
-    assign m_immediate_data = m_dma_metadata[1+:32];
-    assign m_is_immediate = m_dma_metadata[33];
-    assign m_rem_addr = m_dma_metadata[34+:64];
-    assign m_rem_ip_addr = m_dma_metadata[98+:32];
-    assign m_r_key = m_dma_metadata[130+:32];
-    assign m_rem_psn = m_dma_metadata[162+:24];
-    assign m_loc_qpn = m_dma_metadata[186+:24];
-    assign m_rem_qpn = m_dma_metadata[210+:24];
-    assign m_dma_length = m_dma_metadata[234+:32];
+    assign m_wr_req_tx_type        = m_wr_req[0];
+    assign m_wr_req_is_immediate   = m_wr_req[1];
+    assign m_wr_req_immediate_data = m_wr_req[2  +:32];
+    assign m_wr_req_addr_offset    = m_wr_req[34 +:64];
+    assign m_wr_req_dma_length     = m_wr_req[98 +:32];
+    assign m_wr_req_loc_qp         = m_wr_req[130+:24];
 
     assign m_axis_tdata       = m_axis_fifo_tdata;
     assign m_axis_tkeep       = m_axis_fifo_tkeep;

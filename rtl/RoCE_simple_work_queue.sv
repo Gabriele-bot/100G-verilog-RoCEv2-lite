@@ -49,7 +49,7 @@ module RoCE_simple_work_queue #
     output wire [63:0] m_rem_addr,
     output wire        m_is_immediate,
     output wire [31:0] m_immediate_data,
-    output wire        m_trasfer_type
+    output wire        m_transfer_type
 );
 
     localparam MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
@@ -63,16 +63,6 @@ module RoCE_simple_work_queue #
     QP_STATE_SQ_ERROR = 3'd5,
     QP_STATE_ERROR    = 3'd6;
 
-
-    localparam [9:0] WORK_QUEUE_LENGTH_WIDTH = 2**($clog2(24+32+64+32+1+1));
-
-    localparam LOC_QPN_OFFSET        = 0;
-    localparam DMA_LENGTH_OFFSET     = 24;
-    localparam ADDR_OFF_OFFSET       = 56;
-    localparam IMMEDIATE_DATA_OFFSET = 120;
-    localparam IMMEDIATE_OFFSET      = 152;
-    localparam TXTYPE_OFFSET         = 153;
-
     localparam [2:0]
     STATE_IDLE  = 3'd0,
     STATE_NEW_WORK_REQ   = 3'd1,
@@ -80,15 +70,11 @@ module RoCE_simple_work_queue #
 
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
-    reg  [WORK_QUEUE_LENGTH_WIDTH-1 :0] WQE;
-    wire [WORK_QUEUE_LENGTH_WIDTH-1 :0] WQE_fifo_out;
-    wire [23:0] WQE_fifo_out_loc_qpn;
-
     reg [31:0] m_dma_length_fifo_out_reg;
     reg [63:0] m_rem_addr_offset_fifo_out_reg;
     reg        m_is_immediate_fifo_out_reg;
     reg [31:0] m_immediate_data_fifo_out_reg;
-    reg        m_trasfer_type_fifo_out_reg;
+    reg        m_transfer_type_fifo_out_reg;
 
     reg        m_dma_meta_valid_reg;
 
@@ -101,85 +87,33 @@ module RoCE_simple_work_queue #
     reg [63:0] m_rem_addr_reg;
     reg        m_is_immediate_reg;
     reg [31:0] m_immediate_data_reg;
-    reg        m_trasfer_type_reg;
+    reg        m_transfer_type_reg;
 
-    wire WQE_fifo_out_valid;
-    wire WQE_fifo_out_ready;
+    reg s_wr_req_ready_reg, s_wr_req_ready_next;
 
-    reg WQE_fifo_out_ready_reg, WQE_fifo_out_ready_next;
-
-    // Write into queue
-
-    always @* begin
-        WQE[WORK_QUEUE_LENGTH_WIDTH-1 :0]  = 0; //default
-        WQE[LOC_QPN_OFFSET        +: 24] = s_wr_req_loc_qp;
-        WQE[DMA_LENGTH_OFFSET     +: 32] = s_wr_req_dma_length;
-        WQE[ADDR_OFF_OFFSET       +: 64] = s_wr_req_addr_offset;
-        WQE[IMMEDIATE_DATA_OFFSET +: 32] = s_wr_req_immediate_data;
-        WQE[IMMEDIATE_OFFSET]            = s_wr_req_is_immediate;
-        WQE[TXTYPE_OFFSET]               = s_wr_req_tx_type;
-    end
-
-    axis_fifo #(
-        .DEPTH(QUEUE_LENGTH),
-        .DATA_WIDTH(WORK_QUEUE_LENGTH_WIDTH),
-        .KEEP_ENABLE(0),
-        .LAST_ENABLE(0),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(0),
-        .FRAME_FIFO(0)
-    ) input_axis_fifo (
-        .clk(clk),
-        .rst(rst),
-
-        // AXI input
-        .s_axis_tdata(WQE),
-        .s_axis_tkeep(0),
-        .s_axis_tvalid(s_wr_req_valid),
-        .s_axis_tready(s_wr_req_ready),
-        .s_axis_tlast(0),
-        .s_axis_tid(0),
-        .s_axis_tdest(0),
-        .s_axis_tuser(0),
-
-        // AXI output
-        .m_axis_tdata (WQE_fifo_out),
-        .m_axis_tkeep (),
-        .m_axis_tvalid(WQE_fifo_out_valid),
-        .m_axis_tready(WQE_fifo_out_ready),
-        .m_axis_tlast (),
-        .m_axis_tid   (),
-        .m_axis_tdest (),
-        .m_axis_tuser (),
-
-        // Status
-        .status_overflow  (),
-        .status_bad_frame (),
-        .status_good_frame()
-    );
-
-    assign m_qp_local_qpn_req = WQE_fifo_out[LOC_QPN_OFFSET +: 24];
-    assign WQE_fifo_out_ready = WQE_fifo_out_ready_reg;
-    assign m_qp_context_req = WQE_fifo_out_valid && WQE_fifo_out_ready && (m_qp_local_qpn_req[23:8] == 16'd1 && m_qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0);
+    assign m_qp_local_qpn_req = s_wr_req_loc_qp;
+    assign s_wr_req_ready = s_wr_req_ready_reg;
+    assign m_qp_context_req = s_wr_req_valid && s_wr_req_ready && (m_qp_local_qpn_req[23:8] == 16'd1 && m_qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0);
 
     always @* begin
 
-        state_next = STATE_IDLE;
+        
 
-        WQE_fifo_out_ready_next = WQE_fifo_out_ready_reg;
+        s_wr_req_ready_next = 1'b0;
 
         case (state_reg)
             STATE_IDLE: begin
-                WQE_fifo_out_ready_next = 1'b1;
-                if (m_dma_meta_ready && WQE_fifo_out_valid) begin
-                    if (m_qp_local_qpn_req[23:8] == 16'd1 && m_qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the rights range
+                if (s_wr_req_valid && s_wr_req_ready) begin
+                    if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the rights range
                         state_next = STATE_NEW_WORK_REQ;
                     end
+                end else begin
+                    state_next = STATE_IDLE;
+                    s_wr_req_ready_next = 1'b1;
                 end
             end
             STATE_NEW_WORK_REQ: begin
-                WQE_fifo_out_ready_next = 1'b0;
+                s_wr_req_ready_next = 1'b0;
                 if (m_dma_meta_ready && m_dma_meta_valid) begin
                     state_next = STATE_WORK_REQ_SENT;
                 end else if (s_qp_context_valid && s_qp_state != QP_STATE_RTS) begin
@@ -189,7 +123,7 @@ module RoCE_simple_work_queue #
                 end
             end
             STATE_WORK_REQ_SENT: begin
-                WQE_fifo_out_ready_next = 1'b0;
+                s_wr_req_ready_next = 1'b0;
                 if (m_dma_meta_ready) begin
                     state_next = STATE_IDLE;
                 end else begin
@@ -206,21 +140,19 @@ module RoCE_simple_work_queue #
             m_dma_meta_valid_reg <= 1'b0;
         end else begin
             state_reg <= state_next;
-            WQE_fifo_out_ready_reg <= WQE_fifo_out_ready_next;
+            s_wr_req_ready_reg <= s_wr_req_ready_next;
 
             m_dma_meta_valid_reg <= m_dma_meta_ready & !m_dma_meta_valid_reg & s_qp_context_valid && s_qp_state == QP_STATE_RTS;
         end
     end
 
     always @(posedge clk) begin
-        if (WQE_fifo_out_valid && WQE_fifo_out_ready) begin
-            m_dma_length_fifo_out_reg       <= WQE_fifo_out[DMA_LENGTH_OFFSET     +: 32];
-            m_rem_addr_offset_fifo_out_reg  <= WQE_fifo_out[ADDR_OFF_OFFSET       +: 64];
-            m_immediate_data_fifo_out_reg   <= WQE_fifo_out[IMMEDIATE_DATA_OFFSET +: 32];
-            m_is_immediate_fifo_out_reg     <= WQE_fifo_out[IMMEDIATE_OFFSET];
-            m_trasfer_type_fifo_out_reg     <= WQE_fifo_out[TXTYPE_OFFSET];
-
-            //m_qp_local_qpn_req <= WQE_fifo_out[LOC_QPN_OFFSET +: 24];
+        if (s_wr_req_valid && s_wr_req_ready) begin
+            m_dma_length_fifo_out_reg       <= s_wr_req_dma_length;
+            m_rem_addr_offset_fifo_out_reg  <= s_wr_req_addr_offset;
+            m_immediate_data_fifo_out_reg   <= s_wr_req_immediate_data;
+            m_is_immediate_fifo_out_reg     <= s_wr_req_is_immediate;
+            m_transfer_type_fifo_out_reg    <= s_wr_req_tx_type;
         end
 
         if (s_qp_context_valid) begin
@@ -233,7 +165,7 @@ module RoCE_simple_work_queue #
             m_rem_ip_addr_reg    <= s_qp_rem_ip_addr;
             m_immediate_data_reg <= m_immediate_data_fifo_out_reg;
             m_is_immediate_reg   <= m_is_immediate_fifo_out_reg;
-            m_trasfer_type_reg   <= m_trasfer_type_fifo_out_reg;
+            m_transfer_type_reg   <= m_transfer_type_fifo_out_reg;
         end
 
     end
@@ -248,6 +180,6 @@ module RoCE_simple_work_queue #
     assign m_rem_addr       = m_rem_addr_reg;
     assign m_immediate_data = m_immediate_data_reg;
     assign m_is_immediate   = m_is_immediate_reg;
-    assign m_trasfer_type   = m_trasfer_type_reg;
+    assign m_transfer_type  = m_transfer_type_reg;
 
 endmodule

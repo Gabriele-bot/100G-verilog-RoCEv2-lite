@@ -613,19 +613,16 @@ module top #(
 
   
   network_wrapper_roce_generic #(
-    .LOCAL_MAC_ADDRESS(48'h00_0A_35_DE_AD_01),
     .MAC_DATA_WIDTH(MAC_DATA_WIDTH),
-    .UDP_IP_DATA_WIDTH(RoCE_DATA_WIDTH),
-    .RoCE_DATA_WIDTH(RoCE_DATA_WIDTH),
+    .STACK_DATA_WIDTH(RoCE_DATA_WIDTH),
     .FIFO_REGS(3),
+    .ENABLE_PFC(8'h03),
     .DEBUG(0)
   ) network_wrapper_roce_generic_instance (
     .clk_network(clk_udp),
     .rst_network(rst),
     .clk_udp_ip(clk_roce),
     .rst_udp_ip(rst),
-    .clk_roce(clk_roce), 
-    .rst_roce(rst),
     .m_network_tx_axis_tdata (tx_generic_axis_tdata),
     .m_network_tx_axis_tkeep (tx_generic_axis_tkeep),
     .m_network_tx_axis_tvalid(tx_generic_axis_tvalid),
@@ -640,8 +637,18 @@ module top #(
     .s_network_rx_axis_tlast (rx_generic_axis_tlast),
     .s_network_rx_axis_tuser (rx_generic_axis_tuser),
     
-    .pause_req(9'd0),
-    .pause_ack()
+    .m_qp_context_spy (1'b0),
+    .m_qp_local_qpn_spy(24'h100),
+    
+    .ctrl_local_mac_address(48'h00_0A_35_DE_AD_01),
+    .ctrl_local_ip({8'd22, 8'd1, 8'd212, 8'd10}),
+    .ctrl_clear_arp_cache(1'b0),
+    .ctrl_pmtu(3'd4),
+    .ctrl_RoCE_udp_port(16'h12B7),
+    .ctrl_priority_tag(3'd1),
+    
+    .pfc_pause_req(8'd0),
+    .pfc_pause_ack()
   );
 
 endmodule
