@@ -1545,7 +1545,7 @@ module RoCE_minimal_stack #(
     endgenerate
 
 
-    RoCE_udp_tx #(
+    RoCE_udp_tx_v2 #(
     .DATA_WIDTH(DATA_WIDTH)
     ) RoCE_udp_tx_instance (
         .clk                            (clk),
