@@ -37,7 +37,7 @@ module udp_complete_test #(
   parameter KEEP_ENABLE = (DATA_WIDTH>8),
   // tkeep signal width (words per cycle)
   parameter KEEP_WIDTH = (DATA_WIDTH/8),
-
+  parameter IP_HEADER_CHECKSUM_PIPELINED = 0,
   parameter ARP_CACHE_ADDR_WIDTH = 9,
   parameter ARP_REQUEST_RETRY_COUNT = 4,
   parameter ARP_REQUEST_RETRY_INTERVAL = 125000000 * 2,
@@ -575,6 +575,7 @@ module udp_complete_test #(
   ip_complete_test #(
   .DATA_WIDTH(DATA_WIDTH),
   .KEEP_ENABLE(1),
+  .IP_HEADER_CHECKSUM_PIPELINED(IP_HEADER_CHECKSUM_PIPELINED),
   .ARP_CACHE_ADDR_WIDTH(ARP_CACHE_ADDR_WIDTH),
   .ARP_REQUEST_RETRY_COUNT(ARP_REQUEST_RETRY_COUNT),
   .ARP_REQUEST_RETRY_INTERVAL(ARP_REQUEST_RETRY_INTERVAL),

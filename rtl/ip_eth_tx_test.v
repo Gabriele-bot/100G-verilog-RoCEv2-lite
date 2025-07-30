@@ -39,9 +39,7 @@ module ip_eth_tx_test #
     // If disabled, tkeep assumed to be 1'b1
     parameter KEEP_ENABLE = (DATA_WIDTH>8),
     // tkeep signal width (words per cycle)
-    parameter KEEP_WIDTH = (DATA_WIDTH/8),
-    // header check sum pipeline stages (only for high speeds)
-    parameter IP_HDR_CHECKSUM_PIPELINED = 0
+    parameter KEEP_WIDTH = (DATA_WIDTH/8)
 )
 (
     input  wire                  clk,
@@ -60,6 +58,7 @@ module ip_eth_tx_test #
     input  wire [12:0]           s_ip_fragment_offset,
     input  wire [ 7:0]           s_ip_ttl,
     input  wire [ 7:0]           s_ip_protocol,
+    input  wire [15:0]           s_ip_hdr_checksum,
     input  wire [31:0]           s_ip_source_ip,
     input  wire [31:0]           s_ip_dest_ip,
     input  wire                  s_is_roce_packet,
@@ -160,14 +159,13 @@ interface.
     reg [12:0] ip_fragment_offset_reg = 13'd0;
     reg [ 7:0] ip_ttl_reg = 8'd0;
     reg [ 7:0] ip_protocol_reg = 8'd0;
+    reg [15:0] ip_hdr_checksum_reg = 16'd0;
     reg [31:0] ip_source_ip_reg = 32'd0;
     reg [31:0] ip_dest_ip_reg = 32'd0;
     reg        is_roce_packet_reg = 1'b0;
 
     reg s_ip_hdr_ready_reg = 1'b0, s_ip_hdr_ready_next;
     reg s_ip_payload_axis_tready_reg = 1'b0, s_ip_payload_axis_tready_next;
-
-    reg [1:0] s_ip_hdr_valid_del;
 
     reg m_eth_hdr_valid_reg = 1'b0, m_eth_hdr_valid_next;
     reg [47:0] m_eth_dest_mac_reg = 48'd0;
@@ -199,13 +197,6 @@ interface.
     reg                   m_eth_payload_axis_tlast_int;
     reg  [1:0]            m_eth_payload_axis_tuser_int;
     wire                  m_eth_payload_axis_tready_int_early;
-
-    wire [15:0] ip_length_roce_int;
-
-    reg [19:0] hdr_sum_temp_reg = 20'd0, hdr_sum_temp_next;
-    reg [19:0] hdr_sum_reg = 20'd0, hdr_sum_next;
-
-    assign ip_length_roce_int = s_ip_length + 16'd4;
 
     assign s_ip_hdr_ready = s_ip_hdr_ready_reg;
     assign s_ip_payload_axis_tready = s_ip_payload_axis_tready_reg;
@@ -244,7 +235,6 @@ interface.
         end
     end
 
-
     always @* begin
         send_ip_header_next = send_ip_header_reg;
         send_ip_payload_next = send_ip_payload_reg;
@@ -252,9 +242,6 @@ interface.
 
         s_ip_hdr_ready_next = 1'b0;
         s_ip_payload_axis_tready_next = 1'b0;
-
-        hdr_sum_temp_next = hdr_sum_temp_reg;
-        hdr_sum_next = hdr_sum_reg;
 
         m_eth_hdr_valid_next = m_eth_hdr_valid_reg && !m_eth_hdr_ready;
 
@@ -272,52 +259,11 @@ interface.
         if (s_ip_hdr_ready && s_ip_hdr_valid) begin
             store_ip_hdr = 1'b1;
             ptr_next = 0;
-
-            if (s_is_roce_packet) begin
-                hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
-                ip_length_roce_int +
-                s_ip_identification +
-                {s_ip_flags, s_ip_fragment_offset} +
-                {s_ip_ttl, s_ip_protocol} +
-                s_ip_source_ip[31:16] +
-                s_ip_source_ip[15: 0] +
-                s_ip_dest_ip[31:16] +
-                s_ip_dest_ip[15: 0];
-            end else begin
-                hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
-                s_ip_length +
-                s_ip_identification +
-                {s_ip_flags, s_ip_fragment_offset} +
-                {s_ip_ttl, s_ip_protocol} +
-                s_ip_source_ip[31:16] +
-                s_ip_source_ip[15: 0] +
-                s_ip_dest_ip[31:16] +
-                s_ip_dest_ip[15: 0];
-            end
-            if (IP_HDR_CHECKSUM_PIPELINED == 0) begin
-                send_ip_header_next = 1'b1;
-                send_ip_payload_next = (OFFSET != 0) && (CYCLE_COUNT == 1);
-                s_ip_payload_axis_tready_next = send_ip_payload_next && m_eth_payload_axis_tready_int_early;
-                hdr_sum_temp_next = hdr_sum_next[15:0] + hdr_sum_next[19:16];
-                hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
-                m_eth_hdr_valid_next = 1'b1;
-            end 
+            send_ip_header_next = 1'b1;
+            send_ip_payload_next = (OFFSET != 0) && (CYCLE_COUNT == 1);
+            m_eth_hdr_valid_next = 1'b1;
+            s_ip_payload_axis_tready_next = send_ip_payload_next && m_eth_payload_axis_tready_int_early;
         end
-
-        if (IP_HDR_CHECKSUM_PIPELINED != 0) begin
-            if (s_ip_hdr_valid_del[0]) begin
-                send_ip_header_next = 1'b1;
-                send_ip_payload_next = (OFFSET != 0) && (CYCLE_COUNT == 1);
-
-                s_ip_payload_axis_tready_next = send_ip_payload_next && m_eth_payload_axis_tready_int_early;
-
-                hdr_sum_temp_next = hdr_sum_reg[15:0] + hdr_sum_reg[19:16];
-                hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
-                m_eth_hdr_valid_next = 1'b1;
-            end
-        end
-
-
 
         if (send_ip_payload_reg) begin
             s_ip_payload_axis_tready_next = m_eth_payload_axis_tready_int_early && shift_ip_payload_axis_input_tready;
@@ -369,8 +315,8 @@ interface.
                 `_HEADER_FIELD_(7,  ip_fragment_offset_reg[0*8 +: 8])
                 `_HEADER_FIELD_(8,  ip_ttl_reg)
                 `_HEADER_FIELD_(9,  ip_protocol_reg)
-                `_HEADER_FIELD_(10, ~hdr_sum_temp_reg[1*8 +: 8])
-                `_HEADER_FIELD_(11, ~hdr_sum_temp_reg[0*8 +: 8])
+                `_HEADER_FIELD_(10, ip_hdr_checksum_reg[1*8 +: 8])
+                `_HEADER_FIELD_(11, ip_hdr_checksum_reg[0*8 +: 8])
                 `_HEADER_FIELD_(12, ip_source_ip_reg[3*8 +: 8])
                 `_HEADER_FIELD_(13, ip_source_ip_reg[2*8 +: 8])
                 `_HEADER_FIELD_(14, ip_source_ip_reg[1*8 +: 8])
@@ -392,8 +338,8 @@ interface.
         end
         end
 
-        //s_ip_hdr_ready_next = !m_eth_hdr_valid_next && !(send_ip_header_next || send_ip_payload_next);
-        s_ip_hdr_ready_next = !store_ip_hdr && !(send_ip_header_next || send_ip_payload_next);
+        s_ip_hdr_ready_next = !m_eth_hdr_valid_next && !(send_ip_header_next || send_ip_payload_next);
+
     end
 
     always @(posedge clk) begin
@@ -401,18 +347,12 @@ interface.
         send_ip_payload_reg <= send_ip_payload_next;
         ptr_reg <= ptr_next;
 
-        hdr_sum_reg      <= hdr_sum_next;
-        hdr_sum_temp_reg <= hdr_sum_temp_next;
-
         s_ip_hdr_ready_reg <= s_ip_hdr_ready_next;
         s_ip_payload_axis_tready_reg <= s_ip_payload_axis_tready_next;
 
         m_eth_hdr_valid_reg <= m_eth_hdr_valid_next;
 
         busy_reg <= send_ip_header_next || send_ip_payload_next;
-
-        s_ip_hdr_valid_del[0] <= s_ip_hdr_valid && s_ip_hdr_ready_reg;
-        s_ip_hdr_valid_del[1] <= s_ip_hdr_valid_del[0];
 
         if (store_ip_hdr) begin
             m_eth_dest_mac_reg <= s_eth_dest_mac;
@@ -431,9 +371,9 @@ interface.
             ip_fragment_offset_reg <= s_ip_fragment_offset;
             ip_ttl_reg <= s_ip_ttl;
             ip_protocol_reg <= s_ip_protocol;
+            ip_hdr_checksum_reg <= s_ip_hdr_checksum;
             ip_source_ip_reg <= s_ip_source_ip;
             ip_dest_ip_reg <= s_ip_dest_ip;
-
             is_roce_packet_reg <= s_is_roce_packet;
         end
 
@@ -458,7 +398,6 @@ interface.
             s_ip_hdr_ready_reg <= 1'b0;
             s_ip_payload_axis_tready_reg <= 1'b0;
             m_eth_hdr_valid_reg <= 1'b0;
-            s_ip_hdr_valid_del <= 2'd0;
             busy_reg <= 1'b0;
         end
     end
@@ -553,4 +492,3 @@ interface.
 endmodule
 
 `resetall
-
