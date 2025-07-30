@@ -27,7 +27,7 @@ THE SOFTWARE.
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 /*
- * IPv4 block, ethernet frame interface
+ * IPv4 block, ethernet frame interface (64 bit datapath)
  */
 module ip_test #(
   // Width of AXI stream interfaces in bits
@@ -36,9 +36,9 @@ module ip_test #(
   // If disabled, tkeep assumed to be 1'b1
   parameter KEEP_ENABLE = (DATA_WIDTH>8),
   // tkeep signal width (words per cycle)
-  parameter KEEP_WIDTH = (DATA_WIDTH/8)
-  // reg cached ARP entries
-  //parameter CACHED_MAC_ADDR = 2
+  parameter KEEP_WIDTH = (DATA_WIDTH/8),
+  // Checksum pipeleined
+  parameter HEADER_CHECKSUM_PIPELINED = 0
 ) (
   input wire clk,
   input wire rst,
@@ -152,7 +152,7 @@ module ip_test #(
   input wire [31:0] local_ip
 );
 
-  localparam [1:0] STATE_IDLE = 2'd0,  STATE_ARP_QUERY = 2'd1, STATE_WAIT_PACKET = 2'd2;
+  localparam [1:0] STATE_IDLE = 2'd0,  STATE_COMPUTE_CHECKSUM = 2'd1, STATE_ARP_QUERY = 2'd2, STATE_WAIT_PACKET = 2'd3;
 
   reg [1:0] state_reg = STATE_IDLE, state_next;
 
@@ -160,6 +160,9 @@ module ip_test #(
   wire outgoing_ip_hdr_ready;
   reg [47:0] outgoing_eth_dest_mac_reg = 48'h000000000000, outgoing_eth_dest_mac_next;
   wire outgoing_ip_payload_axis_tready;
+
+  reg [19:0] hdr_sum_temp_reg = 20'd0, hdr_sum_temp_next;
+  reg [19:0] hdr_sum_reg = 20'd0, hdr_sum_next;
 
   wire [DATA_WIDTH-1:0] m_eth_payload_fifo_axis_tdata ;
   wire [KEEP_WIDTH-1:0] m_eth_payload_fifo_axis_tkeep ;
@@ -221,28 +224,31 @@ module ip_test #(
     .error_invalid_checksum(rx_error_invalid_checksum)
   );
 
+
   ip_eth_tx_test #(
   .DATA_WIDTH(DATA_WIDTH)
   ) ip_eth_tx_inst (
     .clk(clk),
     .rst(rst),
     // IP frame input
-    .s_ip_hdr_valid(outgoing_ip_hdr_valid_reg),
-    .s_ip_hdr_ready(outgoing_ip_hdr_ready),
-    .s_eth_dest_mac(outgoing_eth_dest_mac_reg),
-    .s_eth_src_mac(local_mac),
-    .s_eth_type(16'h0800),
-    .s_ip_dscp(s_ip_dscp),
-    .s_ip_ecn(s_ip_ecn),
-    .s_ip_length(s_ip_length),
-    .s_ip_identification(16'd0),
-    .s_ip_flags(3'b010),
-    .s_ip_fragment_offset(13'd0),
-    .s_ip_ttl(s_ip_ttl),
-    .s_ip_protocol(s_ip_protocol),
-    .s_ip_source_ip(s_ip_source_ip),
-    .s_ip_dest_ip(s_ip_dest_ip),
-    .s_is_roce_packet(s_is_roce_packet),
+    .s_ip_hdr_valid         (outgoing_ip_hdr_valid_reg),
+    .s_ip_hdr_ready         (outgoing_ip_hdr_ready),
+    .s_eth_dest_mac         (outgoing_eth_dest_mac_reg),
+    .s_eth_src_mac          (local_mac),
+    .s_eth_type             (16'h0800),
+    .s_ip_dscp              (s_ip_dscp),
+    .s_ip_ecn               (s_ip_ecn),
+    .s_ip_length            (s_ip_length),
+    .s_ip_identification    (16'd0),
+    .s_ip_flags             (3'b010),
+    .s_ip_fragment_offset   (13'd0),
+    .s_ip_ttl               (s_ip_ttl),
+    .s_ip_protocol          (s_ip_protocol),
+    .s_ip_hdr_checksum      (~hdr_sum_temp_reg),
+    .s_ip_source_ip         (s_ip_source_ip),
+    .s_ip_dest_ip           (s_ip_dest_ip),
+    .s_is_roce_packet       (s_is_roce_packet),
+
     .s_ip_payload_axis_tdata(s_ip_payload_axis_tdata),
     .s_ip_payload_axis_tkeep(s_ip_payload_axis_tkeep),
     .s_ip_payload_axis_tvalid(s_ip_payload_axis_tvalid),
@@ -317,6 +323,8 @@ module ip_test #(
 
   reg drop_packet_reg = 1'b0, drop_packet_next;
 
+  wire [15:0] s_ip_length_roce = s_ip_length + 16'd4;
+
   assign s_ip_hdr_ready = s_ip_hdr_ready_reg;
   assign s_ip_payload_axis_tready = outgoing_ip_payload_axis_tready || drop_packet_reg;
 
@@ -338,6 +346,9 @@ module ip_test #(
 
     s_ip_hdr_ready_next = 1'b0;
 
+    hdr_sum_next = hdr_sum_reg;
+    hdr_sum_temp_next = hdr_sum_temp_reg;
+
     outgoing_ip_hdr_valid_next = outgoing_ip_hdr_valid_reg && !outgoing_ip_hdr_ready;
     outgoing_eth_dest_mac_next = outgoing_eth_dest_mac_reg;
 
@@ -345,12 +356,38 @@ module ip_test #(
       STATE_IDLE: begin
         // wait for outgoing packet
         if (s_ip_hdr_valid) begin
+          if (s_is_roce_packet) begin
+            hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
+            s_ip_length_roce +
+            16'd0 +
+            {3'b010, 13'd0} +
+            {s_ip_ttl, s_ip_protocol} +
+            s_ip_source_ip[31:16] +
+            s_ip_source_ip[15: 0] +
+            s_ip_dest_ip[31:16] +
+            s_ip_dest_ip[15: 0];
+          end else begin
+            hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
+            s_ip_length +
+            16'd0 +
+            {3'b010, 13'd0} +
+            {s_ip_ttl, s_ip_protocol} +
+            s_ip_source_ip[31:16] +
+            s_ip_source_ip[15: 0] +
+            s_ip_dest_ip[31:16] +
+            s_ip_dest_ip[15: 0];
+          end
           if (s_ip_dest_ip == last_ip_addr_query_reg) begin
-            // use cached value
-            s_ip_hdr_ready_next = 1'b1;
-            outgoing_ip_hdr_valid_next = 1'b1;
             outgoing_eth_dest_mac_next = cached_mac_address_reg;
-            state_next = STATE_WAIT_PACKET;
+            if (HEADER_CHECKSUM_PIPELINED) begin
+              state_next = STATE_COMPUTE_CHECKSUM;
+            end else begin
+              hdr_sum_temp_next = hdr_sum_next[15:0] + hdr_sum_next[19:16];
+              hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
+              s_ip_hdr_ready_next = 1'b1;
+              outgoing_ip_hdr_valid_next = 1'b1;
+              state_next = STATE_WAIT_PACKET;
+            end
           end else begin
             // initiate ARP request
             arp_request_valid_next = 1'b1;
@@ -363,6 +400,9 @@ module ip_test #(
         end
       end
       STATE_ARP_QUERY: begin
+        hdr_sum_temp_next = hdr_sum_reg[15:0] + hdr_sum_reg[19:16];
+        hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
+
         arp_response_ready_next = 1'b1;
 
         if (arp_response_valid) begin
@@ -383,6 +423,15 @@ module ip_test #(
         end else begin
           state_next = STATE_ARP_QUERY;
         end
+      end
+      STATE_COMPUTE_CHECKSUM: begin
+        hdr_sum_temp_next = hdr_sum_reg[15:0] + hdr_sum_reg[19:16];
+        hdr_sum_temp_next = hdr_sum_temp_next[15:0] + hdr_sum_temp_next[16];
+
+        s_ip_hdr_ready_next = 1'b1;
+        outgoing_ip_hdr_valid_next = 1'b1;
+
+        state_next = STATE_WAIT_PACKET;
       end
       STATE_WAIT_PACKET: begin
         drop_packet_next = drop_packet_reg;
@@ -424,6 +473,9 @@ module ip_test #(
       outgoing_ip_hdr_valid_reg <= outgoing_ip_hdr_valid_next;
 
     end
+
+    hdr_sum_reg      <= hdr_sum_next;
+    hdr_sum_temp_reg <= hdr_sum_temp_next;
 
     outgoing_eth_dest_mac_reg <= outgoing_eth_dest_mac_next;
   end

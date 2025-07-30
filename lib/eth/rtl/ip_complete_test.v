@@ -37,6 +37,7 @@ module ip_complete_test #(
     parameter KEEP_ENABLE = (DATA_WIDTH>8),
     // tkeep signal width (words per cycle)
     parameter KEEP_WIDTH = (DATA_WIDTH/8),
+    parameter IP_HEADER_CHECKSUM_PIPELINED = 0,
     // ARP parameter
     parameter ARP_CACHE_ADDR_WIDTH = 9,
     parameter ARP_REQUEST_RETRY_COUNT = 4,
@@ -783,7 +784,8 @@ This module integrates the IP and ARP modules for a complete IP stack
  * IP module
  */
   ip_test #(
-    .DATA_WIDTH(DATA_WIDTH)
+    .DATA_WIDTH(DATA_WIDTH),
+    .HEADER_CHECKSUM_PIPELINED(IP_HEADER_CHECKSUM_PIPELINED)
   )ip_inst (
       .clk(clk),
       .rst(rst),
@@ -1151,5 +1153,3 @@ endgenerate
 endmodule
 
 `resetall
-
-
