@@ -217,6 +217,13 @@ module RoCE_minimal_stack #(
     wire s_payload_fifo_axis_tuser;
     wire s_payload_fifo_axis_tready;
 
+    wire [DATA_WIDTH   - 1 : 0] m_payload_framer_axis_tdata;
+    wire [DATA_WIDTH/8 - 1 : 0] m_payload_framer_axis_tkeep;
+    wire                        m_payload_framer_axis_tvalid;
+    wire                        m_payload_framer_axis_tlast;
+    wire [14:0]                 m_payload_framer_axis_tuser;
+    wire                        m_payload_framer_axis_tready;
+
     wire [DATA_WIDTH   - 1 : 0] m_payload_fifo_axis_tdata;
     wire [DATA_WIDTH/8 - 1 : 0] m_payload_fifo_axis_tkeep;
     wire                        m_payload_fifo_axis_tvalid;
@@ -433,7 +440,7 @@ module RoCE_minimal_stack #(
     wire [31:0] s_qp_req_rem_ip_addr;
 
     wire stop_transfer;
-    reg  stop_transfer_reg;
+    reg  stop_transfer_del;
     wire stop_transfer_nack;
 
     wire en_retrans;
@@ -559,7 +566,7 @@ module RoCE_minimal_stack #(
     wire                         m_axi_buffer_rready;
 
     wire         qp_close_params_valid;
-    wire [127:0] qp_close_params;
+    wire [151:0] qp_close_params;
 
     wire [26:0] RoCE_tx_n_valid_up;
     wire [26:0] RoCE_tx_n_ready_up;
@@ -567,6 +574,9 @@ module RoCE_minimal_stack #(
 
     reg [3:0] pmtu_shift;
     reg [11:0] length_pmtu_mask;
+
+    wire        wr_error_qp_not_rts;
+    wire [23:0] wr_error_loc_qpn;
 
     reg [23:0] wr_req_loc_qp;
     reg [31:0] wr_req_dma_length;
@@ -637,7 +647,7 @@ module RoCE_minimal_stack #(
         .clk(clk),
         .rst(rst),
         .start(s_wr_req_valid && s_wr_req_ready),
-        .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans)),
+        .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans) || wr_error_qp_not_rts),
         .m_axis_tdata (s_payload_axis_tdata),
         .m_axis_tkeep (s_payload_axis_tkeep),
         .m_axis_tvalid(s_payload_axis_tvalid),
@@ -724,7 +734,7 @@ module RoCE_minimal_stack #(
     (s_select_roce_reg && rx_udp_RoCE_payload_axis_tready) ||
     (s_select_none_reg);
 
-    
+
 
     assign s_wr_req_tx_type = wr_req_tx_type; // 0 WRITE, 1 SEND
     assign s_wr_req_is_immediate = wr_req_is_immediate;
@@ -757,7 +767,7 @@ module RoCE_minimal_stack #(
             wr_req_is_immediate   <= 0;
             wr_req_tx_type        <= 0;
             wr_req_dma_length     <= 0;
-            messages_to_trasnfer  <= 0;
+            messages_to_trasnfer  <= {32{1'b1}};
             txmeta_frequency_reg  <= 0;
             address_offset        <= 0;
             transfer_ongoing      <= 0;
@@ -805,6 +815,10 @@ module RoCE_minimal_stack #(
             end
 
             s_wr_req_valid_reg <= s_wr_req_valid_next;
+
+            if (wr_error_qp_not_rts && wr_req_loc_qp == wr_error_loc_qpn) begin // if qp is not in RTS stops the wr genration
+                messages_to_trasnfer <= 32'd0;
+            end
         end
     end
 
@@ -812,6 +826,7 @@ module RoCE_minimal_stack #(
         if (stop_transfer) begin
             last_acked_psn_reg <= last_acked_psn;
         end
+        stop_transfer_del <= stop_transfer;
     end
 
 
@@ -846,21 +861,36 @@ module RoCE_minimal_stack #(
         .m_wr_req_is_immediate  (m_wr_req_is_immediate),
         .m_wr_req_tx_type       (m_wr_req_tx_type),
 
+        .m_axis_tdata           (m_payload_framer_axis_tdata ),
+        .m_axis_tkeep           (m_payload_framer_axis_tkeep ),
+        .m_axis_tvalid          (m_payload_framer_axis_tvalid),
+        .m_axis_tready          (m_payload_framer_axis_tready),
+        .m_axis_tlast           (m_payload_framer_axis_tlast ),
+        .m_axis_tuser           (m_payload_framer_axis_tuser ),
+        .pmtu                   (pmtu)
+    );
+
+    RoCE_simple_work_queue #(
+        .DATA_WIDTH(DATA_WIDTH),
+        .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS)
+        //.QUEUE_LENGTH(64)
+    ) RoCE_simple_work_queue_instance (
+        .clk(clk),
+        .rst(rst),
+
+        .s_axis_tdata           (m_payload_framer_axis_tdata ),
+        .s_axis_tkeep           (m_payload_framer_axis_tkeep ),
+        .s_axis_tvalid          (m_payload_framer_axis_tvalid),
+        .s_axis_tready          (m_payload_framer_axis_tready),
+        .s_axis_tlast           (m_payload_framer_axis_tlast ),
+        .s_axis_tuser           (m_payload_framer_axis_tuser ),
+
         .m_axis_tdata           (m_payload_fifo_axis_tdata ),
         .m_axis_tkeep           (m_payload_fifo_axis_tkeep ),
         .m_axis_tvalid          (m_payload_fifo_axis_tvalid),
         .m_axis_tready          (m_payload_fifo_axis_tready),
         .m_axis_tlast           (m_payload_fifo_axis_tlast ),
         .m_axis_tuser           (m_payload_fifo_axis_tuser ),
-        .pmtu                   (pmtu)
-    );
-
-    RoCE_simple_work_queue #(
-        .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS),
-        .QUEUE_LENGTH(64)
-    ) RoCE_simple_work_queue_instance (
-        .clk(clk),
-        .rst(rst),
 
         .s_wr_req_valid         (m_wr_req_valid),
         .s_wr_req_ready         (m_wr_req_ready),
@@ -894,7 +924,10 @@ module RoCE_minimal_stack #(
         .m_rem_addr             (m_framer_rem_addr      ),
         .m_immediate_data       (m_framer_immediate_data),
         .m_is_immediate         (m_framer_is_immediate  ),
-        .m_transfer_type        (m_framer_transfer_type )
+        .m_transfer_type        (m_framer_transfer_type ),
+
+        .error_qp_not_rts       (wr_error_qp_not_rts    ),
+        .error_loc_qpn          (wr_error_loc_qpn       )
     );
 
     RoCE_tx_header_producer #(
@@ -993,12 +1026,13 @@ module RoCE_minimal_stack #(
             end
 
 
-            wire [127:0] s_qp_params;
+            wire [151:0] s_qp_params;
             assign s_qp_params[31 :0  ] = qp_init_rem_ip_addr;
             assign s_qp_params[55 :32 ] = qp_init_rem_qpn;
             assign s_qp_params[79 :56 ] = qp_init_loc_qpn;
             assign s_qp_params[111:80 ] = qp_init_r_key;
             assign s_qp_params[127:112] = 16'hffff; // p_key
+            assign s_qp_params[151:128] = qp_init_rem_psn;
 
 
             RoCE_retransmission_module #(
@@ -1009,7 +1043,7 @@ module RoCE_minimal_stack #(
                 .DEBUG(DEBUG)
             ) RoCE_retransmission_module_instance (
                 .clk(clk),
-                .rst(rst),
+                .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == curr_open_qpn && qp_active)),
                 .rst_retry_cntr              (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
                 .s_qp_params_valid           (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
                 .s_qp_params                 (s_qp_params),

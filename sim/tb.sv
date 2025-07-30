@@ -14,15 +14,15 @@ export "DPI-C" task xgmii_write;
 export "DPI-C" task xgmii_idle;
 
 parameter MAC_DATA_WIDTH = 1024;
-parameter RoCE_DATA_WIDTH = 1024;
+parameter RoCE_DATA_WIDTH = 2048;
 
-localparam SCALE_UP_FACT = RoCE_DATA_WIDTH/64;
+localparam SCALE_UP_FACT = MAC_DATA_WIDTH/64;
 
 parameter MAC_FREQ      = 390.625_000;
-parameter UDP_IP_FREQ   = MAC_FREQ/SCALE_UP_FACT;
-parameter ROCE_FREQ     = MAC_FREQ/SCALE_UP_FACT;
-parameter AXI_SEG_FREQ  = MAC_FREQ/SCALE_UP_FACT;
-parameter AXI_SEG_FREQ_09 = AXI_SEG_FREQ *0.9;
+parameter UDP_IP_FREQ   = 276/SCALE_UP_FACT;
+parameter ROCE_FREQ     = 276/SCALE_UP_FACT;
+parameter AXI_SEG_FREQ  = 398.66/SCALE_UP_FACT;
+parameter AXI_SEG_FREQ_09 = 390.625_000/SCALE_UP_FACT;
 
 parameter MAC_PERIOD      = 1000/MAC_FREQ;
 parameter UDP_IP_PERIOD   = 1000/UDP_IP_FREQ;

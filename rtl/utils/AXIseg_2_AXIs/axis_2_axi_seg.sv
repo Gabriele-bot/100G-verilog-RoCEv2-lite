@@ -3,7 +3,7 @@
 /*
  * arbitrated multiplexer
  */
-module axis_2_axi_seg_v2 #(
+module axis_2_axi_seg #(
     // input axis register
     parameter INPUT_REGS = 1
 )(

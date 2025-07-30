@@ -393,12 +393,12 @@ module top #(
   assign clk_025_wire = clk_025;
 
  
-
+ 
   dcmac_pad #(
     .DATA_WIDTH(1024),
     .USER_WIDTH(1)
   ) dcmac_pad_instance (
-    .clk(clk_udp),
+    .clk(clk_axi_seg),
     .rst(rst),
     .s_axis_tdata(tx_generic_axis_tdata),
     .s_axis_tkeep(tx_generic_axis_tkeep),
@@ -414,7 +414,7 @@ module top #(
     .m_axis_tuser(tx_generic_pad_axis_tuser)
   );
   
-  /*
+  
   
   wire [128*8-1:0] s_axis_seg_tdata;
   wire s_axis_seg_tvalid;
@@ -431,10 +431,10 @@ module top #(
   wire [63:0]                                        s_axis_seg_fifo_tuser;
  
   
-  axis_2_axi_seg_v2  #(
+  axis_2_axi_seg  #(
   //.SEGMENT_FIFO_DEPTH(128)
   ) axis_2_axi_seg_inst (
-   	.clk(clk_udp),
+   	.clk(clk_axi_seg),
 	.rst(rst),
 	// AXI input
       .s_axis_tdata(tx_generic_pad_axis_tdata),
@@ -458,7 +458,7 @@ module top #(
   );
   
   axis_async_fifo #(
-      .DEPTH(512),
+      .DEPTH(16),
       .DATA_WIDTH(1024),
       .KEEP_ENABLE(0),
       .DEST_ENABLE(0),
@@ -466,7 +466,7 @@ module top #(
       .USER_WIDTH(64),
       .FRAME_FIFO(0)
   ) middle_fifo (
-      .s_clk(clk_udp),
+      .s_clk(clk_axi_seg),
       .s_rst(rst),
 
       // AXI input
@@ -503,8 +503,8 @@ module top #(
   
 
   axi_seg_2_axis #(
-  .SEGMENT_FIFO_DEPTH(25600),
-  .AXIS_FIFO_DEPTH(8192)
+  .SEGMENT_FIFO_DEPTH(256000),
+  .AXIS_FIFO_DEPTH(16384)
   ) axi_seg_2_axis_instance (
     .s_clk(clk_axi_seg_09),
     .s_rst(rst),
@@ -516,7 +516,7 @@ module top #(
     .s_eop({tx_axis_pkt.eop[7], tx_axis_pkt.eop[6], tx_axis_pkt.eop[5], tx_axis_pkt.eop[4], tx_axis_pkt.eop[3], tx_axis_pkt.eop[2], tx_axis_pkt.eop[1], tx_axis_pkt.eop[0]}),
     .s_err({tx_axis_pkt.err[7], tx_axis_pkt.err[6], tx_axis_pkt.err[5], tx_axis_pkt.err[4], tx_axis_pkt.err[3], tx_axis_pkt.err[2], tx_axis_pkt.err[1], tx_axis_pkt.err[0]}),
     .s_mty({tx_axis_pkt.mty[7], tx_axis_pkt.mty[6], tx_axis_pkt.mty[5], tx_axis_pkt.mty[4], tx_axis_pkt.mty[3], tx_axis_pkt.mty[2], tx_axis_pkt.mty[1], tx_axis_pkt.mty[0]}),
-    .m_clk(clk_udp),
+    .m_clk(clk_axi_seg),
     .m_rst(rst),
     .m_axis_tdata(tx_generic_fifo_axis_tdata),
     .m_axis_tkeep(tx_generic_fifo_axis_tkeep),
@@ -526,7 +526,8 @@ module top #(
     .m_axis_tuser(tx_generic_fifo_axis_tuser)
   );
   
-  */
+  
+  
   
   axis_async_fifo_adapter #(
       .DEPTH(4200),
@@ -541,15 +542,15 @@ module top #(
       .USER_WIDTH(1),
       .FRAME_FIFO(0)
   ) eth_tx_axis_fifo (
-      .s_clk(clk_udp),
+      .s_clk(clk_axi_seg),
       .s_rst(rst),
 
       // AXI input
-      .s_axis_tdata (tx_generic_pad_axis_tdata),
-      .s_axis_tkeep (tx_generic_pad_axis_tkeep),
-      .s_axis_tvalid(tx_generic_pad_axis_tvalid),
-      .s_axis_tready(tx_generic_pad_axis_tready),
-      .s_axis_tlast (tx_generic_pad_axis_tlast),
+      .s_axis_tdata (tx_generic_fifo_axis_tdata),
+      .s_axis_tkeep (tx_generic_fifo_axis_tkeep),
+      .s_axis_tvalid(tx_generic_fifo_axis_tvalid),
+      .s_axis_tready(tx_generic_fifo_axis_tready),
+      .s_axis_tlast (tx_generic_fifo_axis_tlast),
       .s_axis_tid(0),
       .s_axis_tdest(0),
       .s_axis_tuser(tx_generic_fifo_axis_tuser),
@@ -597,7 +598,7 @@ module top #(
       .s_axis_tdest(0),
       .s_axis_tuser( rx_axis_tuser),
       
-      .m_clk(clk_udp),
+      .m_clk(clk_axi_seg),
       .m_rst(rst),
 
       // AXI output
@@ -619,10 +620,10 @@ module top #(
     .ENABLE_PFC(8'h03),
     .DEBUG(0)
   ) network_wrapper_roce_generic_instance (
-    .clk_network(clk_udp),
-    .rst_network(rst),
-    .clk_udp_ip(clk_roce),
-    .rst_udp_ip(rst),
+    .clk_mac(clk_axi_seg),
+    .rst_mac(rst),
+    .clk_stack(clk_udp),
+    .rst_stack(rst),
     .m_network_tx_axis_tdata (tx_generic_axis_tdata),
     .m_network_tx_axis_tkeep (tx_generic_axis_tkeep),
     .m_network_tx_axis_tvalid(tx_generic_axis_tvalid),

@@ -2,19 +2,17 @@
 
 
 module network_wrapper_roce_generic #(
-    parameter TARGET = "XILINX",
-    //parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00,
     parameter MAC_DATA_WIDTH = 1024,
     parameter STACK_DATA_WIDTH = 1024,
     parameter FIFO_REGS = 4,
     parameter ENABLE_PFC = 8'h0,
     parameter DEBUG = 0
 ) (
-    input wire clk_network,
-    input wire rst_network,
+    input wire clk_mac,
+    input wire rst_mac,
 
-    input wire clk_udp_ip,
-    input wire rst_udp_ip,
+    input wire clk_stack,
+    input wire rst_stack,
 
     /*
      * Ethernet: AXIS
@@ -271,8 +269,8 @@ module network_wrapper_roce_generic #(
         .USER_WIDTH(1),
         .DEPTH(FIFO_REGS)
     ) rx_axis_srl_fifo (
-        .clk(clk_network),
-        .rst(rst_network),
+        .clk(clk_mac),
+        .rst(rst_mac),
 
         // AXI input
         .s_axis_tdata (s_network_rx_axis_tdata),
@@ -302,8 +300,8 @@ module network_wrapper_roce_generic #(
         .USER_WIDTH(1),
         .DEPTH(FIFO_REGS)
     ) tx_axis_srl_fifo (
-        .clk(clk_network),
-        .rst(rst_network),
+        .clk(clk_mac),
+        .rst(rst_mac),
 
         // AXI input
         .s_axis_tdata (m_tx_axis_srl_fifo_tdata),
@@ -325,7 +323,7 @@ module network_wrapper_roce_generic #(
     );
 
     axis_async_fifo_adapter #(
-        .DEPTH(1024),
+        .DEPTH(2048),
         .S_DATA_WIDTH(MAC_DATA_WIDTH),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(STACK_DATA_WIDTH),
@@ -336,8 +334,8 @@ module network_wrapper_roce_generic #(
         .USER_WIDTH(1),
         .FRAME_FIFO(0)
     ) rx_axis_adapter_fifo (
-        .s_clk(clk_network),
-        .s_rst(rst_network),
+        .s_clk(clk_mac),
+        .s_rst(rst_mac),
 
         // AXI input
         .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
@@ -349,8 +347,8 @@ module network_wrapper_roce_generic #(
         .s_axis_tid   (0),
         .s_axis_tdest (0),
 
-        .m_clk(clk_udp_ip),
-        .m_rst(rst_udp_ip),
+        .m_clk(clk_stack),
+        .m_rst(rst_stack),
 
         // AXI output
         .m_axis_tdata (s_rx_axis_adapter_tdata),
@@ -378,9 +376,9 @@ module network_wrapper_roce_generic #(
                 .N(3),
                 .BUS_WIDTH(3)
             ) sync_bit_array_instance (
-                .src_clk(clk_udp_ip),
-                .src_rst(rst_udp_ip),
-                .dest_clk(clk_network),
+                .src_clk(clk_stack),
+                .src_rst(rst_stack),
+                .dest_clk(clk_mac),
                 .data_in(ctrl_priority_tag),
                 .data_out(ctrl_priority_tag_sync)
             );
@@ -393,8 +391,8 @@ module network_wrapper_roce_generic #(
                 .USER_ENABLE(1),
                 .USER_WIDTH(1)
             ) axis_demux_instance (
-                .clk(clk_network),
-                .rst(rst_network),
+                .clk(clk_mac),
+                .rst(rst_mac),
 
                 .s_axis_tdata (m_tx_axis_pfc_demux_tdata),
                 .s_axis_tkeep (m_tx_axis_pfc_demux_tkeep),
@@ -422,8 +420,8 @@ module network_wrapper_roce_generic #(
                 .FIFO_DEPTH(8192),
                 .ENABLE_PRIORITY_MASK(ENABLE_PFC)
             ) eth_pfc_fifo_tx_instance (
-                .clk(clk_network),
-                .rst(rst_network),
+                .clk(clk_mac),
+                .rst(rst_mac),
                 .s_priority_0_axis_tdata (m_tx_axis_pfc_priorities_tdata [0*MAC_DATA_WIDTH+:MAC_DATA_WIDTH]),
                 .s_priority_0_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [0*MAC_DATA_WIDTH/8+:MAC_DATA_WIDTH/8]),
                 .s_priority_0_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[0]),
@@ -504,7 +502,7 @@ module network_wrapper_roce_generic #(
     endgenerate
 
     axis_async_fifo_adapter #(
-        .DEPTH(1024),
+        .DEPTH(2048),
         .S_DATA_WIDTH(STACK_DATA_WIDTH),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(MAC_DATA_WIDTH),
@@ -515,8 +513,8 @@ module network_wrapper_roce_generic #(
         .USER_WIDTH(1),
         .FRAME_FIFO(0)
     ) tx_axis_adapter_fifo (
-        .s_clk(clk_udp_ip),
-        .s_rst(rst_udp_ip),
+        .s_clk(clk_stack),
+        .s_rst(rst_stack),
 
         // AXI input
         .s_axis_tdata (m_tx_axis_adapter_tdata),
@@ -528,8 +526,8 @@ module network_wrapper_roce_generic #(
         .s_axis_tid   (0),
         .s_axis_tdest (0),
 
-        .m_clk(clk_network),
-        .m_rst(rst_network),
+        .m_clk(clk_mac),
+        .m_rst(rst_mac),
 
         // AXI output
         .m_axis_tdata (m_tx_axis_pfc_demux_tdata),
@@ -545,8 +543,8 @@ module network_wrapper_roce_generic #(
     eth_axis_rx #(
     .DATA_WIDTH(STACK_DATA_WIDTH)
     ) eth_axis_rx_inst (
-        .clk(clk_udp_ip),
-        .rst(rst_udp_ip),
+        .clk(clk_stack),
+        .rst(rst_stack),
         // AXI input
         .s_axis_tdata (s_rx_axis_adapter_tdata),
         .s_axis_tkeep (s_rx_axis_adapter_tkeep),
@@ -576,8 +574,8 @@ module network_wrapper_roce_generic #(
         .DATA_WIDTH(STACK_DATA_WIDTH),
         .ENABLE_DOT1Q_HEADER(0)
     ) eth_axis_tx_inst (
-        .clk(clk_udp_ip),
-        .rst(rst_udp_ip),
+        .clk(clk_stack),
+        .rst(rst_stack),
         // Ethernet frame input
         .s_eth_hdr_valid          (m_tx_eth_hdr_valid),
         .s_eth_hdr_ready          (m_tx_eth_hdr_ready),
@@ -611,8 +609,8 @@ module network_wrapper_roce_generic #(
         .UDP_CHECKSUM_GEN_ENABLE(0),
         .ROCE_ICRC_INSERTER(1)
     ) udp_complete_inst (
-        .clk(clk_udp_ip),
-        .rst(rst_udp_ip),
+        .clk(clk_stack),
+        .rst(rst_stack),
         // Ethernet frame input
         .s_eth_hdr_valid          (s_rx_eth_hdr_valid),
         .s_eth_hdr_ready          (s_rx_eth_hdr_ready),
@@ -757,8 +755,8 @@ module network_wrapper_roce_generic #(
         .RETRANSMISSION(1),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(22)
     ) RoCE_minimal_stack_instance (
-        .clk(clk_udp_ip),
-        .rst(rst_udp_ip),
+        .clk(clk_stack),
+        .rst(rst_stack),
         .s_udp_hdr_valid          (s_rx_udp_hdr_valid),
         .s_udp_hdr_ready          (s_rx_udp_hdr_ready),
         .s_eth_dest_mac           (0),
@@ -827,7 +825,7 @@ module network_wrapper_roce_generic #(
         .pmtu           (ctrl_pmtu),
         .RoCE_udp_port  (ctrl_RoCE_udp_port),
         .loc_ip_addr    (ctrl_local_ip),
-        .timeout_period (64'd15000), //4.3 ns * 15000 = 64 us
+        .timeout_period (64'd300), //4.3 ns * 15000 = 64 us
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7)
     );
@@ -846,8 +844,8 @@ module network_wrapper_roce_generic #(
             axis_handshake_monitor #(
             .window_width(MONITOR_WINDOW_SIZE_BITS)
             ) axis_handshake_monitor_udp (
-                .clk(clk_udp_ip),
-                .rst(rst_udp_ip),
+                .clk(clk_stack),
+                .rst(rst_stack),
                 .s_axis_tvalid(m_tx_udp_payload_axis_tvalid),
                 .m_axis_tready(m_tx_udp_payload_axis_tready),
                 .n_valid_up(udp_n_valid_up),
@@ -862,8 +860,8 @@ module network_wrapper_roce_generic #(
             axis_handshake_monitor #(
             .window_width(MONITOR_WINDOW_SIZE_BITS)
             ) axis_handshake_monitor_eth_in (
-                .clk(clk_udp_ip),
-                .rst(rst_udp_ip),
+                .clk(clk_stack),
+                .rst(rst_stack),
                 .s_axis_tvalid(m_tx_eth_payload_axis_tvalid),
                 .m_axis_tready(m_tx_eth_payload_axis_tready),
                 .n_valid_up(eth_in_n_valid_up),
@@ -878,8 +876,8 @@ module network_wrapper_roce_generic #(
             axis_handshake_monitor #(
             .window_width(MONITOR_WINDOW_SIZE_BITS)
             ) axis_handshake_monitor_eth_out (
-                .clk(clk_udp_ip),
-                .rst(rst_udp_ip),
+                .clk(clk_stack),
+                .rst(rst_stack),
                 .s_axis_tvalid(m_tx_axis_adapter_tvalid),
                 .m_axis_tready(m_tx_axis_adapter_tready),
                 .n_valid_up(eth_out_n_valid_up),
@@ -888,7 +886,7 @@ module network_wrapper_roce_generic #(
             );
 
             vio_axis_monitor VIO_axis_monitor_udp_eth (
-                .clk(clk_udp_ip),
+                .clk(clk_stack),
                 .probe_in0(udp_n_valid_up),
                 .probe_in1(udp_n_ready_up),
                 .probe_in2(udp_n_both_up ),

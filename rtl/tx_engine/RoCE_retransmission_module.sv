@@ -12,7 +12,7 @@ module RoCE_retransmission_module #(
     input wire rst_retry_cntr,
 
     input  wire          s_qp_params_valid,
-    input  wire [127:0]  s_qp_params,
+    input  wire [151:0]  s_qp_params,
 
     /*
      * RoCE RX ACKed PSNs
@@ -167,7 +167,7 @@ module RoCE_retransmission_module #(
     Close QP in case failed transfer (e.g. rnr retry count reached, retry count reached, irreversible error)
     */
     output  wire          m_qp_close_params_valid,
-    output  wire [127:0]  m_qp_close_params,
+    output  wire [151:0]  m_qp_close_params,
     /*
     Status ?
     */
@@ -639,6 +639,8 @@ Simple DMA write logic
     always @* begin
         state_next                           = STATE_IDLE;
 
+        
+
         single_packet_frame_next = single_packet_frame_reg;
 
         retrans_roce_bth_op_code_next = retrans_roce_bth_op_code_reg;
@@ -660,7 +662,7 @@ Simple DMA write logic
         retry_counter_next     = retry_counter_reg;
         rnr_retry_counter_next = rnr_retry_counter_reg;
 
-        stop_transfer_next     = 1'b0;
+        stop_transfer_next     = stop_transfer_reg;
 
         s_roce_bth_psn_memory_next = s_roce_bth_psn_memory_reg;
 
@@ -703,6 +705,11 @@ Simple DMA write logic
             last_acked_psn_next = s_roce_rx_bth_psn;
         end
 
+        if (s_qp_params_valid) begin
+            last_acked_psn_next = s_qp_params[151:128] - 24'd1;
+            last_sent_psn_next  = s_qp_params[151:128] - 24'd1;
+        end
+
         case (state_reg)
             STATE_IDLE: begin
 
@@ -732,15 +739,13 @@ Simple DMA write logic
                         if (rnr_retry_count_reg == 3'd7) begin // if rnr retry == 7, retry for ever
                             rnr_retry_counter_next = rnr_retry_counter_reg;
                         end else if (rnr_retry_counter_reg < rnr_retry_count) begin
-                            rnr_retry_counter_next = rnr_retry_counter_reg + 1;
+                            rnr_retry_counter_next = rnr_retry_counter_reg + 3'd1;
                         end else begin //stops retransmission
                             last_sent_psn_next = last_acked_psn_reg;
                             state_next  = STATE_IDLE;
                             stop_transfer_next = 1'b1;
                             //n_rnr_retransmit_triggers_next = 32'd0;
                         end
-                    end else begin
-                        rnr_retry_counter_next = 0;
                     end
                     retry_start_psn_next = (last_acked_psn_reg + 1);
                 end else if (trigger_retransmit) begin
@@ -760,8 +765,9 @@ Simple DMA write logic
                     n_retransmit_triggers_next = n_retransmit_triggers_reg + 32'd1;
 
                     if (retry_start_psn_reg == (last_acked_psn_reg + 24'd1)) begin
+                        // retransmission started from the last checkpoint (no acks in between, need to increase the retry counter, otherwise back to 1)
                         if (retry_counter_reg < retry_count_reg) begin
-                            retry_counter_next = retry_counter_reg + 1;
+                            retry_counter_next = retry_counter_reg + 3'd1;
                         end else begin //stops retransmission
                             last_sent_psn_next = last_acked_psn_reg;
                             state_next  = STATE_IDLE;
@@ -769,7 +775,7 @@ Simple DMA write logic
                             //n_retransmit_triggers_next = 32'd0;
                         end
                     end else begin
-                        retry_counter_next = 0;
+                        retry_counter_next = 3'd1;
                     end
                     retry_start_psn_next = (last_acked_psn_reg + 1);
 
@@ -791,6 +797,8 @@ Simple DMA write logic
                         last_sent_psn_next = s_roce_bth_psn;
                         last_buffered_psn_next = s_roce_bth_psn;
                         s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
                         state_next                   = STATE_DMA_WRITE;
                     end else if (s_roce_bth_ready && s_roce_bth_valid && s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
                         store_bth   = 1'b1;
@@ -809,6 +817,8 @@ Simple DMA write logic
                         last_sent_psn_next = s_roce_bth_psn;
                         last_buffered_psn_next = s_roce_bth_psn;
                         s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
                         state_next                   = STATE_DMA_WRITE;
                     end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
                         store_bth   = 1'b1;
@@ -827,6 +837,8 @@ Simple DMA write logic
                         last_sent_psn_next = s_roce_bth_psn;
                         last_buffered_psn_next = s_roce_bth_psn;
                         s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
                         state_next                   = STATE_DMA_WRITE;
                     end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid && s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
                         store_bth   = 1'b1;
@@ -845,6 +857,8 @@ Simple DMA write logic
                         last_sent_psn_next = s_roce_bth_psn;
                         last_buffered_psn_next = s_roce_bth_psn;
                         s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
                         state_next                   = STATE_DMA_WRITE;
                     end else  begin
                         state_next                           = STATE_IDLE;
@@ -993,7 +1007,7 @@ Simple DMA write logic
             nak_detected        <= 1'b0;
         end else begin
             if (en_retrans) begin
-                if (reset_timeout_counter_reg) begin
+                if (reset_timeout_counter_reg || stop_transfer_reg) begin
                     timeout_counter    <= timeout_period_reg;
                     trigger_retransmit <= 1'b0;
                     trigger_rnr_wait   <= 1'b0;
@@ -1040,8 +1054,8 @@ Simple DMA write logic
                             nak_detected       <= 1'b1;
                         end
                     endcase
-                end else if (retransmit_started || (last_sent_psn_reg == last_acked_psn_reg)) begin
-                    // Either retransmission on going or mem read pointer == write ponter
+                end else if (retransmit_started || (last_sent_psn_reg == last_acked_psn_reg) || retry_counter_reg == retry_count_reg) begin
+                    // Either retransmission on going or mem read pointer == write ponter or reached retransmission limit
                     timeout_counter <= timeout_period_reg;
                     trigger_retransmit <= 1'b0;
                     trigger_rnr_wait   <= 1'b0;
@@ -1058,6 +1072,10 @@ Simple DMA write logic
                     timeout_counter <= timeout_counter;
                     trigger_retransmit <= 1'b1;
                     trigger_rnr_wait   <= 1'b0;
+                end else if (stop_transfer_reg) begin
+                    timeout_counter <= timeout_counter;
+                    trigger_retransmit <= 1'b0;
+                    trigger_rnr_wait   <= 1'b0;
                 end else begin
                     // reduce timeout cunter
                     timeout_counter <= timeout_counter - 64'd1;
@@ -1065,8 +1083,6 @@ Simple DMA write logic
                     trigger_rnr_wait   <= 1'b0;
                 end
             end
-
-
         end
 
     end
@@ -1203,19 +1219,23 @@ Simple DMA write logic
 
 
             if (rst_retry_cntr) begin
-                retry_counter_reg     <= 4'd0;
-                rnr_retry_counter_reg <= 4'd0;
+                retry_counter_reg     <= 3'd0;
+                rnr_retry_counter_reg <= 3'd0;
                 n_retransmit_triggers_reg     <= 32'd0;
                 n_rnr_retransmit_triggers_reg <= 32'd0;
+
+                stop_transfer_reg <= 1'b0;
             end else begin
                 retry_counter_reg     <= retry_counter_next;
                 rnr_retry_counter_reg <= rnr_retry_counter_next;
                 n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
                 n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
+
+                stop_transfer_reg <= stop_transfer_next;
+        end
             end
 
-            stop_transfer_reg <= stop_transfer_next;
-        end
+            
     end
 
 

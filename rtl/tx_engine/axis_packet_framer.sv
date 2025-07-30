@@ -36,8 +36,8 @@ module axis_packet_framer #(
     /*
      * Output request
      */
-    input wire                          m_wr_req_ready,
     output  wire                        m_wr_req_valid,
+    input wire                          m_wr_req_ready,
     output  wire [23:0]                 m_wr_req_loc_qp,
     output  wire [31:0]                 m_wr_req_dma_length,
     output  wire [63:0]                 m_wr_req_addr_offset,
@@ -119,6 +119,13 @@ module axis_packet_framer #(
     wire                        m_axis_fifo_tlast;
     wire [1                : 0] m_axis_fifo_tuser; // Bad frame, last
     wire                        m_axis_fifo_tready;
+
+    wire [DATA_WIDTH   - 1 : 0] s_axis_fifo_out_tdata;
+    wire [DATA_WIDTH/8 - 1 : 0] s_axis_fifo_out_tkeep;
+    wire                        s_axis_fifo_out_tvalid;
+    wire                        s_axis_fifo_out_tlast;
+    wire [14               : 0] s_axis_fifo_out_tuser; // Bad frame, last
+    wire                        s_axis_fifo_out_tready;
 
     reg transfer_ongoing;
 
@@ -249,6 +256,7 @@ module axis_packet_framer #(
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
         .USER_WIDTH(2),
+        .RAM_PIPELINE(2),
         .FRAME_FIFO(1)
     ) input_axis_fifo (
         .clk(clk),
@@ -285,6 +293,7 @@ module axis_packet_framer #(
         .ID_ENABLE(0),
         .DEST_ENABLE(0),
         .USER_ENABLE(0),
+        .RAM_PIPELINE(2),
         .FRAME_FIFO(0)
     ) length_fifo (
         .clk(clk),
@@ -353,14 +362,54 @@ module axis_packet_framer #(
     assign m_wr_req_dma_length     = m_wr_req[98 +:32];
     assign m_wr_req_loc_qp         = m_wr_req[130+:24];
 
-    assign m_axis_tdata       = m_axis_fifo_tdata;
-    assign m_axis_tkeep       = m_axis_fifo_tkeep;
-    assign m_axis_tvalid      = m_axis_fifo_tvalid;
-    assign m_axis_fifo_tready = m_axis_tready;
-    assign m_axis_tlast       = m_axis_fifo_tlast;
-    assign m_axis_tuser[0]    = m_axis_fifo_tuser[0];
-    assign m_axis_tuser[1]    = last_post_fifo;
-    assign m_axis_tuser[14:2] = length_post_fifo[12:0];
+    assign s_axis_fifo_out_tdata       = m_axis_fifo_tdata;
+    assign s_axis_fifo_out_tkeep       = m_axis_fifo_tkeep;
+    assign s_axis_fifo_out_tvalid      = m_axis_fifo_tvalid;
+    assign m_axis_fifo_tready          = s_axis_fifo_out_tready;
+    assign s_axis_fifo_out_tlast       = m_axis_fifo_tlast;
+    assign s_axis_fifo_out_tuser[0]    = m_axis_fifo_tuser[0];
+    assign s_axis_fifo_out_tuser[1]    = last_post_fifo;
+    assign s_axis_fifo_out_tuser[14:2] = length_post_fifo[12:0];
+
+    axis_fifo #(
+        .DEPTH(8192),
+        .DATA_WIDTH(DATA_WIDTH),
+        .KEEP_ENABLE(1),
+        .KEEP_WIDTH(DATA_WIDTH/8),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(15),
+        .RAM_PIPELINE(2),
+        .FRAME_FIFO(0)
+    ) output_axis_fifo (
+        .clk(clk),
+        .rst(rst),
+
+        // AXI input
+        .s_axis_tdata (s_axis_fifo_out_tdata),
+        .s_axis_tkeep (s_axis_fifo_out_tkeep),
+        .s_axis_tvalid(s_axis_fifo_out_tvalid),
+        .s_axis_tready(s_axis_fifo_out_tready),
+        .s_axis_tlast (s_axis_fifo_out_tlast),
+        .s_axis_tuser (s_axis_fifo_out_tuser),
+        .s_axis_tid   (0),
+        .s_axis_tdest (0),
+
+        // AXI output
+        .m_axis_tdata (m_axis_tdata),
+        .m_axis_tkeep (m_axis_tkeep),
+        .m_axis_tvalid(m_axis_tvalid),
+        .m_axis_tready(m_axis_tready),
+        .m_axis_tlast (m_axis_tlast),
+        .m_axis_tuser (m_axis_tuser),
+
+        // Status
+        .status_overflow  (),
+        .status_bad_frame (),
+        .status_good_frame()
+    );
+
 
 endmodule
 
