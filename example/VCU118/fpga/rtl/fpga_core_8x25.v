@@ -611,7 +611,8 @@ module fpga_core #
             udp_complete_test #(
                 .DATA_WIDTH(64),
                 .UDP_CHECKSUM_GEN_ENABLE(0),
-                .ROCE_ICRC_INSERTER(1)
+                .ROCE_ICRC_INSERTER(1),
+                .IP_HEADER_CHECKSUM_PIPELINED(1)
             ) udp_complete_inst (
                 .clk(clk[j]),
                 .rst(rst[j]),
@@ -1186,7 +1187,8 @@ module fpga_core #
             udp_complete_test #(
                 .DATA_WIDTH(64),
                 .UDP_CHECKSUM_GEN_ENABLE(0),
-                .ROCE_ICRC_INSERTER(1)
+                .ROCE_ICRC_INSERTER(1),
+                .IP_HEADER_CHECKSUM_PIPELINED(1)
             ) udp_complete_inst (
                 .clk(clk[j]),
                 .rst(rst[j]),
