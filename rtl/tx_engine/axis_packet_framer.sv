@@ -43,7 +43,7 @@ module axis_packet_framer #(
     output  wire [63:0]                 m_wr_req_addr_offset,
     output  wire                        m_wr_req_is_immediate,
     output  wire [31:0]                 m_wr_req_immediate_data,
-    output  wire                        m_wr_req_tx_type, 
+    output  wire                        m_wr_req_tx_type,
 
     // axis stream
     output  wire [DATA_WIDTH   - 1 :0]  m_axis_tdata,
@@ -52,7 +52,7 @@ module axis_packet_framer #(
     input   wire                        m_axis_tready,
     output  wire                        m_axis_tlast,
     output  wire  [14              :0]  m_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
-
+    
     // config
     input wire [2:0] pmtu
 );
@@ -86,8 +86,15 @@ module axis_packet_framer #(
 
     function [DATA_WIDTH/8 - 1:0] count2keep;
         input [$clog2(DATA_WIDTH/8):0] k;
-        if (k < DATA_WIDTH/8) count2keep = count2keep_reg[k];
-        else count2keep = {DATA_WIDTH/8{1'b1}};
+        reg [DATA_WIDTH/4 - 1:0] temp_ones = {{DATA_WIDTH/4{1'b0}}, {DATA_WIDTH/4{1'b1}}};
+        reg [DATA_WIDTH/4 - 1:0] temp_srl;
+        if (k < DATA_WIDTH/8) begin
+            temp_srl = temp_ones << k;
+            count2keep = temp_srl[DATA_WIDTH/8 +: DATA_WIDTH/8];
+        end
+        else begin
+            count2keep = {DATA_WIDTH/8{1'b1}};
+        end
     endfunction
 
     localparam [1:0]
@@ -287,7 +294,7 @@ module axis_packet_framer #(
     );
 
     axis_fifo #(
-        .DEPTH(6),
+        .DEPTH(8),
         .DATA_WIDTH(16),
         .KEEP_ENABLE(0),
         .ID_ENABLE(0),
@@ -321,7 +328,7 @@ module axis_packet_framer #(
 
     // DMA meta fifo
     axis_fifo #(
-        .DEPTH(128),
+        .DEPTH(16),
         .DATA_WIDTH(154),
         .KEEP_ENABLE(0),
         .LAST_ENABLE(0),
@@ -349,11 +356,11 @@ module axis_packet_framer #(
 
 
     assign s_wr_req = { s_wr_req_loc_qp,
-                        s_wr_req_dma_length,
-                        s_wr_req_addr_offset,
-                        s_wr_req_immediate_data,
-                        s_wr_req_is_immediate,
-                        s_wr_req_tx_type};
+    s_wr_req_dma_length,
+    s_wr_req_addr_offset,
+    s_wr_req_immediate_data,
+    s_wr_req_is_immediate,
+    s_wr_req_tx_type};
 
     assign m_wr_req_tx_type        = m_wr_req[0];
     assign m_wr_req_is_immediate   = m_wr_req[1];
@@ -409,6 +416,8 @@ module axis_packet_framer #(
         .status_bad_frame (),
         .status_good_frame()
     );
+
+    
 
 
 endmodule

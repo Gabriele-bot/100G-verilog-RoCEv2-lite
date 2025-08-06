@@ -72,6 +72,11 @@ module RoCE_simple_work_queue #
     output wire [31:0] m_immediate_data,
     output wire        m_transfer_type,
 
+    // Update QP state output
+    output wire        m_qp_update_context_valid,
+    output wire [23:0] m_qp_update_loc_qpn,
+    output wire [23:0] m_qp_update_rem_psn,
+
     // Status
     output wire        error_qp_not_rts,
     output wire [23:0] error_loc_qpn
@@ -89,10 +94,12 @@ module RoCE_simple_work_queue #
     QP_STATE_ERROR    = 3'd6;
 
     localparam [2:0]
-    STATE_IDLE  = 3'd0,
-    STATE_NEW_WORK_REQ   = 3'd1,
-    STATE_WORK_REQ_SENT  = 3'd2,
-    STATE_DROP_AXIS      = 3'd3;
+    STATE_IDLE           = 3'd0,
+    STATE_WAIT_REQ_CD    = 3'd1,
+    STATE_NEW_WORK_REQ   = 3'd2,
+    STATE_WORK_REQ_SENT  = 3'd3,
+    STATE_SEND_DATA      = 3'd4,
+    STATE_DROP_AXIS      = 3'd5;
 
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
@@ -133,15 +140,25 @@ module RoCE_simple_work_queue #
 
     reg s_wr_req_ready_reg, s_wr_req_ready_next;
 
+    reg        m_qp_context_req_reg, m_qp_context_req_next;
+    reg [23:0] m_qp_local_qpn_req_reg, m_qp_local_qpn_req_next;
+
+    reg last_end_of_frame;
+
+    reg [2:0] qp_req_cooldown; // contex request must wait 6 clks after qp update;
+
     assign s_axis_tready = s_axis_tready_reg;
 
-    assign m_qp_local_qpn_req = s_wr_req_loc_qp;
+    assign m_qp_local_qpn_req = m_qp_local_qpn_req_reg;
     assign s_wr_req_ready = s_wr_req_ready_reg;
-    assign m_qp_context_req = s_wr_req_valid && s_wr_req_ready && (m_qp_local_qpn_req[23:8] == 16'd1 && m_qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0);
+    assign m_qp_context_req = m_qp_context_req_reg;
 
     always @* begin
 
         s_wr_req_ready_next = 1'b0;
+
+        m_qp_context_req_next = 1'b0;
+        m_qp_local_qpn_req_next = m_qp_local_qpn_req_reg;
 
         m_dma_meta_valid_next = m_dma_meta_valid_reg && !m_dma_meta_ready;
 
@@ -160,7 +177,13 @@ module RoCE_simple_work_queue #
             STATE_IDLE: begin
                 if (s_wr_req_valid && s_wr_req_ready) begin
                     if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the rights range
-                        state_next = STATE_NEW_WORK_REQ;
+                        if (qp_req_cooldown == 3'd0) begin
+                            m_qp_context_req_next = 1'b1;
+                            state_next = STATE_NEW_WORK_REQ;
+                        end else begin
+                            state_next = STATE_WAIT_REQ_CD;
+                        end
+                        m_qp_local_qpn_req_next = s_wr_req_loc_qp;
                     end else begin
                         error_qp_not_rts_next = 1'b1;
                         error_loc_qpn_next = s_wr_req_loc_qp;
@@ -172,17 +195,19 @@ module RoCE_simple_work_queue #
                     state_next = STATE_IDLE;
                 end
             end
+            STATE_WAIT_REQ_CD: begin
+                if (qp_req_cooldown == 3'd0) begin
+                    m_qp_context_req_next = 1'b1;
+                    state_next = STATE_NEW_WORK_REQ;
+                end else begin
+                    state_next = STATE_WAIT_REQ_CD;
+                end
+            end
             STATE_NEW_WORK_REQ: begin
                 s_wr_req_ready_next = 1'b0;
                 if (s_qp_context_valid && s_qp_state == QP_STATE_RTS) begin
                     m_dma_meta_valid_next = 1'b1;
                     state_next = STATE_WORK_REQ_SENT;
-                    s_axis_tready_next = m_axis_tready_int_early;
-                    m_axis_tdata_int  = s_axis_tdata;
-                    m_axis_tkeep_int  = s_axis_tkeep;
-                    m_axis_tvalid_int = s_axis_tvalid && s_axis_tready;;
-                    m_axis_tlast_int  = s_axis_tlast;
-                    m_axis_tuser_int  = s_axis_tuser;
                 end else if (s_qp_context_valid && s_qp_state != QP_STATE_RTS) begin
                     error_qp_not_rts_next = 1'b1;
                     error_loc_qpn_next = wr_loc_qpn_reg;
@@ -193,6 +218,20 @@ module RoCE_simple_work_queue #
             end
             STATE_WORK_REQ_SENT: begin
                 s_wr_req_ready_next = 1'b0;
+                if (m_dma_meta_valid && m_dma_meta_ready) begin
+                    s_axis_tready_next = m_axis_tready_int_early;
+                    m_axis_tdata_int  = s_axis_tdata;
+                    m_axis_tkeep_int  = s_axis_tkeep;
+                    m_axis_tvalid_int = s_axis_tvalid && s_axis_tready;;
+                    m_axis_tlast_int  = s_axis_tlast;
+                    m_axis_tuser_int  = s_axis_tuser;
+                    state_next = STATE_SEND_DATA;
+                end else begin
+                    state_next = STATE_WORK_REQ_SENT;
+                end
+            end
+            STATE_SEND_DATA: begin
+                s_wr_req_ready_next = 1'b0;
                 s_axis_tready_next = m_axis_tready_int_early;
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
@@ -200,10 +239,11 @@ module RoCE_simple_work_queue #
                 m_axis_tlast_int  = s_axis_tlast;
                 m_axis_tuser_int  = s_axis_tuser;
                 if (s_axis_tvalid && s_axis_tready && s_axis_tlast && s_axis_tuser[1]) begin
+                    s_wr_req_ready_next = 1'b1;
+                    s_axis_tready_next = 1'b0;
                     state_next = STATE_IDLE;
-                    s_axis_tready_next <= 1'b0;
                 end else begin
-                    state_next = STATE_WORK_REQ_SENT;
+                    state_next = STATE_SEND_DATA;
                 end
             end
             STATE_DROP_AXIS: begin
@@ -235,6 +275,10 @@ module RoCE_simple_work_queue #
         end else begin
             state_reg <= state_next;
             s_wr_req_ready_reg <= s_wr_req_ready_next;
+
+            m_qp_context_req_reg   <= m_qp_context_req_next;
+            m_qp_local_qpn_req_reg <= m_qp_local_qpn_req_next;
+
 
             s_axis_tready_reg <= s_axis_tready_next;
 
@@ -370,6 +414,86 @@ module RoCE_simple_work_queue #
             temp_m_axis_tvalid_reg <= 1'b0;
         end
     end
+
+    // updare qp loigc
+
+    reg [23:0] rem_psn_add_reg,  rem_psn_add_next;
+    reg [23:0] qp_update_rem_psn_add_reg, qp_update_rem_psn_add_next;
+
+    reg [23:0] qp_update_loc_qpn_reg, qp_update_loc_qpn_next;
+    reg        qp_update_valid_reg, qp_update_valid_next;
+
+    reg [23:0] m_qp_update_loc_qpn_reg, m_qp_update_loc_next;
+    reg [23:0] m_qp_update_rem_psn_reg, m_qp_update_rem_psn_next;
+
+    always @(*) begin
+
+        rem_psn_add_next = rem_psn_add_reg;
+        qp_update_rem_psn_add_next = qp_update_rem_psn_add_reg;
+
+        qp_update_loc_qpn_next = qp_update_loc_qpn_reg;
+        qp_update_valid_next   = 1'b0;
+
+
+
+        if (s_axis_tvalid && s_axis_tready && last_end_of_frame) begin
+            rem_psn_add_next = rem_psn_add_reg + 24'd1;
+            if (s_axis_tuser[1]) begin // last packet
+                rem_psn_add_next = 24'd0;
+                qp_update_rem_psn_add_next = rem_psn_add_reg + 24'd1;
+                qp_update_valid_next = 1'b1;
+            end
+        end
+
+        if (s_qp_context_valid) begin
+            qp_update_loc_qpn_next = s_qp_loc_qpn;
+            m_qp_update_rem_psn_next = s_qp_rem_psn;
+        end
+
+    end
+
+    always @(posedge clk) begin
+        if (rst) begin
+            rem_psn_add_reg <= 24'd0;
+
+            qp_update_rem_psn_add_reg <= 24'd0;
+            qp_update_loc_qpn_reg     <= 24'd0;
+            qp_update_valid_reg       <= 1'b0;
+
+            m_qp_update_rem_psn_reg   <= 24'd0;
+
+            qp_req_cooldown <= 3'd0;
+
+            last_end_of_frame <= 1'b1;
+        end else begin
+
+            if (s_axis_tvalid && s_axis_tready) begin
+                last_end_of_frame <= s_axis_tlast;
+            end
+
+            rem_psn_add_reg <= rem_psn_add_next;
+
+            qp_update_rem_psn_add_reg <= qp_update_rem_psn_add_next;
+            qp_update_loc_qpn_reg     <= qp_update_loc_qpn_next;
+            qp_update_valid_reg       <= qp_update_valid_next;
+
+            m_qp_update_rem_psn_reg   <= m_qp_update_rem_psn_next + qp_update_rem_psn_add_next;
+
+            if (qp_update_valid_next) begin
+                qp_req_cooldown <= 3'd3;
+            end else if (qp_req_cooldown == 3'd0) begin
+                qp_req_cooldown <= 3'd0;
+            end else begin
+                qp_req_cooldown <= qp_req_cooldown - 3'd1;
+            end
+
+
+        end
+    end
+
+    assign m_qp_update_context_valid = qp_update_valid_reg;
+    assign m_qp_update_loc_qpn       = qp_update_loc_qpn_reg;
+    assign m_qp_update_rem_psn       = m_qp_update_rem_psn_reg;
 
 
 

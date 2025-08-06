@@ -825,7 +825,7 @@ module network_wrapper_roce_generic #(
         .pmtu           (ctrl_pmtu),
         .RoCE_udp_port  (ctrl_RoCE_udp_port),
         .loc_ip_addr    (ctrl_local_ip),
-        .timeout_period (64'd300), //4.3 ns * 15000 = 64 us
+        .timeout_period (64'd15000), //4.3 ns * 15000 = 64 us
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7)
     );

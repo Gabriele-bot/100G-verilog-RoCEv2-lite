@@ -338,7 +338,7 @@ module RoCE_retransmission_module #(
     wire                       s_axis_broadcast_tready;
     wire                       s_axis_broadcast_tlast;
     wire [0:0]                 s_axis_broadcast_tuser;
-    
+
 
     reg [BUFFER_ADDR_WIDTH-1:0]  s_axis_dma_write_desc_addr_reg  = {BUFFER_ADDR_WIDTH{1'b0}}, s_axis_dma_write_desc_addr_next;
     reg [AXI_DMA_LENGTH-1:0]    s_axis_dma_write_desc_len_reg   = 13'b0, s_axis_dma_write_desc_len_next;
@@ -407,7 +407,7 @@ module RoCE_retransmission_module #(
     wire                       axis_bypass_tlast;
     wire [0:0]                 axis_bypass_tuser;
 
-    
+
 
     reg [23:0] psn_diff_next, psn_diff_reg = 24'd0;
 
@@ -639,7 +639,7 @@ Simple DMA write logic
     always @* begin
         state_next                           = STATE_IDLE;
 
-        
+
 
         single_packet_frame_next = single_packet_frame_reg;
 
@@ -684,7 +684,7 @@ Simple DMA write logic
         store_reth = 1'b0;
         store_immdh = 1'b0;
         store_udp_ip = 1'b0;
-        
+
         m_roce_bth_valid_next           = m_roce_bth_valid_reg   && !m_roce_bth_ready;
         m_roce_reth_valid_next          = m_roce_reth_valid_reg  && !m_roce_bth_ready;
         m_roce_immdh_valid_next         = m_roce_immdh_valid_reg && !m_roce_bth_ready;
@@ -706,21 +706,105 @@ Simple DMA write logic
         end
 
         if (s_qp_params_valid) begin
-            last_acked_psn_next = s_qp_params[151:128] - 24'd1;
-            last_sent_psn_next  = s_qp_params[151:128] - 24'd1;
+            last_acked_psn_next     = s_qp_params[151:128] - 24'd1;
+            last_sent_psn_next      = s_qp_params[151:128] - 24'd1;
+            last_buffered_psn_next  = s_qp_params[151:128] - 24'd1;
         end
 
         case (state_reg)
             STATE_IDLE: begin
 
-
-                s_roce_bth_ready_next               = !m_roce_bth_valid_next;
+                s_roce_bth_ready_next               = !m_roce_bth_valid_next && !(rnr_timeout_counter > 0 || trigger_retransmit) ;
 
                 single_packet_frame_next = single_packet_frame_reg;
 
                 //s_axis_dma_read_desc_valid_next = 1'b0;
 
-                if (rnr_timeout_counter > 0) begin // RNR
+                if (s_roce_bth_valid && s_roce_bth_ready) begin
+                    if (~s_roce_reth_valid && ~s_roce_immdh_valid) begin
+                        store_bth   = 1'b1;
+                        store_reth   = 1'b0;
+                        store_immdh   = 1'b0;
+
+                        store_udp_ip = 1'b1;
+
+                        m_roce_bth_valid_next   = 1'b1;
+                        m_roce_reth_valid_next  = 1'b0;
+                        m_roce_immdh_valid_next = 1'b0;
+                        s_roce_bth_ready_next   = 1'b0;
+                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
+                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 8; // UDP length - BTH - UDP HEADER 
+                        single_packet_frame_next = ((s_udp_length - 12 - 8) <= 16'd64);
+                        last_sent_psn_next = s_roce_bth_psn;
+                        last_buffered_psn_next = s_roce_bth_psn;
+                        s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
+                        state_next                   = STATE_DMA_WRITE;
+                    end else if (s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
+                        store_bth   = 1'b1;
+                        store_reth   = 1'b0;
+                        store_immdh   = 1'b1;
+
+                        store_udp_ip = 1'b1;
+
+                        m_roce_bth_valid_next   = 1'b1;
+                        m_roce_reth_valid_next  = 1'b0;
+                        m_roce_immdh_valid_next = 1'b1;
+                        s_roce_bth_ready_next   = 1'b0;
+                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
+                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 4 - 8; // UDP length - BTH - IMMD - UDP HEADER 
+                        single_packet_frame_next = ((s_udp_length - 12 - 4 - 8) <= 16'd64);
+                        last_sent_psn_next = s_roce_bth_psn;
+                        last_buffered_psn_next = s_roce_bth_psn;
+                        s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
+                        state_next                   = STATE_DMA_WRITE;
+                    end else if (s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
+                        store_bth   = 1'b1;
+                        store_reth   = 1'b1;
+                        store_immdh   = 1'b0;
+
+                        store_udp_ip = 1'b1;
+
+                        m_roce_bth_valid_next   = 1'b1;
+                        m_roce_reth_valid_next  = 1'b1;
+                        m_roce_immdh_valid_next = 1'b0;
+                        s_roce_bth_ready_next   = 1'b0;
+                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
+                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 8; // UDP length - BTH - RETH - UDP HEADER 
+                        single_packet_frame_next = ((s_udp_length - 12 - 16 - 8) <= 16'd64);
+                        last_sent_psn_next = s_roce_bth_psn;
+                        last_buffered_psn_next = s_roce_bth_psn;
+                        s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
+                        state_next                   = STATE_DMA_WRITE;
+                    end else if (s_roce_reth_valid && s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
+                        store_bth   = 1'b1;
+                        store_reth   = 1'b1;
+                        store_immdh   = 1'b1;
+
+                        store_udp_ip = 1'b1;
+
+                        m_roce_bth_valid_next   = 1'b1;
+                        m_roce_reth_valid_next  = 1'b1;
+                        m_roce_immdh_valid_next = 1'b1;
+                        s_roce_bth_ready_next   = 1'b0;
+                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
+                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 4 - 8; // UDP length - BTH - RETH - IMMD - UDP HEADER
+                        single_packet_frame_next = ((s_udp_length - 12 - 16 - 4 - 8) <= 16'd64);
+                        last_sent_psn_next = s_roce_bth_psn;
+                        last_buffered_psn_next = s_roce_bth_psn;
+                        s_axis_dma_write_desc_valid_next = 1'b1;
+                        retry_counter_next = 0;
+                        rnr_retry_counter_next = 0;
+                        state_next                   = STATE_DMA_WRITE;
+                    end else  begin
+                        state_next                           = STATE_IDLE;
+                    end
+                end else if (rnr_timeout_counter > 0 && !m_roce_bth_valid) begin // RNR
 
                     state_next  = STATE_RNR_WAIT;
 
@@ -748,7 +832,7 @@ Simple DMA write logic
                         end
                     end
                     retry_start_psn_next = (last_acked_psn_reg + 1);
-                end else if (trigger_retransmit) begin
+                end else if (trigger_retransmit && !m_roce_bth_valid) begin
 
                     state_next  = STATE_READ_RAM_HEADER;
 
@@ -779,90 +863,6 @@ Simple DMA write logic
                     end
                     retry_start_psn_next = (last_acked_psn_reg + 1);
 
-                end else begin
-                    if (s_roce_bth_ready && s_roce_bth_valid && ~s_roce_reth_valid && ~s_roce_immdh_valid) begin
-                        store_bth   = 1'b1;
-                        store_reth   = 1'b0;
-                        store_immdh   = 1'b0;
-
-                        store_udp_ip = 1'b1;
-                        
-                        m_roce_bth_valid_next   = 1'b1;
-                        m_roce_reth_valid_next  = 1'b0;
-                        m_roce_immdh_valid_next = 1'b0;
-                        s_roce_bth_ready_next   = 1'b0;
-                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
-                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 8; // UDP length - BTH - UDP HEADER 
-                        single_packet_frame_next = ((s_udp_length - 12 - 8) <= 16'd64);
-                        last_sent_psn_next = s_roce_bth_psn;
-                        last_buffered_psn_next = s_roce_bth_psn;
-                        s_axis_dma_write_desc_valid_next = 1'b1;
-                        retry_counter_next = 0;
-                        rnr_retry_counter_next = 0;
-                        state_next                   = STATE_DMA_WRITE;
-                    end else if (s_roce_bth_ready && s_roce_bth_valid && s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
-                        store_bth   = 1'b1;
-                        store_reth   = 1'b0;
-                        store_immdh   = 1'b1;
-
-                        store_udp_ip = 1'b1;
-                        
-                        m_roce_bth_valid_next   = 1'b1;
-                        m_roce_reth_valid_next  = 1'b0;
-                        m_roce_immdh_valid_next = 1'b1;
-                        s_roce_bth_ready_next   = 1'b0;
-                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
-                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 4 - 8; // UDP length - BTH - IMMD - UDP HEADER 
-                        single_packet_frame_next = ((s_udp_length - 12 - 4 - 8) <= 16'd64);
-                        last_sent_psn_next = s_roce_bth_psn;
-                        last_buffered_psn_next = s_roce_bth_psn;
-                        s_axis_dma_write_desc_valid_next = 1'b1;
-                        retry_counter_next = 0;
-                        rnr_retry_counter_next = 0;
-                        state_next                   = STATE_DMA_WRITE;
-                    end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
-                        store_bth   = 1'b1;
-                        store_reth   = 1'b1;
-                        store_immdh   = 1'b0;
-
-                        store_udp_ip = 1'b1;
-                        
-                        m_roce_bth_valid_next   = 1'b1;
-                        m_roce_reth_valid_next  = 1'b1;
-                        m_roce_immdh_valid_next = 1'b0;
-                        s_roce_bth_ready_next   = 1'b0;
-                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
-                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 8; // UDP length - BTH - RETH - UDP HEADER 
-                        single_packet_frame_next = ((s_udp_length - 12 - 16 - 8) <= 16'd64);
-                        last_sent_psn_next = s_roce_bth_psn;
-                        last_buffered_psn_next = s_roce_bth_psn;
-                        s_axis_dma_write_desc_valid_next = 1'b1;
-                        retry_counter_next = 0;
-                        rnr_retry_counter_next = 0;
-                        state_next                   = STATE_DMA_WRITE;
-                    end else if (s_roce_bth_ready && s_roce_bth_valid &&  s_roce_reth_valid && s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
-                        store_bth   = 1'b1;
-                        store_reth   = 1'b1;
-                        store_immdh   = 1'b1;
-
-                        store_udp_ip = 1'b1;
-                        
-                        m_roce_bth_valid_next   = 1'b1;
-                        m_roce_reth_valid_next  = 1'b1;
-                        m_roce_immdh_valid_next = 1'b1;
-                        s_roce_bth_ready_next   = 1'b0;
-                        s_axis_dma_write_desc_addr_next =  s_roce_bth_psn << memory_steps;
-                        s_axis_dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 4 - 8; // UDP length - BTH - RETH - IMMD - UDP HEADER
-                        single_packet_frame_next = ((s_udp_length - 12 - 16 - 4 - 8) <= 16'd64);
-                        last_sent_psn_next = s_roce_bth_psn;
-                        last_buffered_psn_next = s_roce_bth_psn;
-                        s_axis_dma_write_desc_valid_next = 1'b1;
-                        retry_counter_next = 0;
-                        rnr_retry_counter_next = 0;
-                        state_next                   = STATE_DMA_WRITE;
-                    end else  begin
-                        state_next                           = STATE_IDLE;
-                    end
                 end
 
             end
@@ -877,9 +877,70 @@ Simple DMA write logic
                     if (s_roce_payload_axis_tuser) begin // retry count reached, frame dropped and last sent psn back to last acked one
                         last_sent_psn_next = last_acked_psn_reg;
                     end
-                    state_next                           = STATE_IDLE;
-                //end else if (single_packet_frame_reg) begin
-                //    state_next                           = STATE_IDLE;
+                    if (rnr_timeout_counter > 0 && !m_roce_bth_valid) begin // RNR
+
+                        state_next  = STATE_RNR_WAIT;
+
+                        //s_axis_dma_write_desc_valid_next = 1'b0;
+
+                        m_roce_bth_valid_next   = 1'b0;
+                        m_roce_reth_valid_next  = 1'b0;
+                        m_roce_immdh_valid_next = 1'b0;
+
+                        s_roce_bth_psn_memory_next = rnr_nak_psn_reg;
+                        reset_timeout_counter_next = 1'b1;
+
+                        n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg + 32'd1;
+
+                        if (retry_start_psn_reg == (last_acked_psn_reg + 24'd1)) begin
+                            if (rnr_retry_count_reg == 3'd7) begin // if rnr retry == 7, retry for ever
+                                rnr_retry_counter_next = rnr_retry_counter_reg;
+                            end else if (rnr_retry_counter_reg < rnr_retry_count) begin
+                                rnr_retry_counter_next = rnr_retry_counter_reg + 3'd1;
+                            end else begin //stops retransmission
+                                last_sent_psn_next = last_acked_psn_reg;
+                                state_next  = STATE_IDLE;
+                                stop_transfer_next = 1'b1;
+                                //n_rnr_retransmit_triggers_next = 32'd0;
+                            end
+                        end
+                        retry_start_psn_next = (last_acked_psn_reg + 1);
+                    end else if (trigger_retransmit && !m_roce_bth_valid) begin
+
+                        state_next  = STATE_READ_RAM_HEADER;
+
+                        //s_axis_dma_write_desc_valid_next = 1'b0;
+
+                        m_roce_bth_valid_next   = 1'b0;
+                        m_roce_reth_valid_next  = 1'b0;
+                        m_roce_immdh_valid_next = 1'b0;
+
+                        s_roce_bth_psn_memory_next = nak_detected ? nak_psn_reg : (last_acked_psn_reg + 1);
+                        hdr_ram_addr_next = nak_detected ? nak_psn_reg : (last_acked_psn_reg + 1);
+                        reset_timeout_counter_next = 1'b1;
+
+                        n_retransmit_triggers_next = n_retransmit_triggers_reg + 32'd1;
+
+                        if (retry_start_psn_reg == (last_acked_psn_reg + 24'd1)) begin
+                            // retransmission started from the last checkpoint (no acks in between, need to increase the retry counter, otherwise back to 1)
+                            if (retry_counter_reg < retry_count_reg) begin
+                                retry_counter_next = retry_counter_reg + 3'd1;
+                            end else begin //stops retransmission
+                                last_sent_psn_next = last_acked_psn_reg;
+                                state_next  = STATE_IDLE;
+                                stop_transfer_next = 1'b1;
+                                //n_retransmit_triggers_next = 32'd0;
+                            end
+                        end else begin
+                            retry_counter_next = 3'd1;
+                        end
+                        retry_start_psn_next = (last_acked_psn_reg + 1);
+
+                    end else begin
+                        state_next                           = STATE_IDLE;
+                    end
+                    //end else if (single_packet_frame_reg) begin
+                    //    state_next                           = STATE_IDLE;
                 end
             end
             STATE_READ_RAM_HEADER: begin
@@ -1232,10 +1293,10 @@ Simple DMA write logic
                 n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
 
                 stop_transfer_reg <= stop_transfer_next;
-        end
             end
+        end
 
-            
+
     end
 
 
@@ -1290,7 +1351,7 @@ Simple DMA write logic
     assign m_udp_length         = axis_mux_select ? m_udp_length_reg : retrans_udp_length_reg;
     assign m_udp_checksum       = m_udp_checksum_reg;
 
-    
+
 
     axis_fifo #(
         .DEPTH(DATA_WIDTH/8*4),
@@ -1372,7 +1433,7 @@ Simple DMA write logic
         .m_axis_tuser ({s_axis_dma_write_fifo_data_tuser, axis_bypass_tuser})
     );
 
-    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && !trigger_retransmit && rnr_timeout_counter == 0);
+    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && (!(trigger_retransmit && !m_roce_bth_valid) || !(rnr_timeout_counter > 0 && !m_roce_bth_valid)));
 
     axis_mux #(
         .S_COUNT(2),

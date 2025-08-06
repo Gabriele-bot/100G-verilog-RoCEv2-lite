@@ -484,6 +484,10 @@ module RoCE_minimal_stack #(
     wire [31:0] m_framer_immediate_data;
     wire        m_framer_transfer_type;
 
+    wire         m_qp_update_context_valid;
+    wire [23:0]  m_qp_update_loc_qpn      ;
+    wire [23:0]  m_qp_update_rem_psn      ;
+
 
 
     /*
@@ -925,6 +929,10 @@ module RoCE_minimal_stack #(
         .m_immediate_data       (m_framer_immediate_data),
         .m_is_immediate         (m_framer_is_immediate  ),
         .m_transfer_type        (m_framer_transfer_type ),
+
+        .m_qp_update_context_valid(m_qp_update_context_valid),
+        .m_qp_update_loc_qpn      (m_qp_update_loc_qpn),
+        .m_qp_update_rem_psn      (m_qp_update_rem_psn),
 
         .error_qp_not_rts       (wr_error_qp_not_rts    ),
         .error_loc_qpn          (wr_error_loc_qpn       )
@@ -1913,18 +1921,9 @@ module RoCE_minimal_stack #(
         .qp_spy_rem_addr        (s_qp_spy_rem_addr),
         .qp_spy_syndrome        (s_qp_spy_syndrome),
 
-        /*
-        .s_dma_meta_valid       (s_dma_meta_valid & s_dma_meta_ready),
-        .s_meta_dma_length      (s_dma_length),
-        .s_meta_rem_qpn         (s_rem_qpn),
-        .s_meta_loc_qpn         (s_loc_qpn),
-        .s_meta_rem_psn         (s_rem_psn),
-        */
-        .s_roce_tx_bth_valid    (m_roce_to_retrans_bth_valid && m_roce_to_retrans_bth_ready),
-        .s_roce_tx_bth_op_code  (m_roce_to_retrans_bth_op_code),
-        .s_roce_tx_bth_psn      (m_roce_to_retrans_bth_psn),
-        .s_roce_tx_bth_src_qp   (m_roce_to_retrans_bth_src_qp),
-        .s_roce_tx_bth_dest_qp  (m_roce_to_retrans_bth_dest_qp),
+        .s_qp_update_context_valid(m_qp_update_context_valid),
+        .s_qp_update_loc_qpn      (m_qp_update_loc_qpn),
+        .s_qp_update_rem_psn      (m_qp_update_rem_psn),
 
         .s_roce_rx_bth_valid    (m_roce_rx_to_dropper_bth_valid & m_roce_rx_to_dropper_bth_ready),
         .s_roce_rx_bth_ready    (),
