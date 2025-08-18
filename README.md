@@ -7,16 +7,20 @@ Up to now only RC RDMA WRITE and RC SEND with and without IMMEDIATE for both. RX
 
 ## TX diagram
 <center>
-    <img src="img/RoCE_TX_diagram.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/RoCE_engine.png" alt="Drawing" style="width: 500px"/>
 </center>
 
 ## Retransmission diagram
 <center>
-    <img src="img/Retransmission_RoCE.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/RoCE_retransmission.png" alt="Drawing" style="width: 500px"/>
 </center>
 
 ## Connection manager via UDP
 A Connection Manager (CM) is implemented via UDP packets. The structure of the UDP packet can be found [here](https://github.com/Gabriele-bot/100G-verilog-RoCEv2-lite/blob/main/rtl/connection_manager/udp_RoCE_connection_manager_rx.sv#L10-L39). An example script can be found here [Scripts/send_connection_info.py](Scripts/send_connection_info.py).
+
+<center>
+    <img src="img/RoCE_cm_fsm.png" alt="Drawing" style="width: 500px"/>
+</center>
 
 To open a connection use the following command:
 ```
@@ -61,14 +65,25 @@ Every command that act on the QP's state will produce an ACK or an error:
 * Error will reply with the code `REQ_ERROR`
 * The ACK contains the local and remote information stored in the FPGA QP memory, E.G. Local adn Remote QPN, R_KEY, ADDR, IP ADDR 
 
+## AXI-Stream transaction example
+<center>
+    <img src="img/Stack_axis.png" alt="Drawing" style="width: 500px"/>
+</center>
+
+## RoCE TX transaction example
+<center>
+    <img src="img/TX_example.png" alt="Drawing" style="width: 500px"/>
+</center>
+
 ## TODO list
 
 Still Work In Progress, many things need to be adjusted:
 - [x] QP state module need to be updated
 - [ ] Add UDP checksum checker and producer for the CM path 
-- [ ] Modify RX and TX to support variable datapath width. 64, 128, 256, 512, 1024 bits
+- [x] Modify RX and TX to support variable datapath width. 64, 128, 256, 512, 1024 bits
 - [x] Optimize mask fields, now takes far too many LUTS (11k-15k)
 	- New CRC32 module written in SystemVerilog, [here](https://github.com/UofT-HPRC/Tbps_CRC)
 - [ ] Migth be useful to add UC RDMA WRITE
 - [x] Finish retransmission module
     - What about mutiple QPs? 
+- [ ] Optimize code for 400G, now it takes too many resources
