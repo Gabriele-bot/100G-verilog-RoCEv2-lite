@@ -72,7 +72,7 @@ Every command that act on the QP's state will produce an ACK or an error:
 
 ## RoCE TX transaction example
 <center>
-    <img src="img/TX_example.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/Tx_example.png" alt="Drawing" style="width: 500px"/>
 </center>
 
 ## TODO list
