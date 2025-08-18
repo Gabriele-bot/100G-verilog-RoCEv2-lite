@@ -369,6 +369,9 @@ module RoCE_qp_state_module #(
           qp_rem_acked_psn_mem[s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS_WIDTH-1:0]] <= s_roce_rx_bth_psn;
         end
       end
+    // if reset QP put it to 0  
+    end else if (state_reg == STATE_OPEN_QP) begin
+      qp_rem_acked_psn_mem[qp_init_ptr_reg] <= 24'd0;
     end else if (qp_context_spy) begin
       if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
         qp_spy_rem_acked_psn_reg <= qp_rem_acked_psn_mem[qp_local_qpn_spy[MAX_QUEUE_PAIRS_WIDTH-1:0]];

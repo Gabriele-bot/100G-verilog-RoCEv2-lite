@@ -66,7 +66,17 @@ module network_wrapper_roce_generic #(
     /*
     Status registers
     */
-    output wire stat_test
+    output wire stat_test,
+    // perf monitor
+    input  wire [3:0]  cfg_latency_avg_po2,
+    input  wire [4:0]  cfg_throughput_avg_po2,
+    input  wire [23:0] monitor_loc_qpn,
+    output wire [31:0] transfer_time_avg,
+    output wire [31:0] transfer_time_moving_avg,
+    output wire [31:0] transfer_time_inst,
+    output wire [31:0] latency_avg,
+    output wire [31:0] latency_moving_avg,
+    output wire [31:0] latency_inst
 );
 
     import Board_params::*; // Imports Board parameters
@@ -752,6 +762,7 @@ module network_wrapper_roce_generic #(
         .DATA_WIDTH(STACK_DATA_WIDTH),
         .CLOCK_PERIOD(RoCE_CLOCK_PERIOD),
         .DEBUG(DEBUG),
+        .ENABLE_SIM_PACKET_DROP_TX(1),
         .RETRANSMISSION(1),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(22)
     ) RoCE_minimal_stack_instance (
@@ -822,12 +833,24 @@ module network_wrapper_roce_generic #(
 
         .busy(),
         .error_payload_early_termination(),
+        
         .pmtu           (ctrl_pmtu),
         .RoCE_udp_port  (ctrl_RoCE_udp_port),
         .loc_ip_addr    (ctrl_local_ip),
         .timeout_period (64'd15000), //4.3 ns * 15000 = 64 us
         .retry_count    (3'd7),
-        .rnr_retry_count(3'd7)
+        .rnr_retry_count(3'd7),
+        // perf monitor
+        .transfer_time_avg       (transfer_time_avg),
+        .transfer_time_moving_avg(transfer_time_moving_avg),
+        .transfer_time_inst      (transfer_time_inst),
+        .latency_avg             (latency_avg),
+        .latency_moving_avg      (latency_moving_avg),
+        .latency_inst            (latency_inst),
+        .cfg_latency_avg_po2     (cfg_latency_avg_po2),
+        .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
+        .monitor_loc_qpn         (monitor_loc_qpn)
+        
     );
 
     generate

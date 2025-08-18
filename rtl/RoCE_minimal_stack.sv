@@ -109,7 +109,18 @@ module RoCE_minimal_stack #(
     input  wire [ 31:0] loc_ip_addr,
     input  wire [ 63:0] timeout_period,
     input  wire [ 2 :0] retry_count,
-    input  wire [ 2 :0] rnr_retry_count
+    input  wire [ 2 :0] rnr_retry_count,
+
+    // perf monitor
+    input  wire [3:0]  cfg_latency_avg_po2,
+    input  wire [4:0]  cfg_throughput_avg_po2,
+    input  wire [23:0] monitor_loc_qpn,
+    output wire [31:0] transfer_time_avg,
+    output wire [31:0] transfer_time_moving_avg,
+    output wire [31:0] transfer_time_inst,
+    output wire [31:0] latency_avg,
+    output wire [31:0] latency_moving_avg,
+    output wire [31:0] latency_inst
 
 );
 
@@ -615,6 +626,7 @@ module RoCE_minimal_stack #(
     wire [63:0]  m_wr_req_addr_offset;
     wire [31:0]  m_wr_req_dma_length; // for each transfer
 
+
     assign s_wr_req_valid = s_wr_req_valid_reg;
 
     always @(posedge clk) begin
@@ -643,6 +655,27 @@ module RoCE_minimal_stack #(
     end
 
     /*
+    WORKAROUND to to have only one qp in RTS at the same time
+    */
+    reg        qp_active;
+    reg [23:0] curr_open_qpn;
+
+    always @(posedge clk) begin
+        if (rst) begin
+            curr_open_qpn <= 24'd0;
+            qp_active     <= 1'b0;
+        end else begin
+            if (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS && !qp_active) begin
+                curr_open_qpn <= qp_init_loc_qpn;
+                qp_active     <= 1'b1;
+            end else if (qp_init_valid && qp_init_req_type == REQ_CLOSE_QP && qp_active) begin
+                curr_open_qpn <= 24'd0;
+                qp_active     <= 1'b0;
+            end
+        end
+    end
+
+    /*
      * Generate payolad data
      */
     axis_data_generator #(
@@ -650,6 +683,7 @@ module RoCE_minimal_stack #(
     ) axis_data_generator_instance (
         .clk(clk),
         .rst(rst),
+        .rst_word_ctr(qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
         .start(s_wr_req_valid && s_wr_req_ready),
         .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans) || wr_error_qp_not_rts),
         .m_axis_tdata (s_payload_axis_tdata),
@@ -1012,26 +1046,7 @@ module RoCE_minimal_stack #(
     generate
         if (RETRANSMISSION) begin
 
-            /*
-            WORKAROUND to to have only one qp in RTS at the same time
-            */
-            reg        qp_active;
-            reg [23:0] curr_open_qpn;
 
-            always @(posedge clk) begin
-                if (rst) begin
-                    curr_open_qpn <= 24'd0;
-                    qp_active     <= 1'b0;
-                end else begin
-                    if (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS && !qp_active) begin
-                        curr_open_qpn <= qp_init_loc_qpn;
-                        qp_active     <= 1'b1;
-                    end else if (qp_init_valid && qp_init_req_type == REQ_CLOSE_QP && qp_active) begin
-                        curr_open_qpn <= 24'd0;
-                        qp_active     <= 1'b0;
-                    end
-                end
-            end
 
 
             wire [151:0] s_qp_params;
@@ -1941,6 +1956,40 @@ module RoCE_minimal_stack #(
         .pmtu(pmtu)
     );
 
+    RoCE_latency_eval RoCE_latency_eval_instance (
+        .clk(clk),
+        .rst(rst),
+        .start_i                 (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS),
+        .s_roce_rx_bth_valid     (m_roce_rx_to_dropper_bth_valid),
+        .s_roce_rx_bth_op_code   (m_roce_rx_to_dropper_bth_op_code),
+        .s_roce_rx_bth_p_key     (m_roce_rx_to_dropper_bth_p_key),
+        .s_roce_rx_bth_psn       (m_roce_rx_to_dropper_bth_psn),
+        .s_roce_rx_bth_dest_qp   (m_roce_rx_to_dropper_bth_dest_qp),
+        .s_roce_rx_bth_ack_req   (m_roce_rx_to_dropper_bth_ack_req),
+        .s_roce_rx_aeth_valid    (m_roce_rx_to_dropper_aeth_valid),
+        .s_roce_rx_aeth_syndrome (m_roce_rx_to_dropper_aeth_syndrome),
+        .s_roce_rx_aeth_msn      (m_roce_rx_to_dropper_aeth_msn),
+
+        .s_roce_tx_bth_valid     (m_roce_to_retrans_bth_valid && m_roce_to_retrans_bth_ready),
+        .s_roce_tx_bth_op_code   (m_roce_to_retrans_bth_op_code),
+        .s_roce_tx_bth_p_key     (m_roce_to_retrans_bth_p_key),
+        .s_roce_tx_bth_psn       (m_roce_to_retrans_bth_psn),
+        .s_roce_tx_bth_dest_qp   (m_roce_to_retrans_bth_dest_qp),
+        .s_roce_tx_bth_src_qp    (m_roce_to_retrans_bth_src_qp),
+        .s_roce_tx_bth_ack_req   (m_roce_to_retrans_bth_ack_req),
+        .s_axis_tx_payload_valid (m_roce_to_retrans_payload_axis_tvalid && m_roce_to_retrans_payload_axis_tready),
+        .s_axis_tx_payload_last  (m_roce_to_retrans_payload_axis_tlast),
+        .transfer_time_avg       (transfer_time_avg),
+        .transfer_time_moving_avg(transfer_time_moving_avg),
+        .transfer_time_inst      (transfer_time_inst),
+        .latency_avg             (latency_avg),
+        .latency_moving_avg      (latency_moving_avg),
+        .latency_inst            (latency_inst),
+        .cfg_latency_avg_po2     (cfg_latency_avg_po2),
+        .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
+        .monitor_loc_qpn         (monitor_loc_qpn)
+    );
+
 
     generate
         if (DEBUG) begin
@@ -1995,42 +2044,6 @@ module RoCE_minimal_stack #(
                 .n_both_up (post_retrans_n_both_up)
             );
 
-            wire [63:0] tot_time_wo_ack_avg;
-            wire [63:0] tot_time_avg;
-            wire [63:0] transfer_time_tot;
-            wire [63:0] transfer_time_single;
-            wire [63:0] latency_first_packet;
-            wire [63:0] latency_last_packet;
-
-            RoCE_latency_eval RoCE_latency_eval_instance (
-                .clk                    (clk),
-                .rst                    (rst),
-                .start_i                (txmeta_start_transfer),
-                .s_roce_rx_bth_valid    (m_roce_rx_to_dropper_bth_valid),
-                .s_roce_rx_bth_op_code  (m_roce_rx_to_dropper_bth_op_code),
-                .s_roce_rx_bth_p_key    (m_roce_rx_to_dropper_bth_p_key),
-                .s_roce_rx_bth_psn      (m_roce_rx_to_dropper_bth_psn),
-                .s_roce_rx_bth_dest_qp  (m_roce_rx_to_dropper_bth_dest_qp),
-                .s_roce_rx_bth_ack_req  (m_roce_rx_to_dropper_bth_ack_req),
-                .s_roce_rx_aeth_valid   (m_roce_rx_to_dropper_aeth_valid),
-                .s_roce_rx_aeth_syndrome(m_roce_rx_to_dropper_aeth_syndrome),
-                .s_roce_rx_aeth_msn     (m_roce_rx_to_dropper_aeth_msn),
-                .s_roce_tx_bth_valid    (m_roce_to_retrans_bth_valid & m_roce_to_retrans_bth_ready),
-                .s_roce_tx_bth_op_code  (m_roce_to_retrans_bth_op_code),
-                .s_roce_tx_bth_p_key    (m_roce_to_retrans_bth_p_key),
-                .s_roce_tx_bth_psn      (m_roce_to_retrans_bth_psn),
-                .s_roce_tx_bth_dest_qp  (m_roce_to_retrans_bth_dest_qp),
-                .s_roce_tx_bth_ack_req  (m_roce_to_retrans_bth_ack_req),
-                .s_roce_tx_reth_valid   (m_roce_to_retrans_reth_valid & m_roce_to_retrans_bth_ready),
-                .s_roce_tx_reth_v_addr  (m_roce_to_retrans_reth_v_addr),
-                .s_roce_tx_reth_r_key   (m_roce_to_retrans_reth_r_key),
-                .s_roce_tx_reth_length  (m_roce_to_retrans_reth_length),
-                .transfer_time_tot      (transfer_time_tot),
-                .transfer_time_single   (transfer_time_single),
-                .latency_first_packet   (latency_first_packet),
-                .latency_last_packet    (latency_last_packet)
-            );
-
             axis_handshake_monitor #(
             .window_width(27)
             ) axis_handshake_monitor_instance (
@@ -2062,10 +2075,10 @@ module RoCE_minimal_stack #(
                 .probe_in0(RoCE_tx_n_valid_up),
                 .probe_in1(RoCE_tx_n_ready_up),
                 .probe_in2(RoCE_tx_n_both_up),
-                .probe_in3(latency_first_packet),
-                .probe_in4(latency_last_packet),
-                .probe_in5(transfer_time_tot),
-                .probe_in6(transfer_time_single),
+                .probe_in3(0),
+                .probe_in4(0),
+                .probe_in5(0),
+                .probe_in6(0),
                 .probe_in7(last_acked_psn_reg),
                 .probe_in8(last_acked_psn),
                 .probe_in9(last_buffered_psn),

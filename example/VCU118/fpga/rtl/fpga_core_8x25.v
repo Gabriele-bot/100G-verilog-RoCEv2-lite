@@ -839,7 +839,17 @@ module fpga_core #
                 .loc_ip_addr(local_ips[j]),
                 .timeout_period(64'd13000),
                 .retry_count(3'd7),
-                .rnr_retry_count(3'd7)
+                .rnr_retry_count(3'd7),
+                // perf monitor
+	       .transfer_time_avg       (),
+	       .transfer_time_moving_avg(),
+	       .transfer_time_inst      (),
+	       .latency_avg             (),
+	       .latency_moving_avg      (),
+	       .latency_inst            (),
+	       .cfg_latency_avg_po2     (4'd7),
+	       .cfg_throughput_avg_po2  (5'd9),
+               .monitor_loc_qpn         (24'd256)
             );
 
         end
@@ -1414,7 +1424,17 @@ module fpga_core #
                 .loc_ip_addr(local_ips[j]),
                 .timeout_period(64'd13000), //2.6 ns * 13000 = 34 us
                 .retry_count(3'd7),
-                .rnr_retry_count(3'd7)
+                .rnr_retry_count(3'd7),
+                // perf monitor
+	       .transfer_time_avg       (),
+	       .transfer_time_moving_avg(),
+	       .transfer_time_inst      (),
+	       .latency_avg             (),
+	       .latency_moving_avg      (),
+	       .latency_inst            (),
+	       .cfg_latency_avg_po2     (4'd7),
+	       .cfg_throughput_avg_po2  (5'd9),
+               .monitor_loc_qpn         (24'd256)
             );
 
         end

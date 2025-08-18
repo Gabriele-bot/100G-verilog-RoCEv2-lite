@@ -4,7 +4,5 @@ package Board_params;
 
     parameter RoCE_CLOCK_PERIOD = 1000/276.00; // in ns
     parameter MAC_CLOCK_PERIOD = 1000/391; // in ns
-
-    parameter RoCE_DATA_WIDTH = 2048;
   
 endpackage

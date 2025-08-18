@@ -376,6 +376,10 @@ module RoCE_tx_header_producer #(
 
                         psn_next              = s_rem_psn_reg;
 
+                        if (s_axis_tlast) begin
+                            state_next = STATE_IDLE;
+                        end 
+
                     end else begin // frame length equal to pmtu and not last packet--> FIRST
                         state_next            = STATE_FIRST;
 

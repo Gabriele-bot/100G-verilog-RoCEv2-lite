@@ -8,6 +8,8 @@ module axis_data_generator #(
     input wire clk,
     input wire rst,
 
+    input wire rst_word_ctr,
+
     input wire start,
     input wire stop,
 
@@ -50,7 +52,7 @@ module axis_data_generator #(
             count2keep = temp_srl[KEEP_WIDTH +: KEEP_WIDTH];
         end else begin
             count2keep = {KEEP_WIDTH{1'b1}};
-        end 
+        end
     endfunction
 
     parameter SLICES_32BIT = DATA_WIDTH/32;
@@ -61,6 +63,8 @@ module axis_data_generator #(
     reg start_2;
 
     reg [31:0] word_counter = {32{1'b1}} - WORD_WIDTH;
+    reg [33:0] word_counter_out;
+    reg [31:0] tot_word_ctr;
     reg [KEEP_WIDTH-1:0] tkeep_reg;
     reg                  tlast_reg;
 
@@ -109,6 +113,8 @@ module axis_data_generator #(
     always @(posedge clk) begin
         if (rst) begin
             word_counter      <= {32{1'b1}} - WORD_WIDTH;
+            word_counter_out  <= 34'd0;
+            tot_word_ctr      <= 32'd0;
             length_reg        <= 32'd0;
             stop_transfer_reg <= 1'b0;
             start_1 <= 1'b0;
@@ -120,16 +126,19 @@ module axis_data_generator #(
                 stop_transfer_reg <= 1'b1;
                 if (length_reg == 0) begin // no transfer on going
                     word_counter <= {32{1 'b1}} - WORD_WIDTH;
+                    word_counter_out <= word_counter_out;
                     tkeep_reg <= {KEEP_WIDTH{1'b0}};
                     tlast_reg <= 1'b0;
                 end else begin
                     word_counter <= length_reg - WORD_WIDTH;
+                    word_counter_out <= word_counter_out;
                     tkeep_reg <= {KEEP_WIDTH{1'b1}};
                     tlast_reg <= 1'b1;
                 end
             end else if (s_output_reg_axis_tvalid && s_output_reg_axis_tready) begin
                 if ((word_counter <= length)) begin
                     word_counter <= word_counter + WORD_WIDTH;
+                    word_counter_out <= word_counter_out + WORD_WIDTH;
                 end
                 if (word_counter + WORD_WIDTH + WORD_WIDTH >= length_reg) begin
                     if (length_reg[COUNT_KEEP_WIDTH-1:0] == 12'd0 && |(length_reg[31:COUNT_KEEP_WIDTH])) begin
@@ -144,14 +153,17 @@ module axis_data_generator #(
                 end
                 if (s_output_reg_axis_tlast) begin
                     word_counter      <= {32{1'b1}} - WORD_WIDTH;
+                    word_counter_out <= word_counter_out;
                     length_reg        <= 32'd0;
                     tkeep_reg <= {KEEP_WIDTH{1'b0}};
                     stop_transfer_reg <= 1'b0;
+                    tot_word_ctr <= tot_word_ctr + length_reg;
                 end
             end else if (~start_1 && start) begin //start of transfer
                 stop_transfer_reg <= 1'b0;
                 length_reg <= length;
                 word_counter <= {32{1'b1}} - WORD_WIDTH;
+                word_counter_out <= word_counter_out;
                 // generate teep only for the last frame
                 if (length == WORD_WIDTH) begin
                     tkeep_reg  <= {KEEP_WIDTH{1'b1}};
@@ -166,6 +178,7 @@ module axis_data_generator #(
             end else if (~start_2 && start_1) begin
                 stop_transfer_reg <= 1'b0;
                 word_counter <= 0;
+                word_counter_out <= tot_word_ctr;
                 // generate teep only for the last frame
                 if (length_reg == WORD_WIDTH) begin
                     tkeep_reg  <= {KEEP_WIDTH{1'b1}};
@@ -181,18 +194,18 @@ module axis_data_generator #(
             if (s_output_reg_axis_tvalid && s_output_reg_axis_tready && s_output_reg_axis_tlast) begin
                 stop_transfer_reg <= 1'b0;
             end
-            
+            if (rst_word_ctr) begin
+                word_counter_out <= 34'd0;
+                tot_word_ctr     <= 32'd0;
+            end
         end
     end
 
     // TDATA
     generate
-        assign s_output_reg_axis_tdata[31:0] = word_counter[31:0];
-        if (SLICES_32BIT >= 2) begin
-            assign s_output_reg_axis_tdata[63:32] = ~word_counter[31:0];
-        end
-        if (SLICES_32BIT > 2) begin
-            assign s_output_reg_axis_tdata[DATA_WIDTH-1:64] = {(SLICES_32BIT-2){32'hDEADBEEF}};
+        assign s_output_reg_axis_tdata[31:0] = word_counter_out[33:2];
+        for (genvar j=1; j<SLICES_32BIT; j=j+1) begin
+            assign s_output_reg_axis_tdata[j*32+:32] = word_counter_out[33:2] + j;
         end
     endgenerate
 

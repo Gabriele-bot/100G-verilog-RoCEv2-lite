@@ -52,7 +52,7 @@ module axis_packet_framer #(
     input   wire                        m_axis_tready,
     output  wire                        m_axis_tlast,
     output  wire  [14              :0]  m_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
-    
+
     // config
     input wire [2:0] pmtu
 );
@@ -71,18 +71,6 @@ module axis_packet_framer #(
             end
         end
     endgenerate
-
-    function [$clog2(DATA_WIDTH/8):0] keep2count;
-        input [DATA_WIDTH/8 - 1:0] k;
-        for (i = DATA_WIDTH/8 - 1; i >= 0; i = i - 1) begin
-            if (i == DATA_WIDTH/8 - 1) begin
-                if (k[DATA_WIDTH/8 -1]) keep2count = DATA_WIDTH/8;
-            end else begin
-                if (k[i +: 2] == 2'b01) keep2count = i+1;
-                else if (k[i +: 2] == 2'b00) keep2count = 0;
-            end
-        end
-    endfunction
 
     function [DATA_WIDTH/8 - 1:0] count2keep;
         input [$clog2(DATA_WIDTH/8):0] k;
@@ -139,6 +127,11 @@ module axis_packet_framer #(
     reg [3:0] pmtu_shift;
     reg [11:0] length_pmtu_mask;
 
+    reg length_last_fifo_reg;
+
+    reg [15:0] frame_len_reg, frame_len_next;
+    reg        frame_len_valid_reg, frame_len_valid_next;
+    reg [15:0] bit_cnt;
 
     wire [15:0] length_post_fifo;
     wire        last_post_fifo;
@@ -293,6 +286,46 @@ module axis_packet_framer #(
         .status_good_frame()
     );
 
+
+
+
+    // length computation
+    always @(*) begin
+        frame_len_next = frame_len_reg;
+        frame_len_valid_next = 1'b0;
+
+        if (frame_len_valid_reg) begin
+            frame_len_next = 0;
+        end
+
+        if (s_axis_fifo_tvalid && s_axis_fifo_tready) begin
+
+            if (s_axis_fifo_tlast) begin
+                // end of frame
+                frame_len_valid_next = 1'b1;
+            end
+
+            bit_cnt = 0;
+            for (i = 0; i <= DATA_WIDTH/8; i = i + 1) begin
+                if (s_axis_fifo_tkeep == ({DATA_WIDTH/8{1'b1}}) >> (DATA_WIDTH/8-i)) bit_cnt = i;
+            end
+            frame_len_next = frame_len_next + bit_cnt;
+        end
+    end
+
+
+    always @(posedge clk) begin
+        if (rst) begin
+            frame_len_reg <= 16'd0;
+            frame_len_valid_reg <= 1'b0;
+        end else begin
+            frame_len_reg <= frame_len_next;
+            frame_len_valid_reg <= frame_len_valid_next;
+            length_last_fifo_reg <= s_axis_tlast && s_axis_tvalid && s_axis_tready;
+        end
+    end
+
+
     axis_fifo #(
         .DEPTH(8),
         .DATA_WIDTH(16),
@@ -300,17 +333,17 @@ module axis_packet_framer #(
         .ID_ENABLE(0),
         .DEST_ENABLE(0),
         .USER_ENABLE(0),
-        .RAM_PIPELINE(2),
+        .RAM_PIPELINE(1),
         .FRAME_FIFO(0)
     ) length_fifo (
         .clk(clk),
         .rst(rst),
 
         // AXI input
-        .s_axis_tdata (word_counter + keep2count(s_axis_tkeep)),
-        .s_axis_tvalid(s_axis_fifo_tready && s_axis_fifo_tvalid && s_axis_fifo_tlast),
+        .s_axis_tdata (frame_len_reg),
+        .s_axis_tvalid(frame_len_valid_reg),
         .s_axis_tready(),
-        .s_axis_tlast (s_axis_tlast),
+        .s_axis_tlast (length_last_fifo_reg),
         .s_axis_tuser (0),
         .s_axis_tkeep (0),
         .s_axis_tid   (0),
@@ -379,7 +412,7 @@ module axis_packet_framer #(
     assign s_axis_fifo_out_tuser[14:2] = length_post_fifo[12:0];
 
     axis_fifo #(
-        .DEPTH(8192),
+        .DEPTH(4096),
         .DATA_WIDTH(DATA_WIDTH),
         .KEEP_ENABLE(1),
         .KEEP_WIDTH(DATA_WIDTH/8),
@@ -387,7 +420,7 @@ module axis_packet_framer #(
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
         .USER_WIDTH(15),
-        .RAM_PIPELINE(2),
+        .RAM_PIPELINE(1),
         .FRAME_FIFO(0)
     ) output_axis_fifo (
         .clk(clk),
@@ -417,7 +450,7 @@ module axis_packet_framer #(
         .status_good_frame()
     );
 
-    
+
 
 
 endmodule

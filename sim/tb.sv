@@ -16,7 +16,7 @@ export "DPI-C" task xgmii_idle;
 parameter MAC_DATA_WIDTH = 1024;
 parameter RoCE_DATA_WIDTH = 2048;
 
-localparam SCALE_UP_FACT = MAC_DATA_WIDTH/64;
+localparam SCALE_UP_FACT       = MAC_DATA_WIDTH/64;
 
 parameter MAC_FREQ      = 390.625_000;
 parameter UDP_IP_FREQ   = 276/SCALE_UP_FACT;

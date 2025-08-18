@@ -667,7 +667,17 @@ wire [15:0] RoCE_udp_port;
       .loc_ip_addr(local_ip),
       .timeout_period(64'd20000), //3.1 ns * 20000 = 62 ns
       .retry_count(3'd7),
-      .rnr_retry_count(3'd7)
+      .rnr_retry_count(3'd7),
+      // perf monitor
+     .transfer_time_avg       (),
+     .transfer_time_moving_avg(),
+     .transfer_time_inst      (),
+     .latency_avg             (),
+     .latency_moving_avg      (),
+     .latency_inst            (),
+     .cfg_latency_avg_po2     (4'd7),
+     .cfg_throughput_avg_po2  (5'd9),
+     .monitor_loc_qpn         (24'd256)
   );
   
   /*

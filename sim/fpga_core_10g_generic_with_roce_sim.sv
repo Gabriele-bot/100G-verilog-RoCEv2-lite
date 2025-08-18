@@ -649,7 +649,15 @@ module top #(
     .ctrl_priority_tag(3'd1),
     
     .pfc_pause_req(8'd0),
-    .pfc_pause_ack()
+    .pfc_pause_ack(),
+    
+    .transfer_time_avg      (),
+    .transfer_time_inst     (),
+    .latency_avg            (),
+    .latency_inst           (),
+    .cfg_latency_avg_po2    (4'd4),
+    .cfg_throughput_avg_po2 (5'd4),
+    .monitor_loc_qpn        (24'd256)
   );
 
 endmodule

@@ -29,175 +29,58 @@ module RoCE_latency_eval (
   input  wire [15:0] s_roce_tx_bth_p_key,
   input  wire [23:0] s_roce_tx_bth_psn,
   input  wire [23:0] s_roce_tx_bth_dest_qp,
+  input  wire [23:0] s_roce_tx_bth_src_qp,
   input  wire        s_roce_tx_bth_ack_req,
-  // RETH           
-  input  wire        s_roce_tx_reth_valid,
-  input  wire [63:0] s_roce_tx_reth_v_addr,
-  input  wire [31:0] s_roce_tx_reth_r_key,
-  input  wire [31:0] s_roce_tx_reth_length,
-  // AETH
+  // AXIS
+  input  wire        s_axis_tx_payload_valid,
+  input  wire        s_axis_tx_payload_last,
   /*
    * TODO ADD 
    */
   // Performance results
-  output wire [63:0] transfer_time_tot,
-  output wire [63:0] transfer_time_single,
-  output wire [63:0] latency_first_packet,
-  output wire [63:0] latency_last_packet
+  output wire [31:0] transfer_time_avg,
+  output wire [31:0] transfer_time_moving_avg,
+  output wire [31:0] transfer_time_inst,
+  output wire [31:0] latency_avg,
+  output wire [31:0] latency_moving_avg,
+  output wire [31:0] latency_inst,
+  // cfg
+  input  wire [3:0] cfg_latency_avg_po2, // must be a power of 2 for easy division
+  input  wire [4:0] cfg_throughput_avg_po2, // must be a power of 2 for easy division
+  input  wire [23:0] monitor_loc_qpn
 );
 
   import RoCE_params::*; // Imports RoCE parameters
 
-  wire        fifo_rst;
-
-  reg  [63:0] free_running_ctr;
+  localparam RAM_ADD_WIDTH = 12; // 4096 points
 
 
+  reg start_d;
 
-  reg         start_d;
+  reg [31:0] free_running_ctr;
+  reg [31:0] throughput_ctr;
+  reg [31:0] throughput_out_sum;
+  reg [31:0] throughput_out_sum_reg;
+  reg [31:0] throughput_out_inst;
+  reg [31:0] throughput_starting_point;
+  reg [31:0] throughput_starting_point_inst;
+  reg last_frame;
+  reg [31:0] latency_out_sum;
+  reg [31:0] latency_out_sum_reg;
+  reg [31:0] latency_out_inst;
+  reg [RAM_ADD_WIDTH-2:0]  measure_ctr;
+  reg ren_del_1;
+  reg ren_del_2;
 
-  wire [63:0] start_stamp_fifo_out_data;
-  wire        start_stamp_fifo_out_valid;
-  wire        start_fifos_out_ready;
-  wire        last_fifos_out_ready;
+  wire [12:0] n_transfer_latency_avg = 1 << cfg_latency_avg_po2;
+  wire [16:0] n_transfer_throughput_avg = 1 << cfg_throughput_avg_po2;
+  wire [31:0] ram_dout;
 
-  wire        start_psn_fifo_we;
+  reg latency_avg_valid;
+  reg throughput_avg_valid;
 
-  axis_fifo #(
-    .DEPTH      (1024),
-    .DATA_WIDTH (64),
-    .KEEP_ENABLE(0),
-    .ID_ENABLE  (0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(0),
-    .USER_WIDTH (1),
-    .FRAME_FIFO (0)
-  ) fifo_start_message_time_stamp (
-    .clk(clk),
-    .rst(fifo_rst | rst),
+  integer i;
 
-    // AXI input
-    .s_axis_tdata(free_running_ctr),
-    .s_axis_tkeep(0),
-    .s_axis_tvalid(start_psn_fifo_we),
-    .s_axis_tuser(0),
-    .s_axis_tlast(0),
-    .s_axis_tdest(0),
-    .s_axis_tid(0),
-
-    // AXI output
-    .m_axis_tdata (start_stamp_fifo_out_data),
-    .m_axis_tvalid(start_stamp_fifo_out_valid),
-    .m_axis_tready(start_fifos_out_ready)
-  );
-
-  
-
-  wire [63:0] last_stamp_fifo_out_data;
-  wire        last_stamp_fifo_out_valid;
-  wire        last_psn_fifo_we;
-
-  axis_fifo #(
-    .DEPTH      (1024),
-    .DATA_WIDTH (64),
-    .KEEP_ENABLE(0),
-    .ID_ENABLE  (0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(0),
-    .USER_WIDTH (1),
-    .FRAME_FIFO (0)
-  ) fifo_last_message_time_stamp (
-    .clk(clk),
-    .rst(fifo_rst | rst),
-
-    // AXI input
-    .s_axis_tdata(free_running_ctr),
-    .s_axis_tkeep(0),
-    .s_axis_tvalid(last_psn_fifo_we),
-    .s_axis_tuser(0),
-    .s_axis_tlast(0),
-    .s_axis_tdest(0),
-    .s_axis_tid(0),
-
-    // AXI output
-    .m_axis_tdata (last_stamp_fifo_out_data),
-    .m_axis_tvalid(last_stamp_fifo_out_valid),
-    .m_axis_tready(last_fifos_out_ready)
-  );
-  
-  wire [23:0] start_psn_fifo_out_data;
-  wire        start_psn_fifo_out_valid;
-
-  axis_fifo #(
-    .DEPTH      (1024),
-    .DATA_WIDTH (24),
-    .KEEP_ENABLE(0),
-    .ID_ENABLE  (0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(0),
-    .USER_WIDTH (1),
-    .FRAME_FIFO (0)
-  ) fifo_start_psn (
-    .clk(clk),
-    .rst(fifo_rst | rst),
-
-    // AXI input
-    .s_axis_tdata(s_roce_tx_bth_psn),
-    .s_axis_tkeep(0),
-    .s_axis_tvalid(start_psn_fifo_we), // RDMA WRITE FIRST or RDMA WRITE ONLY, start of packet
-    .s_axis_tuser(0),
-    .s_axis_tlast(0),
-    .s_axis_tdest(0),
-    .s_axis_tid(0),
-
-    // AXI output
-    .m_axis_tdata (start_psn_fifo_out_data),
-    .m_axis_tvalid(start_psn_fifo_out_valid),
-    .m_axis_tready(start_fifos_out_ready)
-  );
-
-  assign start_psn_fifo_we = s_roce_tx_bth_valid & (s_roce_tx_bth_op_code == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD
-                                                 || s_roce_tx_bth_op_code == RC_SEND_FIRST       || s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD
-  );
-
-  wire [23:0] last_psn_fifo_out_data;
-  wire        last_psn_fifo_out_valid;
-
-  axis_fifo #(
-    .DEPTH      (1024),
-    .DATA_WIDTH (24),
-    .KEEP_ENABLE(0),
-    .ID_ENABLE  (0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(0),
-    .USER_WIDTH (1),
-    .FRAME_FIFO (0)
-  ) fifo_last_psn (
-    .clk(clk),
-    .rst(fifo_rst | rst),
-
-    // AXI input
-    .s_axis_tdata(s_roce_tx_bth_psn),
-    .s_axis_tkeep(0),
-    .s_axis_tvalid(last_psn_fifo_we), // RDMA WRITE FIRST or RDMA WRITE ONLY, start of packet
-    .s_axis_tuser(0),
-    .s_axis_tlast(0),
-    .s_axis_tdest(0),
-    .s_axis_tid(0),
-
-    // AXI output
-    .m_axis_tdata (last_psn_fifo_out_data),
-    .m_axis_tvalid(last_psn_fifo_out_valid),
-    .m_axis_tready(last_fifos_out_ready)
-  );
-
-  assign last_psn_fifo_we = s_roce_tx_bth_valid & (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD
-                                                || s_roce_tx_bth_op_code == RC_SEND_LAST       || s_roce_tx_bth_op_code == RC_SEND_LAST_IMD       || s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD
-  );
-
-  assign start_fifos_out_ready = s_roce_rx_bth_valid & s_roce_rx_aeth_valid & (s_roce_rx_bth_psn == start_psn_fifo_out_data);
-  assign last_fifos_out_ready  = s_roce_rx_bth_valid & s_roce_rx_aeth_valid & (s_roce_rx_bth_psn == last_psn_fifo_out_data);
-  assign fifo_rst = start_i & ~start_d;
 
   always @(posedge clk) begin
     start_d <= start_i;
@@ -205,58 +88,152 @@ module RoCE_latency_eval (
 
   always @(posedge clk) begin
     if (rst) begin // reset counter when start of packet is detected at the transmitter side
-      free_running_ctr <= 64'd0;
+      free_running_ctr <= 32'd0;
     end else begin
       if (start_i & ~start_d) begin
-        free_running_ctr <= 64'd0;
+        free_running_ctr <= 32'd0;
       end else begin
-        free_running_ctr <= free_running_ctr + 64'd1;
+        free_running_ctr <= free_running_ctr + 32'd1;
       end
     end
   end
 
+  simple_dpram #(
+    .ADDR_WIDTH(RAM_ADD_WIDTH),
+    .DATA_WIDTH(32),
+    .STRB_WIDTH(1),
+    .NPIPES(0)
+  ) simple_dpram_instance (
+    .clk(clk),
+    .rst(rst),
+    .waddr(s_roce_tx_bth_psn[RAM_ADD_WIDTH-1:0]),
+    .raddr(s_roce_rx_bth_psn[RAM_ADD_WIDTH-1:0]),
+    .din(free_running_ctr),
+    .dout(ram_dout),
+    .strb(1'b1),
+    .ena(1),
+    .ren(s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn),
+    .wen(s_roce_tx_bth_valid && s_roce_tx_bth_src_qp == monitor_loc_qpn)
+  );
 
-  reg [63:0] transfer_time_wo_ack_reg;
-  reg [63:0] transfer_time_reg;
 
-  reg [63:0] tot_time_wo_ack_reg;
-  reg [63:0] tot_time_reg;
-  reg [63:0] latency_tot_first_reg;
-  reg [63:0] latency_tot_last_reg;
-  reg [63:0] latency_first_reg;
-  reg [63:0] latency_last_reg;
+  // round trip latency
+  always @(posedge clk) begin
+    if (rst) begin
+      measure_ctr <= 0;
+      ren_del_1 <= 1'b0;
+      ren_del_2 <= 1'b0;
+      latency_out_sum <= 32'd0;
+    end else begin
+      latency_avg_valid <= 1'b0;
+      ren_del_1 <= s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn;
+      ren_del_2 <= ren_del_1;
+      if (ren_del_2) begin
+        if (measure_ctr < n_transfer_latency_avg-1) begin
+          measure_ctr <= measure_ctr + 1;
+          latency_out_sum <= latency_out_sum + free_running_ctr - ram_dout;
+        end else begin
+          measure_ctr <= 0;
+          latency_out_sum <= 32'd0;
+          latency_out_sum_reg <= latency_out_sum + free_running_ctr - ram_dout;
+          latency_avg_valid <= 1'b1;
+        end
+        latency_out_inst <= free_running_ctr - ram_dout;
+      end
+    end
+  end
 
+  assign latency_avg = latency_out_sum_reg >> cfg_latency_avg_po2;
+  assign latency_inst = latency_out_inst;
 
+  // throughput
+  always @(posedge clk) begin
+    if (rst) begin
+      throughput_ctr <= 32'd0;
+      throughput_out_sum <= 32'd0;
+      last_frame <= 1'b0;
+    end else begin
+      throughput_avg_valid <= 1'b0;
+      if (s_roce_tx_bth_valid && s_roce_tx_bth_src_qp == monitor_loc_qpn) begin
+        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code == RC_SEND_FIRST    ||
+        s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD ||
+        s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD) begin
+          if (throughput_ctr == 0) begin
+            throughput_starting_point <= free_running_ctr;
+            throughput_starting_point_inst <= free_running_ctr;
+          end
+        end
+        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD ||
+        s_roce_tx_bth_op_code == RC_SEND_LAST       || s_roce_tx_bth_op_code == RC_SEND_LAST_IMD       ||
+        s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD ||
+        s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD) begin
+          last_frame <= 1'b1;
+        end
+      end
+      if (last_frame && s_axis_tx_payload_valid && s_axis_tx_payload_last) begin
+        last_frame <= 1'b0;
+        if (throughput_ctr < n_transfer_throughput_avg-1) begin
+          throughput_ctr <= throughput_ctr + 1;
+        end else begin
+          throughput_ctr <= 0;
+          throughput_avg_valid <= 1'b1;
+          throughput_out_sum_reg <= free_running_ctr - throughput_starting_point;
+        end
+        throughput_starting_point_inst <= free_running_ctr;
+        throughput_out_inst <= free_running_ctr - throughput_starting_point_inst;
+      end
+    end
+  end
+
+  assign transfer_time_avg = throughput_out_sum_reg >> cfg_throughput_avg_po2;
+  assign transfer_time_inst = throughput_out_inst;
+
+  // moving averages
+
+  reg [31:0] srl_trpt_ctr [7:0];
+  reg [31:0] srl_lat_ctr [7:0];
+
+  reg [34:0] srl_lat_ctr_moving_avg_reg, srl_lat_ctr_moving_avg_next;
+  reg [34:0] srl_trpt_ctr_moving_avg_reg, srl_trpt_ctr_moving_avg_next;
+
+  always @(*) begin
+
+    srl_lat_ctr_moving_avg_next = 35'd0;
+    srl_trpt_ctr_moving_avg_next = 35'd0;
+
+    for (i=0; i<8; i=i+1) begin
+      srl_lat_ctr_moving_avg_next = srl_lat_ctr_moving_avg_next + srl_lat_ctr[i];
+      srl_trpt_ctr_moving_avg_next = srl_trpt_ctr_moving_avg_next + srl_trpt_ctr[i];
+    end
+    
+  end
+  
 
   always @(posedge clk) begin
-    if (start_i & ~start_d) begin
-      latency_tot_first_reg    <= 64'd0;
-      latency_tot_last_reg     <= 64'd0;
-      transfer_time_reg        <= 64'd0;
-      transfer_time_wo_ack_reg <= 64'd0;
-      tot_time_wo_ack_reg      <= 64'd0;
-      tot_time_reg             <= 64'd0;
-
-      latency_first_reg        <= 64'd0;
-      latency_last_reg         <= 64'd0;
-    end else begin
-      if (start_fifos_out_ready && start_stamp_fifo_out_valid) begin
-        latency_tot_first_reg    <= latency_tot_first_reg + (free_running_ctr - start_stamp_fifo_out_data);
-        latency_first_reg <= free_running_ctr - start_stamp_fifo_out_data;
+    if (rst) begin
+      for (i=0; i<8; i=i+1) begin
+        srl_lat_ctr[i]  <= 35'd0;
+        srl_trpt_ctr[i] <= 35'd0;
       end
-      if (last_fifos_out_ready && last_stamp_fifo_out_valid) begin
-        latency_tot_last_reg     <= latency_tot_last_reg + (free_running_ctr - last_stamp_fifo_out_data);
-        latency_last_reg <= free_running_ctr - last_stamp_fifo_out_data;
-        tot_time_reg <= free_running_ctr;
-        transfer_time_reg <= free_running_ctr - tot_time_reg;
+
+    end else begin
+      srl_lat_ctr_moving_avg_reg <= srl_lat_ctr_moving_avg_next;
+      srl_trpt_ctr_moving_avg_reg <= srl_trpt_ctr_moving_avg_next;
+      if (latency_avg_valid) begin
+        srl_lat_ctr[0] <= latency_out_sum_reg;
+        srl_lat_ctr[7:1] <= srl_lat_ctr[6:0];
+      end
+      if (throughput_avg_valid) begin
+        srl_trpt_ctr[0] <= throughput_out_sum_reg;
+        srl_trpt_ctr[7:1] <= srl_trpt_ctr[6:0];
       end
     end
   end
 
-  assign transfer_time_tot    = tot_time_reg;
-  assign transfer_time_single = transfer_time_reg;
-  assign latency_first_packet = latency_first_reg;
-  assign latency_last_packet  = latency_last_reg;
+  assign latency_moving_avg       = srl_lat_ctr_moving_avg_reg[34:3];
+  assign transfer_time_moving_avg = srl_trpt_ctr_moving_avg_reg[34:3];
+
+
 
 endmodule
 

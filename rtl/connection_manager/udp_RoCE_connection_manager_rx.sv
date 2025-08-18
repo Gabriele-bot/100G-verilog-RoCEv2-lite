@@ -434,7 +434,7 @@ module udp_RoCE_connection_manager_rx #(
     assign m_qp_info_listening_port = qp_info_listening_port_reg;
 
     assign m_txmeta_loc_qpn        = txmeta_loc_qpn_reg;
-    assign m_txmeta_dma_transfer   = txmeta_dma_lentgh_reg;
+    assign m_txmeta_dma_transfer   = txmeta_dma_lentgh_reg & 32'hFFFFFFFC; // mask last two bits to have always multiple of 4
     assign m_txmeta_n_transfers    = txmeta_n_transfers_reg;
     assign m_txmeta_frequency      = txmeta_frequency_reg;
     assign m_txmeta_is_immediate   = txmeta_is_immediate_reg;
