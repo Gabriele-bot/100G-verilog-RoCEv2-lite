@@ -8,9 +8,9 @@ import argparse
 parser = argparse.ArgumentParser(description='Send QP information via UDP')
 parser.add_argument('-I', '--netdev', metavar='N', type=str, default="tap0",
                     help='Sender Network device')
-parser.add_argument('-t', '--time-quanta', metavar='N', type=in, default=512,
+parser.add_argument('-t', '--time_quanta', metavar='N', type=int, default=512,
                     help='Pause time')
-parser.add_argument('-p', '--priories', metavar='N', type=int, default=0x02,
+parser.add_argument('-p', '--priorities', metavar='N', type=int, default=0x02,
                     help='Affected priorities')
            
 args = parser.parse_args()      
@@ -34,7 +34,7 @@ ETHER_TYPE = 0x8808
 #PFC
 OPCODE = 0x0101 
 CEV    = args.priorities
-PAUSE_TIME = args.time-quanta
+PAUSE_TIME = args.time_quanta
 
 
 MESSAGE = b''
