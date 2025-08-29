@@ -19,6 +19,7 @@ SYN_FILES += lib/RoCE/lib/eth/rtl/mac_pause_ctrl_tx.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/mac_pause_ctrl_rx.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/axis_xgmii_rx_64.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/axis_xgmii_tx_64.v
+SYN_FILES += lib/RoCE/lib/eth/rtl/eth_pfc_fifo_tx.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx.v
 SYN_FILES += lib/RoCE/lib/eth/rtl/eth_phy_10g_rx_if.v
@@ -71,6 +72,7 @@ SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_async_fifo.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_async_fifo_adapter.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_broadcast.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_mux.v
+SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_demux.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/axis_arb_mux.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axis/rtl/sync_reset.v
 SYN_FILES += lib/RoCE/lib/eth/lib/axi/rtl/axi_dma_wr.v
@@ -119,7 +121,7 @@ XDC_FILES += lib/RoCE/lib/eth/lib/axis/syn/vivado/axis_async_fifo.tcl
 XDC_FILES += lib/RoCE/lib/eth/lib/axis/syn/vivado/sync_reset.tcl
 
 # IP
-IP_TCL_FILES = ip/eth_xcvr_gt.tcl
+IP_TCL_FILES = ip/eth_xcvr_gt_10_25.tcl
 IP_TCL_FILES += ip/vio_ext_rst.tcl
 IP_TCL_FILES += ip/vio_roce_cfg.tcl
 IP_TCL_FILES += ip/vio_throughput.tcl

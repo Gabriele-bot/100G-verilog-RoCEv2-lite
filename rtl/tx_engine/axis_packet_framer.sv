@@ -74,7 +74,7 @@ module axis_packet_framer #(
 
     function [DATA_WIDTH/8 - 1:0] count2keep;
         input [$clog2(DATA_WIDTH/8):0] k;
-        reg [DATA_WIDTH/4 - 1:0] temp_ones = {{DATA_WIDTH/4{1'b0}}, {DATA_WIDTH/4{1'b1}}};
+        static reg [DATA_WIDTH/4 - 1:0] temp_ones = {{DATA_WIDTH/4{1'b0}}, {DATA_WIDTH/4{1'b1}}};
         reg [DATA_WIDTH/4 - 1:0] temp_srl;
         if (k < DATA_WIDTH/8) begin
             temp_srl = temp_ones << k;

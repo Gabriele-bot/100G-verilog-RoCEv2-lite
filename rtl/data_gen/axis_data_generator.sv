@@ -45,7 +45,7 @@ module axis_data_generator #(
 
     function [KEEP_WIDTH - 1:0] count2keep;
         input [$clog2(KEEP_WIDTH):0] k;
-        reg [2*KEEP_WIDTH - 1:0] temp_ones = {{KEEP_WIDTH{1'b0}}, {KEEP_WIDTH{1'b1}}};
+        static reg [2*KEEP_WIDTH - 1:0] temp_ones = {{KEEP_WIDTH{1'b0}}, {KEEP_WIDTH{1'b1}}};
         reg [2*KEEP_WIDTH - 1:0] temp_srl;
         if (k < KEEP_WIDTH) begin
             temp_srl = temp_ones << k;

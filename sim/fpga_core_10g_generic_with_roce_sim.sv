@@ -239,6 +239,8 @@ module top #(
   wire                                                       rx_delay_axis_tlast;
   wire                                                       rx_delay_axis_tuser;
   
+  wire [8:0] tx_pause_req, tx_pause_ack;
+  
   typedef struct packed {
         logic [2:0]               id;
         logic [11:0]              ena;
@@ -334,7 +336,9 @@ module top #(
       .TX_FIFO_DEPTH(4200),
       .TX_FRAME_FIFO(1),
       .RX_FIFO_DEPTH(4200),
-      .RX_FRAME_FIFO(1)
+      .RX_FRAME_FIFO(1),
+      .PFC_ENABLE(1),
+      .PFC_FIFO_ENABLE(8'd3)
   ) eth_mac_10g_fifo_inst (
       .rx_clk(clk_mac),
       .rx_rst(xgmii_rx_rst),
@@ -370,8 +374,12 @@ module top #(
       .rx_fifo_overflow  (),
       .rx_fifo_bad_frame (),
       .rx_fifo_good_frame(),
+      
+      .tx_pause_req_out(tx_pause_req),
+      .tx_pause_ack_out(tx_pause_ack),
 
       .cfg_ifg(8'd12),
+      .ctrl_priority_tag(3'd1),
       .cfg_tx_enable(1'b1),
       .cfg_rx_enable(1'b1)
   );
@@ -415,7 +423,7 @@ module top #(
   );
   
   
-  
+ 
   wire [128*8-1:0] s_axis_seg_tdata;
   wire s_axis_seg_tvalid;
   wire s_axis_seg_tready;
@@ -503,8 +511,7 @@ module top #(
   
 
   axi_seg_2_axis #(
-  .SEGMENT_FIFO_DEPTH(256000),
-  .AXIS_FIFO_DEPTH(16384)
+  .AXIS_FIFO_DEPTH(8192)
   ) axi_seg_2_axis_instance (
     .s_clk(clk_axi_seg_09),
     .s_rst(rst),
@@ -546,6 +553,18 @@ module top #(
       .s_rst(rst),
 
       // AXI input
+      /*
+      .s_axis_tdata (tx_generic_pad_axis_tdata),
+      .s_axis_tkeep (tx_generic_pad_axis_tkeep),
+      .s_axis_tvalid(tx_generic_pad_axis_tvalid),
+      .s_axis_tready(tx_generic_pad_axis_tready),
+      .s_axis_tlast (tx_generic_pad_axis_tlast),
+      .s_axis_tid(0),
+      .s_axis_tdest(0),
+      .s_axis_tuser(tx_generic_pad_axis_tuser),
+      */
+      
+      
       .s_axis_tdata (tx_generic_fifo_axis_tdata),
       .s_axis_tkeep (tx_generic_fifo_axis_tkeep),
       .s_axis_tvalid(tx_generic_fifo_axis_tvalid),
@@ -554,6 +573,8 @@ module top #(
       .s_axis_tid(0),
       .s_axis_tdest(0),
       .s_axis_tuser(tx_generic_fifo_axis_tuser),
+      
+      
       
       .m_clk(clk_mac),
       .m_rst(rst),
@@ -617,13 +638,14 @@ module top #(
     .MAC_DATA_WIDTH(MAC_DATA_WIDTH),
     .STACK_DATA_WIDTH(RoCE_DATA_WIDTH),
     .FIFO_REGS(3),
-    .ENABLE_PFC(8'h03),
+    .ENABLE_PFC(8'h00),
     .DEBUG(0)
   ) network_wrapper_roce_generic_instance (
     .clk_mac(clk_axi_seg),
     .rst_mac(rst),
     .clk_stack(clk_udp),
     .rst_stack(rst),
+    .flow_ctrl_pause         (tx_pause_req[1] || tx_pause_req[8]),
     .m_network_tx_axis_tdata (tx_generic_axis_tdata),
     .m_network_tx_axis_tkeep (tx_generic_axis_tkeep),
     .m_network_tx_axis_tvalid(tx_generic_axis_tvalid),

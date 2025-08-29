@@ -10,6 +10,7 @@ module RoCE_retransmission_module #(
     input wire clk,
     input wire rst,
     input wire rst_retry_cntr,
+    input wire flow_ctrl_pause, // stops timeout counter
 
     input  wire          s_qp_params_valid,
     input  wire [151:0]  s_qp_params,
@@ -1127,7 +1128,11 @@ Simple DMA write logic
                     trigger_rnr_wait   <= 1'b0;
                 end else if (state_reg == STATE_DMA_READ_INIT | state_reg == STATE_READ_RAM_HEADER) begin
                     // Retransmission on going, !! retrasnmission can still be triggered !!
-                    timeout_counter <= timeout_counter - 64'd1;
+                    if (!flow_ctrl_pause) begin
+                        timeout_counter <= timeout_counter - 64'd1;
+                    end else begin
+                        timeout_counter <= timeout_counter;
+                    end
                     nak_detected       <= 1'b0;
                 end else if (nak_detected) begin
                     timeout_counter <= timeout_counter;
@@ -1139,7 +1144,11 @@ Simple DMA write logic
                     trigger_rnr_wait   <= 1'b0;
                 end else begin
                     // reduce timeout cunter
-                    timeout_counter <= timeout_counter - 64'd1;
+                    if (!flow_ctrl_pause) begin
+                        timeout_counter <= timeout_counter - 64'd1;
+                    end else begin
+                        timeout_counter <= timeout_counter;
+                    end
                     trigger_retransmit <= 1'b0;
                     trigger_rnr_wait   <= 1'b0;
                 end

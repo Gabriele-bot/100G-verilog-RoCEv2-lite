@@ -15,6 +15,8 @@ module RoCE_minimal_stack #(
     input wire clk,
     input wire rst,
 
+    input wire flow_ctrl_pause,
+
     /*
      * UDP frame input
      */
@@ -1068,6 +1070,7 @@ module RoCE_minimal_stack #(
                 .clk(clk),
                 .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == curr_open_qpn && qp_active)),
                 .rst_retry_cntr              (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+                .flow_ctrl_pause             (flow_ctrl_pause),
                 .s_qp_params_valid           (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
                 .s_qp_params                 (s_qp_params),
                 .s_roce_aeth_valid           (m_roce_aeth_valid),

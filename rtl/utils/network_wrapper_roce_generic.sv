@@ -14,6 +14,8 @@ module network_wrapper_roce_generic #(
     input wire clk_stack,
     input wire rst_stack,
 
+    input wire flow_ctrl_pause, // stack clock domain
+
     /*
      * Ethernet: AXIS
      */
@@ -333,7 +335,7 @@ module network_wrapper_roce_generic #(
     );
 
     axis_async_fifo_adapter #(
-        .DEPTH(2048),
+        .DEPTH(1024),
         .S_DATA_WIDTH(MAC_DATA_WIDTH),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(STACK_DATA_WIDTH),
@@ -427,7 +429,7 @@ module network_wrapper_roce_generic #(
 
             eth_pfc_fifo_tx #(
                 .DATA_WIDTH(MAC_DATA_WIDTH),
-                .FIFO_DEPTH(8192),
+                .FIFO_DEPTH(4200),
                 .ENABLE_PRIORITY_MASK(ENABLE_PFC)
             ) eth_pfc_fifo_tx_instance (
                 .clk(clk_mac),
@@ -512,7 +514,7 @@ module network_wrapper_roce_generic #(
     endgenerate
 
     axis_async_fifo_adapter #(
-        .DEPTH(2048),
+        .DEPTH(1024),
         .S_DATA_WIDTH(STACK_DATA_WIDTH),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(MAC_DATA_WIDTH),
@@ -594,7 +596,7 @@ module network_wrapper_roce_generic #(
         .s_eth_tpid               (16'h8100),
         .s_eth_pcp                (ctrl_priority_tag),
         .s_eth_dei                (1'b0),
-        .s_eth_vid                (12'd10),
+        .s_eth_vid                (12'd0), // no vlan needed
         .s_eth_type               (m_tx_eth_type),
         .s_eth_payload_axis_tdata (m_tx_eth_payload_axis_tdata),
         .s_eth_payload_axis_tkeep (m_tx_eth_payload_axis_tkeep),
@@ -616,6 +618,7 @@ module network_wrapper_roce_generic #(
 
     udp_complete_test #(
         .DATA_WIDTH(STACK_DATA_WIDTH),
+        .IP_HEADER_CHECKSUM_PIPELINED(1),
         .UDP_CHECKSUM_GEN_ENABLE(0),
         .ROCE_ICRC_INSERTER(1)
     ) udp_complete_inst (
@@ -762,12 +765,12 @@ module network_wrapper_roce_generic #(
         .DATA_WIDTH(STACK_DATA_WIDTH),
         .CLOCK_PERIOD(RoCE_CLOCK_PERIOD),
         .DEBUG(DEBUG),
-        .ENABLE_SIM_PACKET_DROP_TX(1),
         .RETRANSMISSION(1),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(22)
     ) RoCE_minimal_stack_instance (
         .clk(clk_stack),
         .rst(rst_stack),
+        .flow_ctrl_pause          (flow_ctrl_pause),
         .s_udp_hdr_valid          (s_rx_udp_hdr_valid),
         .s_udp_hdr_ready          (s_rx_udp_hdr_ready),
         .s_eth_dest_mac           (0),

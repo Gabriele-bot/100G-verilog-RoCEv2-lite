@@ -83,6 +83,8 @@ module RoCE_simple_work_queue #
 );
 
     localparam MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
+    localparam COOLDOWN_CLK_TICKS = 2;
+    
 
     localparam [2:0]
     QP_STATE_RESET    = 3'd0,
@@ -154,6 +156,8 @@ module RoCE_simple_work_queue #
     assign m_qp_context_req = m_qp_context_req_reg;
 
     always @* begin
+
+        state_next = STATE_IDLE;
 
         s_wr_req_ready_next = 1'b0;
 
@@ -424,7 +428,8 @@ module RoCE_simple_work_queue #
     reg        qp_update_valid_reg, qp_update_valid_next;
 
     reg [23:0] m_qp_update_loc_qpn_reg, m_qp_update_loc_next;
-    reg [23:0] m_qp_update_rem_psn_reg, m_qp_update_rem_psn_next;
+    reg [23:0] m_qp_update_rem_psn_reg;
+    reg [23:0] s_qp_rem_psn_reg, s_qp_rem_psn_next;
 
     always @(*) begin
 
@@ -434,7 +439,7 @@ module RoCE_simple_work_queue #
         qp_update_loc_qpn_next = qp_update_loc_qpn_reg;
         qp_update_valid_next   = 1'b0;
 
-
+        s_qp_rem_psn_next = s_qp_rem_psn_reg;
 
         if (s_axis_tvalid && s_axis_tready && last_end_of_frame) begin
             rem_psn_add_next = rem_psn_add_reg + 24'd1;
@@ -447,7 +452,7 @@ module RoCE_simple_work_queue #
 
         if (s_qp_context_valid) begin
             qp_update_loc_qpn_next = s_qp_loc_qpn;
-            m_qp_update_rem_psn_next = s_qp_rem_psn;
+            s_qp_rem_psn_next = s_qp_rem_psn;
         end
 
     end
@@ -455,6 +460,7 @@ module RoCE_simple_work_queue #
     always @(posedge clk) begin
         if (rst) begin
             rem_psn_add_reg <= 24'd0;
+            s_qp_rem_psn_reg <= 24'd0;
 
             qp_update_rem_psn_add_reg <= 24'd0;
             qp_update_loc_qpn_reg     <= 24'd0;
@@ -472,15 +478,16 @@ module RoCE_simple_work_queue #
             end
 
             rem_psn_add_reg <= rem_psn_add_next;
+            s_qp_rem_psn_reg <= s_qp_rem_psn_next;
 
             qp_update_rem_psn_add_reg <= qp_update_rem_psn_add_next;
             qp_update_loc_qpn_reg     <= qp_update_loc_qpn_next;
             qp_update_valid_reg       <= qp_update_valid_next;
 
-            m_qp_update_rem_psn_reg   <= m_qp_update_rem_psn_next + qp_update_rem_psn_add_next;
+            m_qp_update_rem_psn_reg   <= s_qp_rem_psn_next + qp_update_rem_psn_add_next;
 
             if (qp_update_valid_next) begin
-                qp_req_cooldown <= 3'd3;
+                qp_req_cooldown <= COOLDOWN_CLK_TICKS;
             end else if (qp_req_cooldown == 3'd0) begin
                 qp_req_cooldown <= 3'd0;
             end else begin
