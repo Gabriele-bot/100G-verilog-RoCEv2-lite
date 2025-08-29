@@ -5,6 +5,7 @@
  */
 module axis_2_axi_seg #(
     // input axis register
+    parameter SEGMENT_FIFO_DEPTH = 64,
     parameter INPUT_REGS = 1
 )(
     input  wire clk,
@@ -197,7 +198,7 @@ module axis_2_axi_seg #(
 
         for (genvar i=0; i<8; i=i+1) begin
                 axis_fifo #(
-                    .DEPTH(64),
+                    .DEPTH(SEGMENT_FIFO_DEPTH),
                     .DATA_WIDTH(128),
                     .LAST_ENABLE(0),
                     .ID_ENABLE(0),
@@ -226,7 +227,6 @@ module axis_2_axi_seg #(
                     .m_axis_tready(fifo_tready_out[i] ),
                     .m_axis_tuser({ena_fifo_out[i], sop_fifo_out[i], eop_fifo_out[i], err_fifo_out[i], mty_fifo_out[i]})
                 );
-
             
         end
     endgenerate
@@ -449,10 +449,10 @@ module axis_2_axi_seg #(
             temp_m_axis_seg_tdata_reg[6] <= fifo_tdata_out[6];
             temp_m_axis_seg_tdata_reg[7] <= fifo_tdata_out[7];
 
-            temp_m_ena_reg <= ena_fifo_out;
-            temp_m_sop_reg <= sop_fifo_out;
-            temp_m_eop_reg <= eop_fifo_out;
-            temp_m_err_reg <= err_fifo_out;
+            temp_m_ena_reg <= ena_fifo_out & fifo_tvalid_out;
+            temp_m_sop_reg <= sop_fifo_out & fifo_tvalid_out;
+            temp_m_eop_reg <= eop_fifo_out & fifo_tvalid_out;
+            temp_m_err_reg <= err_fifo_out & fifo_tvalid_out;
 
             temp_m_mty_reg[0] <= mty_fifo_out[0];
             temp_m_mty_reg[1] <= mty_fifo_out[1];
