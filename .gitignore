@@ -1,3 +1,6 @@
 example/VCU118/fpga/.Xil
 example/VCU118/fpga_100g/.Xil
+scratch
 
+*/*.log
+*/*.jou
