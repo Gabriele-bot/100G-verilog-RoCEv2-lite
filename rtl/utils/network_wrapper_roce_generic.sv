@@ -651,7 +651,7 @@ module network_wrapper_roce_generic #(
         // IP frame input
         .s_ip_hdr_valid(1'b0),
         .s_ip_hdr_ready(),
-        .s_ip_dscp(0),
+        .s_ip_dscp(6'd0),
         .s_ip_ecn(0),
         .s_ip_length(0),
         .s_ip_ttl(0),
@@ -693,7 +693,8 @@ module network_wrapper_roce_generic #(
         // UDP frame input
         .s_udp_hdr_valid          (m_tx_udp_hdr_valid),
         .s_udp_hdr_ready          (m_tx_udp_hdr_ready),
-        .s_udp_ip_dscp            (m_tx_udp_ip_dscp),
+        //.s_udp_ip_dscp            (m_tx_udp_ip_dscp),
+        .s_udp_ip_dscp            ({ctrl_priority_tag, 3'd0}),
         .s_udp_ip_ecn             (m_tx_udp_ip_ecn),
         .s_udp_ip_ttl             (m_tx_udp_ip_ttl),
         .s_udp_ip_source_ip       (m_tx_udp_ip_source_ip),
