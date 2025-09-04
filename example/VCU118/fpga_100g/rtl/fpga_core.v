@@ -699,7 +699,7 @@ module fpga_core #(
         .monitor_loc_qpn         (monitor_loc_qpn)
     );
 
-    axis_vio_perf_monitor axis_vio_perf_monitor_instance (
+    vio_perf_monitor vio_perf_monitor_instance (
         .clk(clk),
         .probe_out0(cfg_latency_avg_po2),
         .probe_out1(monitor_loc_qpn),
