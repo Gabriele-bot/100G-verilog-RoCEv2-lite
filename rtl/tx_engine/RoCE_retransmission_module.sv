@@ -987,7 +987,6 @@ Simple DMA write logic
                     end else begin
                         s_axis_dma_read_desc_len_next  =  hdr_data_out[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
                     end
-                    last_sent_psn_next = s_roce_bth_psn;
                     //s_axis_dma_read_desc_valid_next = 1'b1;
 
                     //m_roce_bth_valid_next          = hdr_data_out[RAM_BTH_OFFSET]   && !m_roce_bth_ready;

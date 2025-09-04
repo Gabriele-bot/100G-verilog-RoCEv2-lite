@@ -600,7 +600,7 @@ module fpga_core #
 
             eth_axis_tx #(
             .DATA_WIDTH(64),
-            .ENABLE_DOT1Q_HEADER(1)
+            .ENABLE_DOT1Q_HEADER(0)
             )
             eth_axis_tx_inst (
                 .clk(clk_25g[j]),
@@ -611,7 +611,7 @@ module fpga_core #
                 .s_eth_dest_mac(tx_eth_dest_mac),
                 .s_eth_src_mac(tx_eth_src_mac),
                 .s_eth_tpid(16'h8100),
-                .s_eth_pcp(3'd1),
+                .s_eth_pcp(3'd0),
                 .s_eth_dei(1'b0),
                 .s_eth_vid(12'd0),
                 .s_eth_type(tx_eth_type),
@@ -708,7 +708,8 @@ module fpga_core #
                 // UDP frame input
                 .s_udp_hdr_valid(tx_udp_hdr_valid),
                 .s_udp_hdr_ready(tx_udp_hdr_ready),
-                .s_udp_ip_dscp(tx_udp_ip_dscp),
+                //.s_udp_ip_dscp(tx_udp_ip_dscp),
+                .s_udp_ip_dscp({3'd0, 3'd0}),
                 .s_udp_ip_ecn(tx_udp_ip_ecn),
                 .s_udp_ip_ttl(tx_udp_ip_ttl),
                 .s_udp_ip_source_ip(tx_udp_ip_source_ip),
@@ -786,7 +787,7 @@ module fpga_core #
             ) RoCE_minimal_stack_64_instance (
                 .clk(clk_25g[j]),
                 .rst(rst_25g[j]),
-                .flow_ctrl_pause(tx_pause_req[1] || tx_pause_req[8]), // priority 1 or global pause
+                .flow_ctrl_pause(tx_pause_req[0] || tx_pause_req[8]), // priority 0 or global pause
                 .s_udp_hdr_valid(rx_udp_hdr_valid),
                 .s_udp_hdr_ready(rx_udp_hdr_ready),
                 .s_eth_dest_mac(rx_udp_eth_dest_mac),
@@ -1218,7 +1219,7 @@ module fpga_core #
 
             eth_axis_tx #(
             .DATA_WIDTH(64),
-            .ENABLE_DOT1Q_HEADER(1)
+            .ENABLE_DOT1Q_HEADER(0)
             )
             eth_axis_tx_inst (
                 .clk(clk_10g[j-4]),
@@ -1229,7 +1230,7 @@ module fpga_core #
                 .s_eth_dest_mac(tx_eth_dest_mac),
                 .s_eth_src_mac(tx_eth_src_mac),
                 .s_eth_tpid(16'h8100),
-                .s_eth_pcp(3'd1),
+                .s_eth_pcp(3'd0),
                 .s_eth_dei(1'b0),
                 .s_eth_vid(12'd0),
                 .s_eth_type(tx_eth_type),
@@ -1326,7 +1327,8 @@ module fpga_core #
                 // UDP frame input
                 .s_udp_hdr_valid(tx_udp_hdr_valid),
                 .s_udp_hdr_ready(tx_udp_hdr_ready),
-                .s_udp_ip_dscp(tx_udp_ip_dscp),
+                //.s_udp_ip_dscp(tx_udp_ip_dscp),
+                .s_udp_ip_dscp({3'd0, 3'd0}),
                 .s_udp_ip_ecn(tx_udp_ip_ecn),
                 .s_udp_ip_ttl(tx_udp_ip_ttl),
                 .s_udp_ip_source_ip(tx_udp_ip_source_ip),
@@ -1403,7 +1405,7 @@ module fpga_core #
             ) RoCE_minimal_stack_64_instance (
                 .clk(clk_10g[j-4]),
                 .rst(rst_10g[j-4]),
-                .flow_ctrl_pause(tx_pause_req[1] || tx_pause_req[8]), // priority 1 or global pause
+                .flow_ctrl_pause(tx_pause_req[0] || tx_pause_req[8]), // priority 0 or global pause
                 .s_udp_hdr_valid(rx_udp_hdr_valid),
                 .s_udp_hdr_ready(rx_udp_hdr_ready),
                 .s_eth_dest_mac(rx_udp_eth_dest_mac),
