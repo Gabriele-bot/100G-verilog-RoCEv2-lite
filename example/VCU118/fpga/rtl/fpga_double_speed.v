@@ -298,14 +298,6 @@ assign clk_390mhz_int[2] = qsfp1_tx_clk_3_int;
 assign rst_390mhz_int[2] = qsfp1_tx_rst_3_int;
 assign clk_390mhz_int[3] = qsfp1_tx_clk_4_int;
 assign rst_390mhz_int[3] = qsfp1_tx_rst_4_int;
-assign clk_156mhz_int[0] = qsfp2_tx_clk_1_int;
-assign rst_156mhz_int[0] = qsfp2_tx_rst_1_int;
-assign clk_156mhz_int[1] = qsfp2_tx_clk_2_int;
-assign rst_156mhz_int[1] = qsfp2_tx_rst_2_int;
-assign clk_156mhz_int[2] = qsfp2_tx_clk_3_int;
-assign rst_156mhz_int[2] = qsfp2_tx_rst_3_int;
-assign clk_156mhz_int[3] = qsfp2_tx_clk_4_int;
-assign rst_156mhz_int[3] = qsfp2_tx_rst_4_int;
 
 wire qsfp1_rx_block_lock_1;
 wire qsfp1_rx_block_lock_2;
@@ -467,6 +459,15 @@ wire        qsfp2_rx_clk_4_int;
 wire        qsfp2_rx_rst_4_int;
 wire [63:0] qsfp2_rxd_4_int;
 wire [7:0]  qsfp2_rxc_4_int;
+
+assign clk_156mhz_int[0] = qsfp2_tx_clk_1_int;
+assign rst_156mhz_int[0] = qsfp2_tx_rst_1_int;
+assign clk_156mhz_int[1] = qsfp2_tx_clk_2_int;
+assign rst_156mhz_int[1] = qsfp2_tx_rst_2_int;
+assign clk_156mhz_int[2] = qsfp2_tx_clk_3_int;
+assign rst_156mhz_int[2] = qsfp2_tx_rst_3_int;
+assign clk_156mhz_int[3] = qsfp2_tx_clk_4_int;
+assign rst_156mhz_int[3] = qsfp2_tx_rst_4_int;
 
 wire qsfp2_rx_block_lock_1;
 wire qsfp2_rx_block_lock_2;

@@ -453,7 +453,7 @@ module fpga_core #
                 .RX_FIFO_DEPTH(4200),
                 .RX_FRAME_FIFO(1),
                 .PFC_ENABLE(1),
-                .PFC_FIFO_ENABLE(8'd3)
+                .PFC_FIFO_ENABLE(8'd1)
             )
             eth_mac_10g_fifo_inst (
                 .rx_clk(qsfp1_rx_clk[j]),
@@ -495,7 +495,7 @@ module fpga_core #
                 .tx_pause_ack_out(tx_pause_ack),
 
                 .cfg_ifg(8'd12),
-                .ctrl_priority_tag(3'd1),
+                .ctrl_priority_tag(3'd0),
                 .cfg_tx_enable(1'b1),
                 .cfg_rx_enable(1'b1),
                 .cfg_local_mac(local_macs[j])
@@ -1073,7 +1073,7 @@ module fpga_core #
                 .RX_FIFO_DEPTH(4200),
                 .RX_FRAME_FIFO(1),
                 .PFC_ENABLE(1),
-                .PFC_FIFO_ENABLE(8'd3)
+                .PFC_FIFO_ENABLE(8'd1)
             )
             eth_mac_10g_fifo_inst (
                 .rx_clk(qsfp2_rx_clk[j-4]),
@@ -1115,7 +1115,7 @@ module fpga_core #
                 .tx_pause_ack_out(tx_pause_ack),
 
                 .cfg_ifg(8'd12),
-                .ctrl_priority_tag(3'd1),
+                .ctrl_priority_tag(3'd0),
                 .cfg_tx_enable(1'b1),
                 .cfg_rx_enable(1'b1),
                 .cfg_local_mac(local_macs[j])
