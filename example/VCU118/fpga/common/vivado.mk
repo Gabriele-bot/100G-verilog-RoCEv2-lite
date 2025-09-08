@@ -102,7 +102,8 @@ endif
 	for x in $(IP_TCL_FILES_REL); do echo "source $$x" >> $@; done
 	for x in $(CONFIG_TCL_FILES_REL); do echo "source $$x" >> $@; done
 	echo "set_property STEPS.SYNTH_DESIGN.ARGS.DIRECTIVE AlternateRoutability [get_runs synth_1]" >> $@
-	echo "set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE EarlyBlockPlacement [get_runs impl_1]" >> $@
+	#echo "set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE EarlyBlockPlacement [get_runs impl_1]" >> $@
+	echo "set_property STEPS.PLACE_DESIGN.ARGS.DIRECTIVE ExtraNetDelay_high [get_runs impl_1]" >> $@
 	echo "set_property STEPS.PHYS_OPT_DESIGN.ARGS.DIRECTIVE AlternateFlowWithRetiming [get_runs impl_1]" >> $@
 	echo "set_property STEPS.POST_ROUTE_PHYS_OPT_DESIGN.IS_ENABLED true [get_runs impl_1]" >> $@
 
