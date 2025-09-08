@@ -578,8 +578,10 @@ assign led[5] = sw[0] ? qsfp2_rx_block_lock_2 : led_int[5];
 assign led[6] = sw[0] ? qsfp2_rx_block_lock_3 : led_int[6];
 assign led[7] = sw[0] ? qsfp2_rx_block_lock_4 : led_int[7];
 
-fpga_core
-core_inst (
+fpga_core #(
+	ENABLE_QSFP1 = 1,
+	ENABLE_QSFP1 = 0
+) core_inst (
     /*
      * Clock: 390.625 MHz for 25G
      * Clock: 156.250 MHz for 10G

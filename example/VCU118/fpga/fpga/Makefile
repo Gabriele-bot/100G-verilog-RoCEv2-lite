@@ -126,6 +126,7 @@ IP_TCL_FILES += ip/vio_throughput.tcl
 IP_TCL_FILES += ip/vio_qp_state_spy.tcl
 IP_TCL_FILES += ip/vio_retrans_debug.tcl
 IP_TCL_FILES += ip/vio_axis_monitor.tcl
+IP_TCL_FILES += ip/vio_perf_monitor.tcl
 IP_TCL_FILES += ip/ila_axis.tcl
 
 # Configuration
