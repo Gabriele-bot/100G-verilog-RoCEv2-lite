@@ -1,5 +1,6 @@
 import socket
 import struct
+import numpy as np
 from ipaddress import ip_address, IPv4Address
 
 import argparse
@@ -30,8 +31,10 @@ parser.add_argument('-l', '--length', metavar='N', type=int, default=128,
                     help='DMA transfer size in byte')
 parser.add_argument('-n', '--nTransfers', metavar='N', type=int, default=0x1,
                     help='Number of dma transfers')
-parser.add_argument('-fr', '--Frequency', metavar='N', type=int, default=0x0,
-                    help='Transfer Frequency, use 0 to ignore')
+parser.add_argument('-rt', '--msgrate', metavar='N', type=int, default=0x0,
+                    help='Message rate, use 0 to ignore')
+parser.add_argument('-c', '--clock', metavar='N', type=int, default=300e6,
+                    help='Clock frequency in Hz')
 parser.add_argument('-i', '--immediate', action='store_true',
                     help='Immediate transfer')
 parser.add_argument('-t', '--txtype', action='store_false',
@@ -94,26 +97,26 @@ def request_qp_info(rem_ip_addr="22.1.212.10", loc_ip_addr="22.1.212.11",loc_qpn
 
     MESSAGE = b''
     # QP infos, only local parameters are filled
-    MESSAGE += struct.pack("<B", qpinfo_flags)  # QP_info_valid and open qp request
+    MESSAGE += struct.pack(">B", qpinfo_flags)  # QP_info_valid and open qp request
     # LOCAL QP INFO
-    MESSAGE += struct.pack('<L', LOC_QPN)  # local queue pair number
-    MESSAGE += struct.pack('<L', LOC_PSN)  # local start psn
-    MESSAGE += struct.pack('<L', LOC_R_KEY)  # local r_key
-    MESSAGE += struct.pack('<Q', LOC_BASE_ADDR)  # local base address
-    MESSAGE += struct.pack('<L', LOC_IP_ADDRESS_INT)  # local IP address
+    MESSAGE += struct.pack('>L', LOC_QPN)  # local queue pair number
+    MESSAGE += struct.pack('>L', LOC_PSN)  # local start psn
+    MESSAGE += struct.pack('>L', LOC_R_KEY)  # local r_key
+    MESSAGE += struct.pack('>Q', LOC_BASE_ADDR)  # local base address
+    MESSAGE += struct.pack('>L', LOC_IP_ADDRESS_INT)  # local IP address
     # REMOTE QP INFO
-    MESSAGE += struct.pack('<L', REM_QPN)  # remote queue pair number
-    MESSAGE += struct.pack('<L', REM_PSN)  # remote start psn
-    MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
-    MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
-    MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+    MESSAGE += struct.pack('>L', REM_QPN)  # remote queue pair number
+    MESSAGE += struct.pack('>L', REM_PSN)  # remote start psn
+    MESSAGE += struct.pack('>L', REM_R_KEY)  # remote key
+    MESSAGE += struct.pack('>Q', REM_BASE_ADDR)  # remote base address
+    MESSAGE += struct.pack('>L', REM_IP_ADDRESS_INT)  # remote IP address
 
-    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
+    MESSAGE += struct.pack('>H', LISTENING_UDP_PORT)
     # TX META values
-    MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<L", 0x0)  # N transfers
-    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
+    MESSAGE += struct.pack(">B", 0x0)  # No transimt values
+    MESSAGE += struct.pack(">L", 0x0)  # DMA length
+    MESSAGE += struct.pack(">L", 0x0)  # N transfers
+    MESSAGE += struct.pack(">L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", REM_UDP_PORT)
@@ -154,26 +157,26 @@ def send_qp_info(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     MESSAGE = b''
 
     # QP infos, only local parameters are filled
-    MESSAGE += struct.pack("<B", qpinfo_flags)  # QP_info_valid and open qp request
+    MESSAGE += struct.pack(">B", qpinfo_flags)  # QP_info_valid and open qp request
     # LOCAL QP INFO
-    MESSAGE += struct.pack('<L', LOC_QPN)  # local queue pair number
-    MESSAGE += struct.pack('<L', LOC_PSN)  # local start psn
-    MESSAGE += struct.pack('<L', LOC_R_KEY)  # local r_key
-    MESSAGE += struct.pack('<Q', LOC_BASE_ADDR)  # local base address
-    MESSAGE += struct.pack('<L', LOC_IP_ADDRESS_INT)  # local IP address
+    MESSAGE += struct.pack('>L', LOC_QPN)  # local queue pair number
+    MESSAGE += struct.pack('>L', LOC_PSN)  # local start psn
+    MESSAGE += struct.pack('>L', LOC_R_KEY)  # local r_key
+    MESSAGE += struct.pack('>Q', LOC_BASE_ADDR)  # local base address
+    MESSAGE += struct.pack('>L', LOC_IP_ADDRESS_INT)  # local IP address
     # REMOTE QP INFO
-    MESSAGE += struct.pack('<L', REM_QPN)  # remote queue pair number
-    MESSAGE += struct.pack('<L', REM_PSN)  # remote start psn
-    MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
-    MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
-    MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+    MESSAGE += struct.pack('>L', REM_QPN)  # remote queue pair number
+    MESSAGE += struct.pack('>L', REM_PSN)  # remote start psn
+    MESSAGE += struct.pack('>L', REM_R_KEY)  # remote key
+    MESSAGE += struct.pack('>Q', REM_BASE_ADDR)  # remote base address
+    MESSAGE += struct.pack('>L', REM_IP_ADDRESS_INT)  # remote IP address
 
-    MESSAGE += struct.pack('<H', REM_UDP_PORT)
+    MESSAGE += struct.pack('>H', REM_UDP_PORT)
     # TX META values
-    MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<L", 0x0)  # N transfers
-    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
+    MESSAGE += struct.pack(">B", 0x0)  # No transimt values
+    MESSAGE += struct.pack(">L", 0x0)  # DMA length
+    MESSAGE += struct.pack(">L", 0x0)  # N transfers
+    MESSAGE += struct.pack(">L", 0x0)  # Zero padd
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", LISTENING_UDP_PORT)
     print("message:", MESSAGE)
@@ -204,26 +207,26 @@ def modify_qp_rts(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_k
     MESSAGE = b''
 
     # QP infos, only local parameters are filled
-    MESSAGE += struct.pack("<B", qpinfo_flags)  # QP_info_valid and open qp request
+    MESSAGE += struct.pack(">B", qpinfo_flags)  # QP_info_valid and open qp request
     # LOCAL QP INFO
-    MESSAGE += struct.pack('<L', LOC_QPN)  # local queue pair number
-    MESSAGE += struct.pack('<L', LOC_PSN)  # local start psn
-    MESSAGE += struct.pack('<L', LOC_R_KEY)  # local key
-    MESSAGE += struct.pack('<Q', LOC_BASE_ADDR)  # local base address
-    MESSAGE += struct.pack('<L', LOC_IP_ADDRESS_INT)  # local IP address
+    MESSAGE += struct.pack('>L', LOC_QPN)  # local queue pair number
+    MESSAGE += struct.pack('>L', LOC_PSN)  # local start psn
+    MESSAGE += struct.pack('>L', LOC_R_KEY)  # local key
+    MESSAGE += struct.pack('>Q', LOC_BASE_ADDR)  # local base address
+    MESSAGE += struct.pack('>L', LOC_IP_ADDRESS_INT)  # local IP address
     # REMOTE QP INFO
-    MESSAGE += struct.pack('<L', REM_QPN)  # remote queue pair number
-    MESSAGE += struct.pack('<L', REM_PSN)  # remote start psn
-    MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
-    MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
-    MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+    MESSAGE += struct.pack('>L', REM_QPN)  # remote queue pair number
+    MESSAGE += struct.pack('>L', REM_PSN)  # remote start psn
+    MESSAGE += struct.pack('>L', REM_R_KEY)  # remote key
+    MESSAGE += struct.pack('>Q', REM_BASE_ADDR)  # remote base address
+    MESSAGE += struct.pack('>L', REM_IP_ADDRESS_INT)  # remote IP address
 
-    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
+    MESSAGE += struct.pack('>H', LISTENING_UDP_PORT)
     # TX META values
-    MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<L", 0x0)  # N transfers
-    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
+    MESSAGE += struct.pack(">B", 0x0)  # No transimt values
+    MESSAGE += struct.pack(">L", 0x0)  # DMA length
+    MESSAGE += struct.pack(">L", 0x0)  # N transfers
+    MESSAGE += struct.pack(">L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", REM_UDP_PORT)
@@ -264,26 +267,26 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     MESSAGE = b''
 
     # QP infos, only local parameters are filled
-    MESSAGE += struct.pack("<B", qpinfo_flags)  # QP_info_valid and open qp request
+    MESSAGE += struct.pack(">B", qpinfo_flags)  # QP_info_valid and open qp request
     # LOCAL QP INFO
-    MESSAGE += struct.pack('<L', LOC_QPN)  # local queue pair number
-    MESSAGE += struct.pack('<L', LOC_PSN)  # local start psn
-    MESSAGE += struct.pack('<L', LOC_R_KEY)  # local key
-    MESSAGE += struct.pack('<Q', LOC_BASE_ADDR)  # local base address
-    MESSAGE += struct.pack('<L', LOC_IP_ADDRESS_INT)  # local IP address
+    MESSAGE += struct.pack('>L', LOC_QPN)  # local queue pair number
+    MESSAGE += struct.pack('>L', LOC_PSN)  # local start psn
+    MESSAGE += struct.pack('>L', LOC_R_KEY)  # local key
+    MESSAGE += struct.pack('>Q', LOC_BASE_ADDR)  # local base address
+    MESSAGE += struct.pack('>L', LOC_IP_ADDRESS_INT)  # local IP address
     # REMOTE QP INFO
-    MESSAGE += struct.pack('<L', REM_QPN)  # remote queue pair number
-    MESSAGE += struct.pack('<L', REM_PSN)  # remote start psn
-    MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
-    MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
-    MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+    MESSAGE += struct.pack('>L', REM_QPN)  # remote queue pair number
+    MESSAGE += struct.pack('>L', REM_PSN)  # remote start psn
+    MESSAGE += struct.pack('>L', REM_R_KEY)  # remote key
+    MESSAGE += struct.pack('>Q', REM_BASE_ADDR)  # remote base address
+    MESSAGE += struct.pack('>L', REM_IP_ADDRESS_INT)  # remote IP address
 
-    MESSAGE += struct.pack('<H', LISTENING_UDP_PORT)
+    MESSAGE += struct.pack('>H', LISTENING_UDP_PORT)
     # TX META values
-    MESSAGE += struct.pack("<B", 0x0)  # No transimt values
-    MESSAGE += struct.pack("<L", 0x0)  # DMA length
-    MESSAGE += struct.pack("<L", 0x0)  # N transfers
-    MESSAGE += struct.pack("<L", 0x0)  # Zero padd
+    MESSAGE += struct.pack(">B", 0x0)  # No transimt values
+    MESSAGE += struct.pack(">L", 0x0)  # DMA length
+    MESSAGE += struct.pack(">L", 0x0)  # N transfers
+    MESSAGE += struct.pack(">L", 0x0)  # Zero padd
 
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", REM_UDP_PORT)
@@ -302,7 +305,7 @@ def close_rem_qp(rem_ip_addr="22.1.212.10", rem_qpn=0x100, rem_psn=0x0, rem_r_ke
     return data
 
 def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x11, loc_qpn=0x12,
-                rdma_length=0x0, n_trasnfers=1, freq=0, start_flag=0, immd_flag=0, txtype_flag=1):
+                rdma_length=0x0, n_trasnfers=1, msg_wait_ctr=0, start_flag=0, immd_flag=0, txtype_flag=1):
 
     LOC_IP_ADDRESS = loc_ip_addr
     LOC_IP_ADDRESS_INT = int(ip_address(loc_ip_addr))
@@ -321,7 +324,7 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
     # Tx meta
     DMA_LENGTH = rdma_length
     N_TRANSFERS = n_trasnfers
-    FREQUENCY = freq
+    MSG_RATE_CTR = msg_wait_ctr
 
     REQ_TYPE = REQ_NULL
     ACK_TYPE = ACK_NULL
@@ -333,26 +336,26 @@ def send_txmeta(rem_ip_addr="22.1.212.11", loc_ip_addr="22.1.212.10", rem_qpn=0x
 
     MESSAGE = b''
 
-    MESSAGE += struct.pack("<B", qpinfo_flags)  # QP_info_valid
+    MESSAGE += struct.pack(">B", qpinfo_flags)  # QP_info_valid
     # LOCAL QP INFO
-    MESSAGE += struct.pack('<L', LOC_QPN)  # local queue pair number
-    MESSAGE += struct.pack('<L', LOC_PSN)  # local start psn
-    MESSAGE += struct.pack('<L', LOC_R_KEY)  # local key
-    MESSAGE += struct.pack('<Q', LOC_BASE_ADDR)  # local base address
-    MESSAGE += struct.pack('<L', LOC_IP_ADDRESS_INT)  # local IP address
+    MESSAGE += struct.pack('>L', LOC_QPN)  # local queue pair number
+    MESSAGE += struct.pack('>L', LOC_PSN)  # local start psn
+    MESSAGE += struct.pack('>L', LOC_R_KEY)  # local key
+    MESSAGE += struct.pack('>Q', LOC_BASE_ADDR)  # local base address
+    MESSAGE += struct.pack('>L', LOC_IP_ADDRESS_INT)  # local IP address
     # REMOTE QP INFO
-    MESSAGE += struct.pack('<L', REM_QPN)  # remote queue pair number
-    MESSAGE += struct.pack('<L', REM_PSN)  # remote start psn
-    MESSAGE += struct.pack('<L', REM_R_KEY)  # remote key
-    MESSAGE += struct.pack('<Q', REM_BASE_ADDR)  # remote base address
-    MESSAGE += struct.pack('<L', REM_IP_ADDRESS_INT)  # remote IP address
+    MESSAGE += struct.pack('>L', REM_QPN)  # remote queue pair number
+    MESSAGE += struct.pack('>L', REM_PSN)  # remote start psn
+    MESSAGE += struct.pack('>L', REM_R_KEY)  # remote key
+    MESSAGE += struct.pack('>Q', REM_BASE_ADDR)  # remote base address
+    MESSAGE += struct.pack('>L', REM_IP_ADDRESS_INT)  # remote IP address
 
-    MESSAGE += struct.pack('<H', 0x0)  # listenijg udp port (not needed here)
+    MESSAGE += struct.pack('>H', 0x0)  # listenijg udp port (not needed here)
     #TX META values
-    MESSAGE += struct.pack("<B", txmeta_flags)  # TX meta flags: valid, start, is_immd, txtype
-    MESSAGE += struct.pack("<L", DMA_LENGTH)  # DMA length
-    MESSAGE += struct.pack("<L", N_TRANSFERS)  # N transfers
-    MESSAGE += struct.pack("<L", FREQUENCY)  # Frequency
+    MESSAGE += struct.pack(">B", txmeta_flags)  # TX meta flags: valid, start, is_immd, txtype
+    MESSAGE += struct.pack(">L", DMA_LENGTH)  # DMA length
+    MESSAGE += struct.pack(">L", N_TRANSFERS)  # N transfers
+    MESSAGE += struct.pack(">L", MSG_RATE_CTR)  # Message rate counter
 
     print("UDP target IP:", REM_IP_ADDRESS)
     print("UDP target port:", REM_UDP_PORT)
@@ -380,18 +383,18 @@ def decode_udp_packet(pkt):
         0x07: 'ACK_ERROR'
     }
 
-    qpinfo_flags = struct.unpack('<B', payload[0:1])[0]
-    LOC_QPN = struct.unpack('<L', payload[1:5])[0]
-    LOC_PSN = struct.unpack('<L', payload[5:9])[0]
-    LOC_R_KEY = struct.unpack('<L', payload[9:13])[0]
-    LOC_BASE_ADDR = struct.unpack('<Q', payload[13:21])[0]
-    LOC_IP_ADDRESS_INT = struct.unpack('<L', payload[21:25])[0]
+    qpinfo_flags       = struct.unpack('>B', payload[0:1])[0]
+    LOC_QPN            = struct.unpack('>L', payload[1:5])[0]
+    LOC_PSN            = struct.unpack('>L', payload[5:9])[0]
+    LOC_R_KEY          = struct.unpack('>L', payload[9:13])[0]
+    LOC_BASE_ADDR      = struct.unpack('>Q', payload[13:21])[0]
+    LOC_IP_ADDRESS_INT = struct.unpack('>L', payload[21:25])[0]
 
-    REM_QPN = struct.unpack('<L', payload[25:29])[0]
-    REM_PSN = struct.unpack('<L', payload[29:33])[0]
-    REM_R_KEY = struct.unpack('<L', payload[33:37])[0]
-    REM_BASE_ADDR = struct.unpack('<Q', payload[37:45])[0]
-    REM_IP_ADDRESS_INT = struct.unpack('<L', payload[45:49])[0]
+    REM_QPN            = struct.unpack('>L', payload[25:29])[0]
+    REM_PSN            = struct.unpack('>L', payload[29:33])[0]
+    REM_R_KEY          = struct.unpack('>L', payload[33:37])[0]
+    REM_BASE_ADDR      = struct.unpack('>Q', payload[37:45])[0]
+    REM_IP_ADDRESS_INT = struct.unpack('>L', payload[45:49])[0]
 
     req_code = (qpinfo_flags>>1) & 0x07
     ack_valid = (qpinfo_flags>>4) & 0x01
@@ -425,8 +428,12 @@ def decode_udp_packet(pkt):
 if __name__ == "__main__":
 
     if args.start:
+        if (args.msgrate == 0):
+            message_counter_value = 0
+        else:
+            message_counter_value  =  np.uint32(args.clock/args.msgrate)
         send_txmeta(loc_ip_addr=args.loc_ip_addr, rem_ip_addr=args.rem_ip_addr, rem_qpn=args.rem_qpn,
-                    n_trasnfers=args.nTransfers, freq=args.Frequency, rdma_length=args.length, start_flag=args.start,
+                    n_trasnfers=args.nTransfers, msg_wait_ctr=message_counter_value, rdma_length=args.length, start_flag=args.start,
                     immd_flag=args.immediate, txtype_flag=args.txtype)
     else:
         if args.request == REQ_OPEN_QP:

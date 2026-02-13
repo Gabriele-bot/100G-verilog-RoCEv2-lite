@@ -3,6 +3,7 @@
 /*
  * Connection manager over UDP, RX path
  * TX meta used only for debug purposes
+ * BIG ENDIANESS
  */
 
 /*
@@ -14,17 +15,17 @@
  * |   0     |  [3  :1  ]  |  QP_req_type             |
  * |   0     |  [4  :4  ]  |  QP_ack_valid            |
  * |   0     |  [7  :5  ]  |  QP_ack_type             |
- * | [3:1]   |  [32 :8  ]  |  QP_info_loc_qpn         |
- * |   4     |  [39 :33 ]  |  ZERO_PADD               |
- * | [7:5]   |  [63 :40 ]  |  QP_info_loc_psn         |
- * |   8     |  [71 :64 ]  |  ZERO_PADD               |
+ * |   1     |  [15 :8  ]  |  ZERO_PADD               |
+ * | [4:2]   |  [39 :16 ]  |  QP_info_loc_qpn         |
+ * |   5     |  [47 :40 ]  |  ZERO_PADD               |
+ * | [8:6]   |  [71 :48 ]  |  QP_info_loc_psn         |
  * | [12:9]  |  [103 :72]  |  QP_info_loc_r_key       |
  * | [20:13] |  [167:104]  |  QP_info_loc_base_addr   |
  * | [24:21] |  [199:168]  |  QP_info_loc_ip_addr     |
- * | [27:25] |  [223:200]  |  QP_info_rem_qpn         |
- * |   28    |  [231:224]  |  ZERO_PADD               |
- * | [31:29] |  [255:232]  |  QP_info_rem_psn         |
- * |   32    |  [263:256]  |  ZERO_PADD               |
+ * |   25    |  [207:200]  |  ZERO_PADD               |
+ * | [28:26] |  [231:208]  |  QP_info_rem_qpn         |
+ * |   29    |  [239:232]  |  ZERO_PADD               |
+ * | [32:30] |  [263:240]  |  QP_info_rem_psn         |
  * | [36:33] |  [295:264]  |  QP_info_rem_r_key       |
  * | [44:37] |  [359:296]  |  QP_info_rem_base_addr   |
  * | [48:45] |  [391:360]  |  QP_info_rem_ip_addr     |
@@ -256,71 +257,71 @@ module udp_RoCE_connection_manager_rx #(
                 end
 
                     `_HEADER_FIELD_(0 ,  {qp_info_ack_type_next, qp_info_ack_valid_next, qp_info_req_type_next, qp_info_valid_next})
-                    `_HEADER_FIELD_(1 ,  qp_info_loc_qpn_next[0*8 +: 8])
-                    `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_next[1*8 +: 8])
-                    `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_next[2*8 +: 8])
-                    //`_HEADER_FIELD_(4 ,  temp_zero_padd)
-                    `_HEADER_FIELD_(5 ,  qp_info_loc_psn_next[0*8 +: 8])
-                    `_HEADER_FIELD_(6 ,  qp_info_loc_psn_next[1*8 +: 8])
-                    `_HEADER_FIELD_(7 ,  qp_info_loc_psn_next[2*8 +: 8])
-                    //`_HEADER_FIELD_(8 ,  temp_zero_padd)
-                    `_HEADER_FIELD_(9 ,  qp_info_loc_r_key_next[0*8 +: 8])
-                    `_HEADER_FIELD_(10,  qp_info_loc_r_key_next[1*8 +: 8])
-                    `_HEADER_FIELD_(11,  qp_info_loc_r_key_next[2*8 +: 8])
-                    `_HEADER_FIELD_(12,  qp_info_loc_r_key_next[3*8 +: 8])
-                    `_HEADER_FIELD_(13,  qp_info_loc_base_addr_next[0*8 +: 8])
-                    `_HEADER_FIELD_(14,  qp_info_loc_base_addr_next[1*8 +: 8])
-                    `_HEADER_FIELD_(15,  qp_info_loc_base_addr_next[2*8 +: 8])
-                    `_HEADER_FIELD_(16,  qp_info_loc_base_addr_next[3*8 +: 8])
-                    `_HEADER_FIELD_(17,  qp_info_loc_base_addr_next[4*8 +: 8])
-                    `_HEADER_FIELD_(18,  qp_info_loc_base_addr_next[5*8 +: 8])
-                    `_HEADER_FIELD_(19,  qp_info_loc_base_addr_next[6*8 +: 8])
-                    `_HEADER_FIELD_(20,  qp_info_loc_base_addr_next[7*8 +: 8])
-                    `_HEADER_FIELD_(21,  qp_info_loc_ip_addr_next[0*8 +: 8])
-                    `_HEADER_FIELD_(22,  qp_info_loc_ip_addr_next[1*8 +: 8])
-                    `_HEADER_FIELD_(23,  qp_info_loc_ip_addr_next[2*8 +: 8])
-                    `_HEADER_FIELD_(24,  qp_info_loc_ip_addr_next[3*8 +: 8])
+                    //`_HEADER_FIELD_(1 ,  temp_zero_padd)
+                    `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_next[2*8 +: 8])
+                    `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_next[1*8 +: 8])
+                    `_HEADER_FIELD_(4 ,  qp_info_loc_qpn_next[0*8 +: 8])
+                    //`_HEADER_FIELD_(5 ,  temp_zero_padd)
+                    `_HEADER_FIELD_(6 ,  qp_info_loc_psn_next[2*8 +: 8])
+                    `_HEADER_FIELD_(7 ,  qp_info_loc_psn_next[1*8 +: 8])
+                    `_HEADER_FIELD_(8 ,  qp_info_loc_psn_next[0*8 +: 8])
+                    `_HEADER_FIELD_(9 ,  qp_info_loc_r_key_next[3*8 +: 8])
+                    `_HEADER_FIELD_(10,  qp_info_loc_r_key_next[2*8 +: 8])
+                    `_HEADER_FIELD_(11,  qp_info_loc_r_key_next[1*8 +: 8])
+                    `_HEADER_FIELD_(12,  qp_info_loc_r_key_next[0*8 +: 8])
+                    `_HEADER_FIELD_(13,  qp_info_loc_base_addr_next[7*8 +: 8])
+                    `_HEADER_FIELD_(14,  qp_info_loc_base_addr_next[6*8 +: 8])
+                    `_HEADER_FIELD_(15,  qp_info_loc_base_addr_next[5*8 +: 8])
+                    `_HEADER_FIELD_(16,  qp_info_loc_base_addr_next[4*8 +: 8])
+                    `_HEADER_FIELD_(17,  qp_info_loc_base_addr_next[3*8 +: 8])
+                    `_HEADER_FIELD_(18,  qp_info_loc_base_addr_next[2*8 +: 8])
+                    `_HEADER_FIELD_(19,  qp_info_loc_base_addr_next[1*8 +: 8])
+                    `_HEADER_FIELD_(20,  qp_info_loc_base_addr_next[0*8 +: 8])
+                    `_HEADER_FIELD_(21,  qp_info_loc_ip_addr_next[3*8 +: 8])
+                    `_HEADER_FIELD_(22,  qp_info_loc_ip_addr_next[2*8 +: 8])
+                    `_HEADER_FIELD_(23,  qp_info_loc_ip_addr_next[1*8 +: 8])
+                    `_HEADER_FIELD_(24,  qp_info_loc_ip_addr_next[0*8 +: 8])
 
-                    `_HEADER_FIELD_(25,  qp_info_rem_qpn_next[0*8 +: 8])
-                    `_HEADER_FIELD_(26,  qp_info_rem_qpn_next[1*8 +: 8])
-                    `_HEADER_FIELD_(27,  qp_info_rem_qpn_next[2*8 +: 8])
-                    //`_HEADER_FIELD_(28 ,  temp_zero_padd)
-                    `_HEADER_FIELD_(29,  qp_info_rem_psn_next[0*8 +: 8])
-                    `_HEADER_FIELD_(30,  qp_info_rem_psn_next[1*8 +: 8])
-                    `_HEADER_FIELD_(31,  qp_info_rem_psn_next[2*8 +: 8])
-                    //`_HEADER_FIELD_(32 ,  temp_zero_padd)
-                    `_HEADER_FIELD_(33,  qp_info_rem_r_key_next[0*8 +: 8])
-                    `_HEADER_FIELD_(34,  qp_info_rem_r_key_next[1*8 +: 8])
-                    `_HEADER_FIELD_(35,  qp_info_rem_r_key_next[2*8 +: 8])
-                    `_HEADER_FIELD_(36,  qp_info_rem_r_key_next[3*8 +: 8])
-                    `_HEADER_FIELD_(37,  qp_info_rem_base_addr_next[0*8 +: 8])
-                    `_HEADER_FIELD_(38,  qp_info_rem_base_addr_next[1*8 +: 8])
-                    `_HEADER_FIELD_(39,  qp_info_rem_base_addr_next[2*8 +: 8])
-                    `_HEADER_FIELD_(40,  qp_info_rem_base_addr_next[3*8 +: 8])
-                    `_HEADER_FIELD_(41,  qp_info_rem_base_addr_next[4*8 +: 8])
-                    `_HEADER_FIELD_(42,  qp_info_rem_base_addr_next[5*8 +: 8])
-                    `_HEADER_FIELD_(43,  qp_info_rem_base_addr_next[6*8 +: 8])
-                    `_HEADER_FIELD_(44,  qp_info_rem_base_addr_next[7*8 +: 8])
-                    `_HEADER_FIELD_(45,  qp_info_rem_ip_addr_next[0*8 +: 8])
-                    `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_next[1*8 +: 8])
-                    `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_next[2*8 +: 8])
-                    `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_next[3*8 +: 8])
-                    `_HEADER_FIELD_(49,  qp_info_listening_port_next[0*8 +: 8])
-                    `_HEADER_FIELD_(50,  qp_info_listening_port_next[1*8 +: 8])
+                    //`_HEADER_FIELD_(25 ,  temp_zero_padd)
+                    `_HEADER_FIELD_(26,  qp_info_rem_qpn_next[2*8 +: 8])
+                    `_HEADER_FIELD_(27,  qp_info_rem_qpn_next[1*8 +: 8])
+                    `_HEADER_FIELD_(28,  qp_info_rem_qpn_next[0*8 +: 8])
+                    //`_HEADER_FIELD_(29 ,  temp_zero_padd)
+                    `_HEADER_FIELD_(30,  qp_info_rem_psn_next[2*8 +: 8])
+                    `_HEADER_FIELD_(31,  qp_info_rem_psn_next[1*8 +: 8])
+                    `_HEADER_FIELD_(32,  qp_info_rem_psn_next[0*8 +: 8])
+                    `_HEADER_FIELD_(33,  qp_info_rem_r_key_next[3*8 +: 8])
+                    `_HEADER_FIELD_(34,  qp_info_rem_r_key_next[2*8 +: 8])
+                    `_HEADER_FIELD_(35,  qp_info_rem_r_key_next[1*8 +: 8])
+                    `_HEADER_FIELD_(36,  qp_info_rem_r_key_next[0*8 +: 8])
+                    `_HEADER_FIELD_(37,  qp_info_rem_base_addr_next[7*8 +: 8])
+                    `_HEADER_FIELD_(38,  qp_info_rem_base_addr_next[6*8 +: 8])
+                    `_HEADER_FIELD_(39,  qp_info_rem_base_addr_next[5*8 +: 8])
+                    `_HEADER_FIELD_(40,  qp_info_rem_base_addr_next[4*8 +: 8])
+                    `_HEADER_FIELD_(41,  qp_info_rem_base_addr_next[3*8 +: 8])
+                    `_HEADER_FIELD_(42,  qp_info_rem_base_addr_next[2*8 +: 8])
+                    `_HEADER_FIELD_(43,  qp_info_rem_base_addr_next[1*8 +: 8])
+                    `_HEADER_FIELD_(44,  qp_info_rem_base_addr_next[0*8 +: 8])
+                    `_HEADER_FIELD_(45,  qp_info_rem_ip_addr_next[3*8 +: 8])
+                    `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_next[2*8 +: 8])
+                    `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_next[1*8 +: 8])
+                    `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_next[0*8 +: 8])
+                    `_HEADER_FIELD_(49,  qp_info_listening_port_next[1*8 +: 8])
+                    `_HEADER_FIELD_(50,  qp_info_listening_port_next[0*8 +: 8])
 
                     `_HEADER_FIELD_(51,  {temp_4bits, txmeta_tx_type_next, txmeta_is_immediate_next, txmeta_start_next, txmeta_valid_next})
-                    `_HEADER_FIELD_(52,  txmeta_dma_lentgh_next[0*8 +: 8])
-                    `_HEADER_FIELD_(53,  txmeta_dma_lentgh_next[1*8 +: 8])
-                    `_HEADER_FIELD_(54,  txmeta_dma_lentgh_next[2*8 +: 8])
-                    `_HEADER_FIELD_(55,  txmeta_dma_lentgh_next[3*8 +: 8])
-                    `_HEADER_FIELD_(56,  txmeta_n_transfers_next[0*8 +: 8])
-                    `_HEADER_FIELD_(57,  txmeta_n_transfers_next[1*8 +: 8])
-                    `_HEADER_FIELD_(58,  txmeta_n_transfers_next[2*8 +: 8])
-                    `_HEADER_FIELD_(59,  txmeta_n_transfers_next[3*8 +: 8])
-                    `_HEADER_FIELD_(60,  txmeta_frequency_next[0*8 +: 8])
-                    `_HEADER_FIELD_(61,  txmeta_frequency_next[1*8 +: 8])
-                    `_HEADER_FIELD_(62,  txmeta_frequency_next[2*8 +: 8])
-                    `_HEADER_FIELD_(63,  txmeta_frequency_next[3*8 +: 8])
+                    `_HEADER_FIELD_(52,  txmeta_dma_lentgh_next[3*8 +: 8])
+                    `_HEADER_FIELD_(53,  txmeta_dma_lentgh_next[2*8 +: 8])
+                    `_HEADER_FIELD_(54,  txmeta_dma_lentgh_next[1*8 +: 8])
+                    `_HEADER_FIELD_(55,  txmeta_dma_lentgh_next[0*8 +: 8])
+                    `_HEADER_FIELD_(56,  txmeta_n_transfers_next[3*8 +: 8])
+                    `_HEADER_FIELD_(57,  txmeta_n_transfers_next[2*8 +: 8])
+                    `_HEADER_FIELD_(58,  txmeta_n_transfers_next[1*8 +: 8])
+                    `_HEADER_FIELD_(59,  txmeta_n_transfers_next[0*8 +: 8])
+                    `_HEADER_FIELD_(60,  txmeta_frequency_next[3*8 +: 8])
+                    `_HEADER_FIELD_(61,  txmeta_frequency_next[2*8 +: 8])
+                    `_HEADER_FIELD_(62,  txmeta_frequency_next[1*8 +: 8])
+                    `_HEADER_FIELD_(63,  txmeta_frequency_next[0*8 +: 8])
 
                     txmeta_loc_qpn_next = qp_info_rem_qpn_next;
 

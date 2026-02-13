@@ -4,9 +4,45 @@
  * Connection manager over UDP
  */
 
+ /*
+ * Structure
+ * +---------+-------------+--------------------------+
+ * | OCTETS  |  BIT RANGE  |       Field              |
+ * +---------+-------------+--------------------------+
+ * |   0     |  [0  :0  ]  |  QP_info_valid           |
+ * |   0     |  [3  :1  ]  |  QP_req_type             |
+ * |   0     |  [4  :4  ]  |  QP_ack_valid            |
+ * |   0     |  [7  :5  ]  |  QP_ack_type             |
+ * |   1     |  [15 :8  ]  |  ZERO_PADD               |
+ * | [4:2]   |  [39 :16 ]  |  QP_info_loc_qpn         |
+ * |   5     |  [47 :40 ]  |  ZERO_PADD               |
+ * | [8:6]   |  [71 :48 ]  |  QP_info_loc_psn         |
+ * | [12:9]  |  [103 :72]  |  QP_info_loc_r_key       |
+ * | [20:13] |  [167:104]  |  QP_info_loc_base_addr   |
+ * | [24:21] |  [199:168]  |  QP_info_loc_ip_addr     |
+ * |   25    |  [207:200]  |  ZERO_PADD               |
+ * | [28:26] |  [231:208]  |  QP_info_rem_qpn         |
+ * |   29    |  [239:232]  |  ZERO_PADD               |
+ * | [32:30] |  [263:240]  |  QP_info_rem_psn         |
+ * | [36:33] |  [295:264]  |  QP_info_rem_r_key       |
+ * | [44:37] |  [359:296]  |  QP_info_rem_base_addr   |
+ * | [48:45] |  [391:360]  |  QP_info_rem_ip_addr     |
+ * | [50:49] |  [407:392]  |  QP_info_listening_port  |
+ * +---------+-------------+--------------------------+
+ * |   51    |  [408:408]  |  txmeta_valid            |
+ * |   51    |  [409:409]  |  txmeta_start            |
+ * |   51    |  [410:410]  |  txmeta_is_immediate     |
+ * |   51    |  [411:411]  |  txmeta_tx_type          |
+ * |   51    |  [415:412]  |  txmeta_reserved         |
+ * | [55:52] |  [447:416]  |  txmeta_dma_length       |
+ * | [59:56] |  [479:448]  |  txmeta_n_transfers      |
+ * | [63:60] |  [511:480]  |  txmeta_frequency        |
+ * +---------+-------------+--------------------------+
+ * TOTAL length 512 bits, 64 bytes
+ */
+
 module udp_RoCE_connection_manager #(
     parameter DATA_WIDTH      = 256,
-    parameter MAX_QUEUE_PAIRS = 4,
     parameter LISTEN_UDP_PORT = 16'h4321
 ) (
     input wire clk,
@@ -197,7 +233,7 @@ module udp_RoCE_connection_manager #(
         .s_udp_dest_port(s_udp_dest_port),
         .s_udp_length(s_udp_length),
         .s_udp_checksum(s_udp_checksum),
-        
+
         .s_udp_payload_axis_tdata(s_udp_payload_axis_tdata),
         .s_udp_payload_axis_tkeep(s_udp_payload_axis_tkeep),
         .s_udp_payload_axis_tvalid(s_udp_payload_axis_tvalid),
@@ -238,7 +274,7 @@ module udp_RoCE_connection_manager #(
 
 
     udp_RoCE_connection_manager_tx #(
-    .DATA_WIDTH(DATA_WIDTH)
+        .DATA_WIDTH(DATA_WIDTH)
     ) udp_RoCE_connection_manager_tx_instance (
         .clk(clk),
         .rst(rst),
@@ -283,7 +319,8 @@ module udp_RoCE_connection_manager #(
     );
 
     qpn_fifo_init #(
-    .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS)
+        .MAX_QUEUE_PAIRS_FIFO(MAX_QUEUE_PAIRS),
+        .BASE_QPN_FIFO(256)
     ) qpn_fifo_init_instance (
         .clk(clk),
         .rst(rst),
