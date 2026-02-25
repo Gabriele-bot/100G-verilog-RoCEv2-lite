@@ -176,7 +176,7 @@ module udp_RoCE_connection_manager_rx #(
         s_udp_payload_axis_tready_next = 1'b0;
 
         metadata_valid_next            = metadata_valid_reg;
-        qp_info_valid_next          = qp_info_valid_reg;
+        qp_info_valid_next             = qp_info_valid_reg;
         txmeta_valid_next = txmeta_valid_reg;
 
         udp_port_next                  = udp_port_reg;
@@ -357,6 +357,8 @@ module udp_RoCE_connection_manager_rx #(
             s_udp_hdr_ready_reg           <= 1'b0;
             s_udp_payload_axis_tready_reg <= 1'b0;
             m_qp_info_valid_reg           <= 1'b0;
+            qp_info_valid_reg             <= 1'b0;
+            qp_info_ack_valid_reg         <= 1'b0;
             busy_reg                      <= 1'b0;
             metadata_valid_reg            <= 1'b0;
 
@@ -370,29 +372,31 @@ module udp_RoCE_connection_manager_rx #(
             s_udp_payload_axis_tready_reg <= s_udp_payload_axis_tready_next;
 
             ptr_reg                       <= ptr_next;
-            read_qp_info_reg           <= read_qp_info_next;
+            read_qp_info_reg              <= read_qp_info_next;
 
             udp_port_reg                  <= udp_port_next;
 
-            qp_info_valid_reg          <= qp_info_valid_next;
+            qp_info_valid_reg             <= qp_info_valid_next;
+            qp_info_ack_valid_reg         <= qp_info_ack_valid_next;
 
-            if (qp_info_valid_next) begin
-                qp_info_req_type_reg      <= qp_info_req_type_next;
+            //if (qp_info_valid_next) begin
+            //
+            //end
+            qp_info_req_type_reg      <= qp_info_req_type_next;
 
-                qp_info_loc_qpn_reg       <= qp_info_loc_qpn_next;
-                qp_info_loc_psn_reg       <= qp_info_loc_psn_next;
-                qp_info_loc_r_key_reg     <= qp_info_loc_r_key_next;
-                qp_info_loc_base_addr_reg <= qp_info_loc_base_addr_next;
-                qp_info_loc_ip_addr_reg   <= qp_info_loc_ip_addr_next;
+            qp_info_loc_qpn_reg       <= qp_info_loc_qpn_next;
+            qp_info_loc_psn_reg       <= qp_info_loc_psn_next;
+            qp_info_loc_r_key_reg     <= qp_info_loc_r_key_next;
+            qp_info_loc_base_addr_reg <= qp_info_loc_base_addr_next;
+            qp_info_loc_ip_addr_reg   <= qp_info_loc_ip_addr_next;
 
-                qp_info_rem_qpn_reg       <= qp_info_rem_qpn_next;
-                qp_info_rem_psn_reg       <= qp_info_rem_psn_next;
-                qp_info_rem_r_key_reg     <= qp_info_rem_r_key_next;
-                qp_info_rem_base_addr_reg <= qp_info_rem_base_addr_next;
-                qp_info_rem_ip_addr_reg   <= qp_info_rem_ip_addr_next;
+            qp_info_rem_qpn_reg       <= qp_info_rem_qpn_next;
+            qp_info_rem_psn_reg       <= qp_info_rem_psn_next;
+            qp_info_rem_r_key_reg     <= qp_info_rem_r_key_next;
+            qp_info_rem_base_addr_reg <= qp_info_rem_base_addr_next;
+            qp_info_rem_ip_addr_reg   <= qp_info_rem_ip_addr_next;
 
-                qp_info_listening_port_reg   <= qp_info_listening_port_next;
-            end
+            qp_info_listening_port_reg   <= qp_info_listening_port_next;
 
             if (qp_info_ack_valid_next) begin
                 qp_info_ack_type_reg      <= qp_info_ack_type_next;
@@ -401,7 +405,8 @@ module udp_RoCE_connection_manager_rx #(
             txmeta_valid_reg <= txmeta_valid_next;
             if (txmeta_valid_next) begin
                 txmeta_start_reg           <= txmeta_start_next;
-                txmeta_loc_qpn_reg         <= txmeta_loc_qpn_next;
+                //txmeta_loc_qpn_reg         <= txmeta_loc_qpn_next;
+                txmeta_loc_qpn_reg         <= qp_info_rem_qpn_next;
                 txmeta_is_immediate_reg    <= txmeta_is_immediate_next;
                 txmeta_tx_type_reg         <= txmeta_tx_type_next;
                 txmeta_dma_lentgh_reg      <= txmeta_dma_lentgh_next;

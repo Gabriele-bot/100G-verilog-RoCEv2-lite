@@ -16,16 +16,16 @@
  * |   0     |  [4  :4  ]  |  QP_ack_valid            |
  * |   0     |  [7  :5  ]  |  QP_ack_type             |
  * |   1     |  [15 :8  ]  |  ZERO_PADD               |
- * | [4:2]   |  [48 :16 ]  |  QP_info_loc_qpn         |
- * |   5     |  [71 :64 ]  |  ZERO_PADD               |
- * | [8:6]   |  [63 :40 ]  |  QP_info_loc_psn         |
+ * | [4:2]   |  [39 :16 ]  |  QP_info_loc_qpn         |
+ * |   5     |  [47 :40 ]  |  ZERO_PADD               |
+ * | [8:6]   |  [71 :48 ]  |  QP_info_loc_psn         |
  * | [12:9]  |  [103 :72]  |  QP_info_loc_r_key       |
  * | [20:13] |  [167:104]  |  QP_info_loc_base_addr   |
  * | [24:21] |  [199:168]  |  QP_info_loc_ip_addr     |
- * | [27:25] |  [223:200]  |  QP_info_rem_qpn         |
- * |   28    |  [231:224]  |  ZERO_PADD               |
- * | [31:29] |  [255:232]  |  QP_info_rem_psn         |
- * |   32    |  [263:256]  |  ZERO_PADD               |
+ * |   25    |  [207:200]  |  ZERO_PADD               |
+ * | [28:26] |  [231:208]  |  QP_info_rem_qpn         |
+ * |   29    |  [239:232]  |  ZERO_PADD               |
+ * | [32:30] |  [263:240]  |  QP_info_rem_psn         |
  * | [36:33] |  [295:264]  |  QP_info_rem_r_key       |
  * | [44:37] |  [359:296]  |  QP_info_rem_base_addr   |
  * | [48:45] |  [391:360]  |  QP_info_rem_ip_addr     |
@@ -44,7 +44,10 @@
  */
 
 module udp_RoCE_connection_manager_tx #(
-    parameter DATA_WIDTH      = 256
+    parameter DATA_WIDTH      = 256,
+    parameter DEST_UDP_PORT   = 16'h4322,
+    parameter LISTEN_UDP_PORT = 16'h4321
+
 ) (
     input wire clk,
     input wire rst,
@@ -138,7 +141,7 @@ module udp_RoCE_connection_manager_tx #(
     reg [63:0] qp_info_rem_base_addr_reg;
     reg [31:0] qp_info_rem_ip_addr_reg;
 
-    reg [15:0] s_qp_info_udp_dest_port_reg;
+    reg [15:0] qp_info_udp_dest_port_reg;
 
     reg s_qp_info_ready_reg = 1'b0, s_qp_info_ready_next;
 
@@ -266,8 +269,8 @@ module udp_RoCE_connection_manager_tx #(
                 `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_reg[2*8 +: 8])
                 `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_reg[1*8 +: 8])
                 `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(49,  m_udp_source_port_reg[1*8 +: 8])
-                `_HEADER_FIELD_(50,  m_udp_source_port_reg[0*8 +: 8])
+                `_HEADER_FIELD_(49,  qp_info_udp_dest_port_reg[1*8 +: 8])
+                `_HEADER_FIELD_(50,  qp_info_udp_dest_port_reg[0*8 +: 8])
                 // not used
                 `_HEADER_FIELD_(51,  8'h00)
                 `_HEADER_FIELD_(52,  8'h00)
@@ -324,12 +327,12 @@ module udp_RoCE_connection_manager_tx #(
             qp_info_rem_base_addr_reg <= s_qp_info_rem_base_addr;
             qp_info_rem_ip_addr_reg   <= s_qp_info_rem_ip_addr;
 
-            s_qp_info_udp_dest_port_reg <= s_qp_info_udp_dest_port;
+            qp_info_udp_dest_port_reg <= LISTEN_UDP_PORT;
 
             m_ip_source_ip_reg    <= s_qp_info_loc_ip_addr;
             m_ip_dest_ip_reg      <= s_qp_info_rem_ip_addr;
             m_udp_source_port_reg <= cfg_udp_source_port;
-            m_udp_dest_port_reg   <= s_qp_info_udp_dest_port;
+            m_udp_dest_port_reg   <= DEST_UDP_PORT;
             m_udp_length_reg      <= QP_INFO_SIZE+16'd8;
             m_udp_checksum_reg    <= 16'd0;
         end

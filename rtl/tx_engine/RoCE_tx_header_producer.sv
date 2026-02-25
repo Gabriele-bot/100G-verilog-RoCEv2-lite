@@ -13,7 +13,7 @@ module RoCE_tx_header_producer #(
      */
     input  wire       s_dma_meta_valid,
     output wire       s_dma_meta_ready,
-    input wire [31:0] s_dma_length, // used on for WRITE operations
+    input wire [31:0] s_dma_length, // used for WRITE operations
     input wire [23:0] s_rem_qpn,
     input wire [23:0] s_loc_qpn,
     input wire [23:0] s_rem_psn,
@@ -606,6 +606,8 @@ module RoCE_tx_header_producer #(
         if (rst) begin
             state_reg   <= STATE_IDLE;
 
+            s_dma_meta_ready_reg <= 1'b0;
+
             s_immediate_data_reg <= 32'd0;
 
             packet_inst_length_reg       <= 14'd0;
@@ -735,7 +737,7 @@ module RoCE_tx_header_producer #(
 
     end
 
-    assign s_dma_meta_ready = s_dma_meta_ready_reg;
+    //assign s_dma_meta_ready = s_dma_meta_ready_reg;
 
     assign m_roce_bth_valid     = roce_bth_valid_reg;
     assign m_roce_reth_valid    = roce_reth_valid_reg;

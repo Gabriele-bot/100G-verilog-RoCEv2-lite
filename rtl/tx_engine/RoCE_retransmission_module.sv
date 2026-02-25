@@ -231,7 +231,10 @@ module RoCE_retransmission_module #(
 
     reg [3:0] state_reg = STATE_IDLE, state_next;
 
-    localparam AXI_MAX_BURST_LEN = 4096/(DATA_WIDTH/8) + 1;
+    localparam AXI_MAX_BURST_LEN_COMP = 4096/(DATA_WIDTH/8);
+    localparam AXI_MAX_BURST_LEN = 256 <= AXI_MAX_BURST_LEN_COMP ? 256 : AXI_MAX_BURST_LEN_COMP;
+    localparam BURST_SIZE = AXI_MAX_BURST_LEN * 8;
+    
 
     reg [3:0] memory_steps;
     reg [12:0] pmtu_val;
@@ -371,6 +374,14 @@ module RoCE_retransmission_module #(
     wire                       m_axis_dma_read_data_tready;
     wire                       m_axis_dma_read_data_tlast;
     wire [0:0]                 m_axis_dma_read_data_tuser;
+
+    // form AXI DMA to output
+    wire [DATA_WIDTH-1:0]      m_axis_dma_read_fifo_data_tdata;
+    wire [DATA_WIDTH/8-1:0]    m_axis_dma_read_fifo_data_tkeep;
+    wire                       m_axis_dma_read_fifo_data_tvalid;
+    wire                       m_axis_dma_read_fifo_data_tready;
+    wire                       m_axis_dma_read_fifo_data_tlast;
+    wire [0:0]                 m_axis_dma_read_fifo_data_tuser;
 
     wire [BUFFER_ADDR_WIDTH-1:0]  s_axis_dma_write_desc_addr;
     wire [AXI_DMA_LENGTH-1:0]     s_axis_dma_write_desc_len;
@@ -550,9 +561,9 @@ module RoCE_retransmission_module #(
         .rst(rst),
         .s_axis_read_desc_addr         (s_axis_dma_read_desc_addr),
         .s_axis_read_desc_len          (s_axis_dma_read_desc_len),
-        .s_axis_read_desc_tag          (1'b0),
-        .s_axis_read_desc_id           (1'b0),
-        .s_axis_read_desc_dest         (1'b0),
+        .s_axis_read_desc_tag          (0),
+        .s_axis_read_desc_id           (0),
+        .s_axis_read_desc_dest         (0),
         .s_axis_read_desc_user         (s_axis_dma_read_desc_user),
         .s_axis_read_desc_valid        (s_axis_dma_read_desc_valid),
         .s_axis_read_desc_ready        (s_axis_dma_read_desc_ready),
@@ -1033,7 +1044,7 @@ Simple DMA write logic
 
                 //s_axis_dma_write_desc_valid_next = 1'b0;
 
-                if (m_axis_dma_read_data_tready && m_axis_dma_read_data_tvalid && m_axis_dma_read_data_tlast) begin
+                if (m_axis_dma_read_fifo_data_tready && m_axis_dma_read_fifo_data_tvalid && m_axis_dma_read_fifo_data_tlast) begin
                     if (trigger_retransmit  || rnr_timeout_counter > 0) begin
                         state_next                           = STATE_IDLE;
                     end else begin
@@ -1401,6 +1412,46 @@ Simple DMA write logic
         .status_good_frame()
     );
 
+    axis_fifo #(
+        .DEPTH(BURST_SIZE), // burst size
+        .DATA_WIDTH(DATA_WIDTH),
+        .KEEP_ENABLE(1),
+        .KEEP_WIDTH(DATA_WIDTH/8),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1),
+        .FRAME_FIFO(0)
+    ) dma_rd_output_axis_fifo (
+        .clk(clk),
+        .rst(rst),
+
+        // AXI input
+        .s_axis_tdata (m_axis_dma_read_data_tdata),
+        .s_axis_tkeep (m_axis_dma_read_data_tkeep),
+        .s_axis_tvalid(m_axis_dma_read_data_tvalid),
+        .s_axis_tready(m_axis_dma_read_data_tready),
+        .s_axis_tlast (m_axis_dma_read_data_tlast),
+        .s_axis_tid(0),
+        .s_axis_tdest(0),
+        .s_axis_tuser (m_axis_dma_read_data_tuser),
+
+        // AXI output
+        .m_axis_tdata (m_axis_dma_read_fifo_data_tdata),
+        .m_axis_tkeep (m_axis_dma_read_fifo_data_tkeep),
+        .m_axis_tvalid(m_axis_dma_read_fifo_data_tvalid),
+        .m_axis_tready(m_axis_dma_read_fifo_data_tready),
+        .m_axis_tlast (m_axis_dma_read_fifo_data_tlast),
+        .m_axis_tid(),
+        .m_axis_tdest(),
+        .m_axis_tuser (m_axis_dma_read_fifo_data_tuser),
+
+        // Status
+        .status_overflow  (),
+        .status_bad_frame (),
+        .status_good_frame()
+    );
+
     wire stall_input_payload = state_reg != STATE_DMA_WRITE;
 
     assign s_axis_broadcast_tdata     = s_roce_payload_axis_tdata;
@@ -1455,14 +1506,14 @@ Simple DMA write logic
     ) axis_mux_instance (
         .clk(clk),
         .rst(rst),
-        .s_axis_tdata ({axis_bypass_tdata , m_axis_dma_read_data_tdata}),
-        .s_axis_tkeep ({axis_bypass_tkeep , m_axis_dma_read_data_tkeep}),
-        .s_axis_tvalid({axis_bypass_tvalid, m_axis_dma_read_data_tvalid}),
-        .s_axis_tready({axis_bypass_tready, m_axis_dma_read_data_tready}),
-        .s_axis_tlast ({axis_bypass_tlast , m_axis_dma_read_data_tlast & m_axis_dma_read_data_tvalid}),
+        .s_axis_tdata ({axis_bypass_tdata , m_axis_dma_read_fifo_data_tdata}),
+        .s_axis_tkeep ({axis_bypass_tkeep , m_axis_dma_read_fifo_data_tkeep}),
+        .s_axis_tvalid({axis_bypass_tvalid, m_axis_dma_read_fifo_data_tvalid}),
+        .s_axis_tready({axis_bypass_tready, m_axis_dma_read_fifo_data_tready}),
+        .s_axis_tlast ({axis_bypass_tlast , m_axis_dma_read_fifo_data_tlast & m_axis_dma_read_fifo_data_tvalid}),
         .s_axis_tid   ({0,0}),
         .s_axis_tdest ({0,0}),
-        .s_axis_tuser ({axis_bypass_tuser , m_axis_dma_read_data_tuser}),
+        .s_axis_tuser ({axis_bypass_tuser , m_axis_dma_read_fifo_data_tuser}),
         .m_axis_tdata (m_roce_payload_axis_tdata),
         .m_axis_tkeep (m_roce_payload_axis_tkeep),
         .m_axis_tvalid(m_roce_payload_axis_tvalid),
