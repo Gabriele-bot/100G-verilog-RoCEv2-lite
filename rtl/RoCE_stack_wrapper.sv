@@ -470,7 +470,8 @@ module RoCE_stack_wrapper #(
 
     // request arbiter
 
-    wire [N_QUEUE_PAIRS-1:0]    qp_context_arb_req;
+    wire [N_QUEUE_PAIRS-1:0]    qp_context_arb_req_valid;
+    wire [N_QUEUE_PAIRS-1:0]    qp_context_arb_req_ready;
     wire [N_QUEUE_PAIRS*24-1:0] qp_local_qpn_arb_req;
 
 
@@ -495,9 +496,9 @@ module RoCE_stack_wrapper #(
     wire [31:0] s_qp_req_rem_ip_addr;
 
     // close parameters, case of too many retransmissions
-    wire [N_QUEUE_PAIRS-1:0] qp_close_params_valid;
+    wire [N_QUEUE_PAIRS-1:0]     qp_close_params_valid;
     wire [N_QUEUE_PAIRS*128-1:0] qp_close_params;
-    wire [N_QUEUE_PAIRS*24-1:0] qp_close_loc_qp;
+    wire [N_QUEUE_PAIRS*24-1:0]  qp_close_loc_qp;
 
     wire           m_qp_close_params_valid;
     wire [24-1:0] m_qp_close_loc_qp;
@@ -516,8 +517,8 @@ module RoCE_stack_wrapper #(
 
         .s_axis_tdata (qp_local_qpn_arb_req),
         .s_axis_tkeep (0),
-        .s_axis_tvalid(qp_context_arb_req),
-        .s_axis_tready(),
+        .s_axis_tvalid(qp_context_arb_req_valid),
+        .s_axis_tready(qp_context_arb_req_ready),
         .s_axis_tlast (0),
         .s_axis_tuser (0),
         .s_axis_tid   (0),
@@ -534,7 +535,7 @@ module RoCE_stack_wrapper #(
         .KEEP_ENABLE(0),
         .USER_ENABLE(0),
         .LAST_ENABLE(0)
-    ) axis_arb_mux_clos_qp_req (
+    ) axis_arb_mux_close_qp_req (
         .clk(clk),
         .rst(rst),
 
@@ -799,18 +800,15 @@ module RoCE_stack_wrapper #(
             wire [23:0] wr_error_loc_qpn;
 
 
-
-
-
             RoCE_data_generator #(
                 .DATA_WIDTH(QP_CH_DATA_WIDTH)
             ) RoCE_data_generator_instance (
                 .clk(clk),
                 .rst(rst),
 
-                .rst_word_ctr(1'b0),
+                .rst_word_ctr(cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP && cm_qp_loc_qpn == (256+i)),
 
-                .stop(stop_transfer && en_retrans),
+                .stop(stop_transfer && en_retrans || wr_error_qp_not_rts),
 
                 .txmeta_valid         (txmeta_valid && txmeta_loc_qpn==(256+i)),
                 .txmeta_start_transfer(txmeta_start_transfer),
@@ -965,7 +963,8 @@ module RoCE_stack_wrapper #(
                 .qp_tx_type     (qp_tx_type),
 
                 // request to qp state
-                .m_qp_context_req(qp_context_arb_req[i]),
+                .m_qp_context_req_valid(qp_context_arb_req_valid[i]),
+                .m_qp_context_req_ready(qp_context_arb_req_ready[i]),
                 .m_qp_local_qpn_req(qp_local_qpn_arb_req[24*i +: 24]),
                 // reply from qp state
                 .s_qp_req_context_valid(s_qp_req_context_valid && s_qp_req_loc_qpn == (256+i)),

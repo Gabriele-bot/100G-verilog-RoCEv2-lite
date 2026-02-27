@@ -961,7 +961,7 @@ module RoCE_minimal_stack #(
         .s_wr_req_is_immediate  (m_wr_req_is_immediate),
         .s_wr_req_tx_type       (m_wr_req_tx_type),
 
-        .m_qp_context_req       (m_qp_context_req),
+        .m_qp_context_req_valid (m_qp_context_req),
         .m_qp_local_qpn_req     (m_qp_local_qpn_req),
         .s_qp_context_valid     (s_qp_req_context_valid),
         .s_qp_state             (s_qp_req_state),

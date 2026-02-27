@@ -118,7 +118,8 @@ module RoCE_tx_engine #(
     input wire        qp_is_immediate,
     input wire        qp_tx_type,
     // QP state request
-    output wire        m_qp_context_req,
+    output wire        m_qp_context_req_valid,
+    input  wire        m_qp_context_req_ready,
     output wire [23:0] m_qp_local_qpn_req,
     // QP state reply
     input wire        s_qp_req_context_valid,
@@ -394,7 +395,8 @@ module RoCE_tx_engine #(
         .s_wr_req_is_immediate  (m_wr_req_is_immediate),
         .s_wr_req_tx_type       (m_wr_req_tx_type),
 
-        .m_qp_context_req       (m_qp_context_req),
+        .m_qp_context_req_valid (m_qp_context_req_valid),
+        .m_qp_context_req_ready (m_qp_context_req_ready),
         .m_qp_local_qpn_req     (m_qp_local_qpn_req),
 
         .s_qp_context_valid     (s_qp_req_context_valid),
@@ -426,8 +428,8 @@ module RoCE_tx_engine #(
         .m_qp_update_loc_qpn      (m_qp_update_loc_qpn),
         .m_qp_update_rem_psn      (m_qp_update_rem_psn),
 
-        .error_qp_not_rts       (wr_error_qp_not_rts    ),
-        .error_loc_qpn          (wr_error_loc_qpn       )
+        .error_qp_not_rts       (wr_error_qp_not_rts),
+        .error_loc_qpn          (wr_error_loc_qpn   )
     );
 
     RoCE_tx_header_producer #(
@@ -525,7 +527,7 @@ module RoCE_tx_engine #(
                 .DEBUG(DEBUG)
             ) RoCE_retransmission_module_instance (
                 .clk(clk),
-                .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == LOCAL_QPN && qp_active)),
+                .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == LOCAL_QPN && qp_active) || (cm_qp_valid && cm_qp_loc_qpn == LOCAL_QPN && cm_qp_req_type == REQ_OPEN_QP)),
                 .rst_retry_cntr              (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
                 .flow_ctrl_pause             (flow_ctrl_pause),
                 .s_qp_params_valid           (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
@@ -772,6 +774,9 @@ module RoCE_tx_engine #(
             assign stop_transfer = stop_transfer_nack;
         end
     endgenerate
+
+    assign wr_error_qp_not_rts_out = wr_error_qp_not_rts;
+    assign wr_error_loc_qpn_out    = wr_error_loc_qpn;
 
 endmodule
 

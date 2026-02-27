@@ -867,7 +867,8 @@ module network_wrapper_roce_generic #(
         .OUT_KEEP_ENABLE                 (1),                  
         .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),                   
         .CLOCK_PERIOD                    (RoCE_CLOCK_PERIOD),                     
-        .DEBUG                           (DEBUG),                             
+        .DEBUG                           (DEBUG), 
+        .REFRESH_CACHE_TICKS             (16383),                           
         .RETRANSMISSION                  (1),                   
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
         .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)                    
