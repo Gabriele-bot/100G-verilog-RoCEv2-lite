@@ -25,17 +25,17 @@ module generic_arb_mux #(
   input wire rst,
 
   
-  input  wire [           S_COUNT-1:0]           s_hdr_valid,
-  output wire [           S_COUNT-1:0]           s_hdr_ready,
-  input  wire [        S_COUNT*HEADER_WIDTH*8-1:0] s_hdr,
-  input  wire [S_COUNT*DATA_WIDTH-1:0]           s_payload_axis_tdata,
-  input  wire [S_COUNT*KEEP_WIDTH-1:0]           s_payload_axis_tkeep,
-  input  wire [           S_COUNT-1:0]           s_payload_axis_tvalid,
-  output wire [           S_COUNT-1:0]           s_payload_axis_tready,
-  input  wire [           S_COUNT-1:0]           s_payload_axis_tlast,
-  input  wire [  S_COUNT*ID_WIDTH-1:0]           s_payload_axis_tid,
-  input  wire [S_COUNT*DEST_WIDTH-1:0]           s_payload_axis_tdest,
-  input  wire [S_COUNT*USER_WIDTH-1:0]           s_payload_axis_tuser,
+  input  wire [           S_COUNT-1    :0] s_hdr_valid,
+  output wire [           S_COUNT-1    :0] s_hdr_ready,
+  input  wire [S_COUNT*HEADER_WIDTH*8-1:0] s_hdr,
+  input  wire [S_COUNT*DATA_WIDTH-1    :0] s_payload_axis_tdata,
+  input  wire [S_COUNT*KEEP_WIDTH-1    :0] s_payload_axis_tkeep,
+  input  wire [           S_COUNT-1    :0] s_payload_axis_tvalid,
+  output wire [           S_COUNT-1    :0] s_payload_axis_tready,
+  input  wire [           S_COUNT-1    :0] s_payload_axis_tlast,
+  input  wire [  S_COUNT*ID_WIDTH-1    :0] s_payload_axis_tid,
+  input  wire [S_COUNT*DEST_WIDTH-1    :0] s_payload_axis_tdest,
+  input  wire [S_COUNT*USER_WIDTH-1    :0] s_payload_axis_tuser,
 
   
   output wire                       m_hdr_valid,

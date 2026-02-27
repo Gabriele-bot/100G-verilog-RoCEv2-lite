@@ -74,6 +74,8 @@ module udp_RoCE_connection_manager_tx #(
 
     input wire [15:0] s_qp_info_udp_dest_port,
 
+    input wire [15:0] s_udp_dest_port,
+
     /*
      * UDP frame output
      */
@@ -142,6 +144,8 @@ module udp_RoCE_connection_manager_tx #(
     reg [31:0] qp_info_rem_ip_addr_reg;
 
     reg [15:0] qp_info_udp_dest_port_reg;
+
+    reg [15:0] udp_dest_port_reg;
 
     reg s_qp_info_ready_reg = 1'b0, s_qp_info_ready_next;
 
@@ -329,10 +333,12 @@ module udp_RoCE_connection_manager_tx #(
 
             qp_info_udp_dest_port_reg <= LISTEN_UDP_PORT;
 
+            udp_dest_port_reg         <= s_udp_dest_port;
+
             m_ip_source_ip_reg    <= s_qp_info_loc_ip_addr;
             m_ip_dest_ip_reg      <= s_qp_info_rem_ip_addr;
             m_udp_source_port_reg <= cfg_udp_source_port;
-            m_udp_dest_port_reg   <= DEST_UDP_PORT;
+            m_udp_dest_port_reg   <= s_udp_dest_port;
             m_udp_length_reg      <= QP_INFO_SIZE+16'd8;
             m_udp_checksum_reg    <= 16'd0;
         end

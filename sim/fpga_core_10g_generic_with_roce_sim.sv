@@ -400,7 +400,7 @@ module top #(
   assign clk_05_wire = clk_05;
   assign clk_025_wire = clk_025;
 
- 
+ /*
  
   dcmac_pad #(
     .DATA_WIDTH(1024),
@@ -533,7 +533,7 @@ module top #(
     .m_axis_tuser(tx_generic_fifo_axis_tuser)
   );
   
-  
+  */
   
   
   axis_async_fifo_adapter #(
@@ -646,12 +646,12 @@ module top #(
     .clk_stack(clk_udp),
     .rst_stack(rst),
     .flow_ctrl_pause         (tx_pause_req[1] || tx_pause_req[8]),
-    .m_network_tx_axis_tdata (tx_generic_axis_tdata),
-    .m_network_tx_axis_tkeep (tx_generic_axis_tkeep),
-    .m_network_tx_axis_tvalid(tx_generic_axis_tvalid),
-    .m_network_tx_axis_tready(tx_generic_axis_tready),
-    .m_network_tx_axis_tlast (tx_generic_axis_tlast),
-    .m_network_tx_axis_tuser (tx_generic_axis_tuser),
+    .m_network_tx_axis_tdata (tx_generic_fifo_axis_tdata),
+    .m_network_tx_axis_tkeep (tx_generic_fifo_axis_tkeep),
+    .m_network_tx_axis_tvalid(tx_generic_fifo_axis_tvalid),
+    .m_network_tx_axis_tready(tx_generic_fifo_axis_tready),
+    .m_network_tx_axis_tlast (tx_generic_fifo_axis_tlast),
+    .m_network_tx_axis_tuser (tx_generic_fifo_axis_tuser),
 
     .s_network_rx_axis_tdata (rx_generic_axis_tdata),
     .s_network_rx_axis_tkeep (rx_generic_axis_tkeep),
@@ -681,6 +681,35 @@ module top #(
     .cfg_throughput_avg_po2 (5'd4),
     .monitor_loc_qpn        (24'd256)
   );
+  
+  /*
+  Network_core Netowork_core_instance (
+    .clk(clk_axi_seg),
+    .rst(rst),
+    
+    .sw(4'd0),
+    .led(),
+    
+    .tx_axis_tdata (tx_generic_fifo_axis_tdata),
+    .tx_axis_tkeep (tx_generic_fifo_axis_tkeep),
+    .tx_axis_tvalid(tx_generic_fifo_axis_tvalid),
+    .tx_axis_tready(tx_generic_fifo_axis_tready),
+    .tx_axis_tlast (tx_generic_fifo_axis_tlast),
+    .tx_axis_tuser (tx_generic_fifo_axis_tuser),
+
+    .rx_axis_tdata (rx_generic_axis_tdata),
+    .rx_axis_tkeep (rx_generic_axis_tkeep),
+    .rx_axis_tvalid(rx_generic_axis_tvalid),
+    .rx_axis_tready(rx_generic_axis_tready),
+    .rx_axis_tlast (rx_generic_axis_tlast),
+    .rx_axis_tuser (rx_generic_axis_tuser),
+    
+    
+    .tx_pause_req(9'd0)
+    
+  );
+  
+  */
 
 endmodule
 

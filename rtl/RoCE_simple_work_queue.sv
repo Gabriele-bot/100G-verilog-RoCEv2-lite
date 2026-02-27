@@ -196,7 +196,8 @@ module RoCE_simple_work_queue #
         cache_qp_rem_ip_addr_next = cache_qp_rem_ip_addr_reg;
         cache_qp_rem_addr_next    = cache_qp_rem_addr_reg;
 
-        m_qp_context_req_next = m_qp_context_req_reg && !m_qp_update_context_ready;
+        //m_qp_context_req_next = m_qp_context_req_reg && !m_qp_update_context_ready;
+        m_qp_context_req_next = 1'b0;
         m_qp_local_qpn_req_next = m_qp_local_qpn_req_reg;
 
         m_dma_meta_valid_next = m_dma_meta_valid_reg && !m_dma_meta_ready;
@@ -382,6 +383,9 @@ module RoCE_simple_work_queue #
             m_immediate_data_fifo_out_reg   <= 32'd0;
             m_is_immediate_fifo_out_reg     <= 1'b0;
             m_transfer_type_fifo_out_reg    <= 1'b0;
+
+            m_qp_context_req_reg   <= 1'b0;
+            m_qp_local_qpn_req_reg <= 24'd0;
 
         end else begin
             state_reg <= state_next;

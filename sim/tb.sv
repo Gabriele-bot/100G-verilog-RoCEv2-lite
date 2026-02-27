@@ -13,8 +13,8 @@ import "DPI-C" context function int xgmii_read(longint xgmiiTxd, byte xgmiiTxc);
 export "DPI-C" task xgmii_write;
 export "DPI-C" task xgmii_idle;
 
-parameter MAC_DATA_WIDTH = 1024;
-parameter RoCE_DATA_WIDTH = 2048;
+parameter MAC_DATA_WIDTH = 64;
+parameter RoCE_DATA_WIDTH = 64;
 
 localparam SCALE_UP_FACT       = MAC_DATA_WIDTH/64;
 

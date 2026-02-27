@@ -177,6 +177,8 @@ module udp_RoCE_connection_manager #(
 
     wire [15:0] s_qp_info_udp_dest_port;
 
+    wire [15:0] udp_dest_port;
+
 
     reg qp_info_valid_reg, qp_info_valid_next;
     reg [2:0] qp_info_req_type_reg, qp_info_req_type_next;
@@ -196,6 +198,8 @@ module udp_RoCE_connection_manager #(
     reg [63:0] qp_info_rem_base_addr_reg   , qp_info_rem_base_addr_next;
 
     reg [15:0] qp_info_udp_dest_port_reg   , qp_info_udp_dest_port_next;
+
+    reg [15:0] udp_dest_port_reg   , udp_dest_port_next;
 
     reg cm_qp_valid_reg, cm_qp_valid_next;
 
@@ -311,6 +315,8 @@ module udp_RoCE_connection_manager #(
 
         .s_qp_info_udp_dest_port(s_qp_info_udp_dest_port),
 
+        .s_udp_dest_port        (udp_dest_port),
+
         .m_udp_hdr_valid  (m_udp_hdr_valid),
         .m_udp_hdr_ready  (m_udp_hdr_ready),
         .m_ip_source_ip   (m_ip_source_ip),
@@ -420,6 +426,8 @@ module udp_RoCE_connection_manager #(
                                         qp_info_rem_base_addr_next  = m_qp_info_loc_base_addr;
                                         qp_info_udp_dest_port_next  = m_qp_info_listening_port;
 
+                                        udp_dest_port_next           = m_qp_info_listening_port;
+
                                         cm_qp_valid_next = 1'b1;
 
                                         cm_qp_req_type_next      = REQ_OPEN_QP;
@@ -456,6 +464,8 @@ module udp_RoCE_connection_manager #(
 
                                     qp_info_udp_dest_port_next = m_qp_info_listening_port;
 
+                                    udp_dest_port_next           = m_qp_info_listening_port;
+
                                     cm_qp_valid_next = 1'b1;
 
                                     cm_qp_req_type_next    = REQ_MODIFY_QP_RTS;
@@ -491,6 +501,8 @@ module udp_RoCE_connection_manager #(
                                         qp_info_rem_base_addr_next = m_qp_info_loc_base_addr;
 
                                         qp_info_udp_dest_port_next = m_qp_info_listening_port;
+
+                                        udp_dest_port_next           = m_qp_info_listening_port;
 
                                         cm_qp_valid_next = 1'b1;
 
@@ -914,6 +926,8 @@ module udp_RoCE_connection_manager #(
             qp_info_rem_ip_addr_reg   <= 0;
             qp_info_rem_base_addr_reg <= 0;
 
+            udp_dest_port_reg         <= CM_DEST_UDP_PORT; 
+
             cm_qp_valid_reg          <= 1'b0;
             cm_qp_req_type_reg       <= 0;
             cm_qp_r_key_reg          <= 0;
@@ -950,6 +964,8 @@ module udp_RoCE_connection_manager #(
             qp_info_rem_base_addr_reg <= qp_info_rem_base_addr_next;
 
             qp_info_udp_dest_port_reg <= qp_info_udp_dest_port_next;
+
+            udp_dest_port_reg         <= MODULE_DIRECTION == "Master" ? CM_DEST_UDP_PORT : udp_dest_port_next; 
 
             cm_qp_valid_reg <= cm_qp_valid_next;
 
@@ -994,6 +1010,8 @@ module udp_RoCE_connection_manager #(
     assign s_qp_info_rem_base_addr = qp_info_rem_base_addr_reg;
 
     assign s_qp_info_udp_dest_port = qp_info_udp_dest_port_reg;
+
+    assign udp_dest_port = udp_dest_port_reg;
 
 
 endmodule
