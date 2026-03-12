@@ -85,7 +85,7 @@ module RoCE_data_generator #(
             wr_req_is_immediate   <= 0;
             wr_req_tx_type        <= 0;
             wr_req_dma_length     <= 0;
-            messages_to_transfer  <= {32{1'b1}};
+            messages_to_transfer  <= {32{1'b0}};
             txmeta_frequency_reg  <= 0;
             address_offset        <= 0;
             transfer_ongoing      <= 0;
@@ -139,7 +139,7 @@ module RoCE_data_generator #(
 
             wr_req_valid_reg <= wr_req_valid_next;
 
-            if (wr_error_qp_not_rts && wr_req_loc_qp == wr_error_loc_qpn) begin // if qp is not in RTS stops the wr genration
+            if ((wr_error_qp_not_rts && wr_req_loc_qp == wr_error_loc_qpn) || stop) begin // if qp is not in RTS stops the wr generation
                 messages_to_transfer <= 32'd0;
             end
         end

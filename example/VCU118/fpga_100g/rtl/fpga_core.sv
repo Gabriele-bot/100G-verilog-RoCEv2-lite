@@ -108,7 +108,10 @@ module fpga_core #(
     input  wire        qsfp2_drp_rdy,
 
     output wire       qsfp2_rx_enable,
-    input  wire       qsfp2_rx_status
+    input  wire       qsfp2_rx_status,
+
+    input wire [8:0] tx_pause_req,
+    input wire [8:0] tx_pause_ack
 );
     wire [511:0]                                               rx_axis_tdata;
     wire [ 63:0]                                               rx_axis_tkeep;
@@ -258,6 +261,18 @@ module fpga_core #(
     wire [31:0] latency_inst;
 
     wire [2:0] prio_tag_debug;
+    
+    reg [3:0]  cfg_latency_avg_po2_reg;
+    reg [4:0]  cfg_throughput_avg_po2_reg;
+    reg [23:0] monitor_loc_qpn_reg;
+    reg [31:0] transfer_time_avg_reg;
+    reg [31:0] transfer_time_moving_avg_reg;
+    reg [31:0] transfer_time_inst_reg;
+    reg [31:0] latency_avg_reg;
+    reg [31:0] latency_moving_avg_reg;
+    reg [31:0] latency_inst_reg;
+
+    reg [2:0] prio_tag_debug_reg;
 
     // Configuration
     //wire [31:0] local_ip    = {8'd22 , 8'd1  , 8'd212, 8'd10 };
@@ -270,6 +285,23 @@ module fpga_core #(
 
     wire [12:0] pmtu;
     wire [15:0] RoCE_udp_port;
+    
+    // QP state spy
+    wire        m_qp_context_spy;
+    wire [23:0] m_qp_local_qpn_spy;
+
+    wire        s_qp_spy_context_valid;
+    wire [2 :0] s_qp_spy_state;
+    wire [23:0] s_qp_spy_rem_qpn;
+    wire [23:0] s_qp_spy_loc_qpn;
+    wire [23:0] s_qp_spy_rem_psn;
+    wire [23:0] s_qp_spy_rem_acked_psn;
+    wire [23:0] s_qp_spy_loc_psn;
+    wire [31:0] s_qp_spy_r_key;
+    wire [63:0] s_qp_spy_rem_addr;
+    wire [31:0] s_qp_spy_rem_ip_addr;
+    wire [7:0]  s_qp_spy_syndrome;
+
 
     vio_roce_ip_cfg vio_roce_ip_cfg_inst (
         .clk(clk),
@@ -278,6 +310,23 @@ module fpga_core #(
         .probe_out2(local_ip),
         .probe_out3(clear_arp_cache)
     );
+    
+    vio_qp_state_spy VIO_roce_qp_state_spy (
+        .clk(clk),
+        .probe_in0 (s_qp_spy_context_valid),
+        .probe_in1 (s_qp_spy_state),
+        .probe_in2 (s_qp_spy_r_key),
+        .probe_in3 (s_qp_spy_rem_qpn),
+        .probe_in4 (s_qp_spy_loc_qpn),
+        .probe_in5 (s_qp_spy_rem_psn),
+        .probe_in6 (s_qp_spy_rem_acked_psn),
+        .probe_in7 (s_qp_spy_loc_psn),
+        .probe_in8 (s_qp_spy_rem_ip_addr),
+        .probe_in9 (s_qp_spy_rem_addr),
+        .probe_in10(s_qp_spy_syndrome),
+        .probe_out0(m_qp_context_spy),
+        .probe_out1(m_qp_local_qpn_spy)
+      );
 
     assign gateway_ip = {local_ip[31:8], 8'd1};
 
@@ -466,6 +515,7 @@ module fpga_core #(
 
     udp_complete_test #(
         .DATA_WIDTH(512),
+	.IP_HEADER_CHECKSUM_PIPELINED(1),
         .UDP_CHECKSUM_GEN_ENABLE(0),
         .ROCE_ICRC_INSERTER(1)
     ) udp_complete_inst (
@@ -615,14 +665,16 @@ module fpga_core #(
     // 100G 512b@322MHz  --> 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
     // 200G 512b@400MHz  --> 2**22 * 8 bits / 200Gbps = 168 us of buffering (best case scenario, every frame is full)
     // 400G 1024b@400MHz --> 2**24 * 8 bits / 400Gbps = 168 us of buffering (best case scenario, every frame is full)
-
+    
+    /*
     RoCE_minimal_stack #(
         .DATA_WIDTH(512),
         .DEBUG(1),
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(21) // 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(20) // 2**20 * 8 bits / 100Gbps = 83 us of buffering (best case scenario, every frame is full)
     ) RoCE_minimal_stack_512_instance (
         .clk(clk),
         .rst(rst),
+        .flow_ctrl_pause(tx_pause_req[prio_tag_debug] || tx_pause_req[8]), // priority 0 or global pause
         .s_udp_hdr_valid(rx_udp_hdr_valid),
         .s_udp_hdr_ready(rx_udp_hdr_ready),
         .s_eth_dest_mac(rx_udp_eth_dest_mac),
@@ -698,6 +750,121 @@ module fpga_core #(
         .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
         .monitor_loc_qpn         (monitor_loc_qpn)
     );
+    */
+   RoCE_stack_wrapper #(
+        .QP_CH_DATA_WIDTH                (128),
+        .QP_CH_KEEP_ENABLE               (1),
+        .QP_CH_KEEP_WIDTH                (16),
+        .OUT_DATA_WIDTH                  (512),
+        .OUT_KEEP_ENABLE                 (1),
+        .OUT_KEEP_WIDTH                  (64),
+        .CLOCK_PERIOD                    (1000/322),
+        .DEBUG                           (0),
+        .REFRESH_CACHE_TICKS             (32767),
+        .RETRANSMISSION                  (1),
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
+        .N_QUEUE_PAIRS                   (4)
+    ) RoCE_stack_wrapper_instance (
+        .clk(clk),
+        .rst(rst),
+        .flow_ctrl_pause(tx_pause_req[prio_tag_debug] || tx_pause_req[8]), // priority 0 or global pause
+
+        .s_wr_req_valid           ('{default:0}),
+        .s_wr_req_ready           (),
+        .s_wr_req_tx_type         ('{default:0}),
+        .s_wr_req_is_immediate    ('{default:0}),
+        .s_wr_req_immediate_data  ('{default:0}),
+        .s_wr_req_loc_qp          ('{default:0}),
+        .s_wr_req_addr_offset     ('{default:0}),
+        .s_wr_req_dma_length      ('{default:0}),
+        .s_axis_tdata             ('{default:0}),
+        .s_axis_tkeep             ('{default:0}),
+        .s_axis_tvalid            ('{default:0}),
+        .s_axis_tready            (),
+        .s_axis_tlast             ('{default:0}),
+        .s_axis_tuser             ('{default:0}),
+
+        .s_udp_hdr_valid(rx_udp_hdr_valid),
+        .s_udp_hdr_ready(rx_udp_hdr_ready),
+        .s_eth_dest_mac(rx_udp_eth_dest_mac),
+        .s_eth_src_mac(rx_udp_eth_src_mac),
+        .s_eth_type(rx_udp_eth_type),
+        .s_ip_version(rx_udp_ip_version),
+        .s_ip_ihl(rx_udp_ip_ihl),
+        .s_ip_dscp(rx_udp_ip_dscp),
+        .s_ip_ecn(rx_udp_ip_ecn),
+        .s_ip_length(rx_udp_ip_length),
+        .s_ip_identification(rx_udp_ip_identification),
+        .s_ip_flags(rx_udp_ip_flags),
+        .s_ip_fragment_offset(rx_udp_ip_fragment_offset),
+        .s_ip_ttl(rx_udp_ip_ttl),
+        .s_ip_protocol(rx_udp_ip_protocol),
+        .s_ip_header_checksum(rx_udp_ip_header_checksum),
+        .s_ip_source_ip(rx_udp_ip_source_ip),
+        .s_ip_dest_ip(rx_udp_ip_dest_ip),
+        .s_udp_source_port(rx_udp_source_port),
+        .s_udp_dest_port(rx_udp_dest_port),
+        .s_udp_length(rx_udp_length),
+        .s_udp_checksum(rx_udp_checksum),
+        .s_udp_payload_axis_tdata(rx_udp_payload_axis_tdata),
+        .s_udp_payload_axis_tkeep(rx_udp_payload_axis_tkeep),
+        .s_udp_payload_axis_tvalid(rx_udp_payload_axis_tvalid),
+        .s_udp_payload_axis_tready(rx_udp_payload_axis_tready),
+        .s_udp_payload_axis_tlast(rx_udp_payload_axis_tlast),
+        .s_udp_payload_axis_tuser(rx_udp_payload_axis_tuser),
+
+        // UDP frame output (TX)
+        
+        .m_udp_hdr_valid(tx_udp_hdr_valid),
+        .m_udp_hdr_ready(tx_udp_hdr_ready),
+        .m_ip_source_ip(tx_udp_ip_source_ip),
+        .m_ip_dest_ip(tx_udp_ip_dest_ip),
+        .m_udp_source_port(tx_udp_source_port),
+        .m_udp_dest_port(tx_udp_dest_port),
+        .m_udp_length(tx_udp_length),
+        .m_udp_checksum(tx_udp_checksum),
+        .m_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
+        .m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
+        .m_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
+        .m_udp_payload_axis_tready(tx_udp_payload_axis_tready),
+        .m_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
+        .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
+
+        // QP spy output
+        
+        .m_qp_context_spy         (m_qp_context_spy),
+        .m_qp_local_qpn_spy       (m_qp_local_qpn_spy),
+        .s_qp_spy_context_valid   (s_qp_spy_context_valid),
+        .s_qp_spy_state           (s_qp_spy_state),
+        .s_qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
+        .s_qp_spy_loc_qpn         (s_qp_spy_loc_qpn),
+        .s_qp_spy_rem_psn         (s_qp_spy_rem_psn),
+        .s_qp_spy_rem_acked_psn   (s_qp_spy_rem_acked_psn),
+        .s_qp_spy_loc_psn         (s_qp_spy_loc_psn),
+        .s_qp_spy_r_key           (s_qp_spy_r_key),
+        .s_qp_spy_rem_addr        (s_qp_spy_rem_addr),
+        .s_qp_spy_rem_ip_addr     (s_qp_spy_rem_ip_addr),
+        .s_qp_spy_syndrome        (s_qp_spy_syndrome),
+        // perf
+        .transfer_time_avg       (transfer_time_avg),
+        .transfer_time_moving_avg(transfer_time_moving_avg),
+        .transfer_time_inst      (transfer_time_inst),
+        .latency_avg             (latency_avg),
+        .latency_moving_avg      (latency_moving_avg),
+        .latency_inst            (latency_inst),
+        .cfg_latency_avg_po2     (cfg_latency_avg_po2),
+        .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
+        .monitor_loc_qpn         (monitor_loc_qpn),
+        
+        
+        .pmtu           (3'd4),
+        .RoCE_udp_port  (16'h12B7),
+        .loc_ip_addr    ({8'd22, 8'd1, 8'd212, 8'd10}),
+        .timeout_period (64'd10000), //3.1 ns * 10000 = 31 us
+        .retry_count    (3'd7),
+        .rnr_retry_count(3'd7)
+
+    );
 
     vio_perf_monitor vio_perf_monitor_instance (
         .clk(clk),
@@ -709,8 +876,17 @@ module fpga_core #(
         .probe_in2(latency_avg),
         .probe_in3(latency_moving_avg)
     );
+    
+    
+    always @(posedge clk) begin
+    	cfg_throughput_avg_po2_reg <= cfg_latency_avg_po2 << 1;
+    end
+    
+    assign cfg_throughput_avg_po2 = cfg_throughput_avg_po2_reg;
 
-    /*
+
+  /*
+    
   ila_axis ila_eth_payload_tx(
     .clk(clk),
     .probe0(tx_eth_payload_axis_tdata),
@@ -719,6 +895,18 @@ module fpga_core #(
     .probe3(tx_eth_payload_axis_tready),
     .probe4(tx_eth_payload_axis_tlast),
     .probe5(tx_eth_payload_axis_tuser)
+  );
+  
+  
+  
+  ila_axis ila_eth_payload_rx(
+    .clk(clk),
+    .probe0(rx_eth_payload_axis_tdata),
+    .probe1(rx_eth_payload_axis_tkeep),
+    .probe2(rx_eth_payload_axis_tvalid),
+    .probe3(rx_eth_payload_axis_tready),
+    .probe4(rx_eth_payload_axis_tlast),
+    .probe5(rx_eth_payload_axis_tuser)
   );
   */
 endmodule

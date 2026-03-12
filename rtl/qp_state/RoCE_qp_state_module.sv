@@ -34,22 +34,25 @@ module RoCE_qp_state_module #(
   output wire [63:0] cm_qp_status_rem_addr,
 
   // Close qp
-  input wire        qp_close_valid,
-  input wire [23:0] qp_close_loc_qpn,
+  input  wire        s_qp_close_valid,
+  output wire        s_qp_close_ready,
+  input  wire [23:0] s_qp_close_loc_qpn,
+  input  wire [23:0] s_qp_close_rem_psn,
 
   // Output QP contetext
-  input wire         qp_context_req,
-  input wire [23:0]  qp_local_qpn_req,
+  input  wire         s_qp_context_req_valid,
+  output wire         s_qp_context_req_ready,
+  input  wire [23:0]  s_qp_context_loc_qpn_req,
 
-  output wire        qp_req_context_valid,
-  output wire [2 :0] qp_req_state,
-  output wire [31:0] qp_req_r_key,
-  output wire [23:0] qp_req_rem_qpn,
-  output wire [23:0] qp_req_loc_qpn,
-  output wire [23:0] qp_req_rem_psn,
-  output wire [23:0] qp_req_loc_psn,
-  output wire [31:0] qp_req_rem_ip_addr,
-  output wire [63:0] qp_req_rem_addr,
+  output wire        m_qp_context_req_valid,
+  output wire [2 :0] m_qp_context_req_state,
+  output wire [31:0] m_qp_context_req_r_key,
+  output wire [23:0] m_qp_context_req_rem_qpn,
+  output wire [23:0] m_qp_context_req_loc_qpn,
+  output wire [23:0] m_qp_context_req_rem_psn,
+  output wire [23:0] m_qp_context_req_loc_psn,
+  output wire [31:0] m_qp_context_req_rem_ip_addr,
+  output wire [63:0] m_qp_context_req_rem_addr,
 
   // SPY QP state
   input wire         qp_context_spy,
@@ -69,6 +72,7 @@ module RoCE_qp_state_module #(
 
   // update qp state input
   input  wire        s_qp_update_context_valid,
+  output wire        s_qp_update_context_ready,
   input  wire [23:0] s_qp_update_loc_qpn,
   input  wire [23:0] s_qp_update_rem_psn,
 
@@ -287,15 +291,17 @@ module RoCE_qp_state_module #(
     qp_aeth_syndrome_next = qp_aeth_syndrome_reg;
 
     qp_update_rem_psn_next = qp_update_rem_psn_reg;
+    qp_close_rem_psn_next  = qp_close_rem_psn_reg;
 
     store_qp_info = 1'b0;
 
     case (state_reg)
       STATE_IDLE: begin
-        if (qp_close_valid && (qp_close_loc_qpn[23:8] == 16'd1 && qp_close_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+        if (s_qp_close_valid && (s_qp_close_loc_qpn[23:8] == 16'd1 && s_qp_close_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
           //  QP goes to error state, some errors occoured during transfer (e.g. transmission timeout)
           qp_aeth_syndrome_next = {1'b1, 2'b00, 5'b11111}; // 8'h9F
-          qp_close_ptr_next = qp_close_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+          qp_close_ptr_next = s_qp_close_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+          qp_close_rem_psn_next = s_qp_close_rem_psn;
           state_next = STATE_ERROR_QP;
         end else if (s_qp_update_context_valid) begin
           // update QP
@@ -401,11 +407,11 @@ module RoCE_qp_state_module #(
   always @(posedge clk) begin
 
     // Read request, spy port has low priority
-    if (qp_context_req) begin
+    if (s_qp_context_req_valid && s_qp_context_req_ready) begin
       qp_spy_context_valid_pipes[0] <= 1'b0;
       error_invalid_qp_spy          <= 1'b0;
-      if (qp_local_qpn_req[23:8] == 16'd1 && qp_local_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_req_context <= qp_contex[qp_local_qpn_req[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+      if (s_qp_context_loc_qpn_req[23:8] == 16'd1 && s_qp_context_loc_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_req_context <= qp_contex[s_qp_context_loc_qpn_req[MAX_QUEUE_PAIRS_WIDTH-1:0]];
         qp_req_context_valid_pipes[0] <= 1'b1;
         error_invalid_qp_req          <= 1'b0;
       end else begin
@@ -646,15 +652,15 @@ module RoCE_qp_state_module #(
   assign cm_qp_status_rem_ip_addr = cm_qp_status_rem_ip_addr_reg;  
   assign cm_qp_status_rem_addr    = cm_qp_status_rem_addr_reg;     
 
-  assign qp_req_context_valid = qp_req_context_valid_pipes[1];
-  assign qp_req_state         = qp_req_context_pipe[QP_STATE_OFFSET   +: 3 ];
-  assign qp_req_rem_ip_addr   = qp_req_context_pipe[REM_IPADDR_OFFSET +: 32];
-  assign qp_req_rem_qpn       = qp_req_context_pipe[REM_QPN_OFFSET    +: 24];
-  assign qp_req_loc_qpn       = qp_req_context_pipe[LOC_QPN_OFFSET    +: 24];
-  assign qp_req_rem_psn       = qp_req_context_pipe[REM_PSN_OFFSET    +: 24];
-  assign qp_req_loc_psn       = qp_req_context_pipe[LOC_PSN_OFFSET    +: 24];
-  assign qp_req_rem_addr      = qp_req_context_pipe[VADDR_OFFSET      +: 64];
-  assign qp_req_r_key         = qp_req_context_pipe[RKEY_OFFSET       +: 32];
+  assign m_qp_context_req_valid         = qp_req_context_valid_pipes[1];
+  assign m_qp_context_req_state         = qp_req_context_pipe[QP_STATE_OFFSET   +: 3 ];
+  assign m_qp_context_req_rem_ip_addr   = qp_req_context_pipe[REM_IPADDR_OFFSET +: 32];
+  assign m_qp_context_req_rem_qpn       = qp_req_context_pipe[REM_QPN_OFFSET    +: 24];
+  assign m_qp_context_req_loc_qpn       = qp_req_context_pipe[LOC_QPN_OFFSET    +: 24];
+  assign m_qp_context_req_rem_psn       = qp_req_context_pipe[REM_PSN_OFFSET    +: 24];
+  assign m_qp_context_req_loc_psn       = qp_req_context_pipe[LOC_PSN_OFFSET    +: 24];
+  assign m_qp_context_req_rem_addr      = qp_req_context_pipe[VADDR_OFFSET      +: 64];
+  assign m_qp_context_req_r_key         = qp_req_context_pipe[RKEY_OFFSET       +: 32];
 
   assign qp_spy_context_valid = qp_spy_context_valid_pipes[1];
   assign qp_spy_state         = qp_spy_context_pipe[QP_STATE_OFFSET   +: 3 ];
@@ -676,6 +682,9 @@ module RoCE_qp_state_module #(
   assign last_nacked_psn = last_nacked_psn_reg;
   assign stop_transfer   = stop_transfer_reg;
 
+  assign s_qp_update_context_ready = state_reg == STATE_UPDATE_QP;
+  assign s_qp_close_ready = state_reg          == STATE_ERROR_QP;
+  assign s_qp_context_req_ready = 1'b1;
 
 
 endmodule

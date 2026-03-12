@@ -78,8 +78,8 @@ module RoCE_simple_work_queue #
     // Update QP state output
     output wire        m_qp_update_context_valid,
     input wire         m_qp_update_context_ready,
-    output wire [23:0] m_qp_update_loc_qpn,
-    output wire [23:0] m_qp_update_rem_psn,
+    output wire [23:0] m_qp_update_context_loc_qpn,
+    output wire [23:0] m_qp_update_context_rem_psn,
 
     // Status
     output wire        error_qp_not_rts,
@@ -171,9 +171,9 @@ module RoCE_simple_work_queue #
     // First read the state then update the PSN if in RTS state
     reg [$clog2(REFRESH_CACHE_TICKS):0] refresh_counter_reg;
 
-    reg [23:0] qp_update_loc_qpn_reg, qp_update_loc_qpn_next;
-    reg [23:0] qp_update_rem_psn_reg, qp_update_rem_psn_next;
-    reg        qp_update_valid_reg, qp_update_valid_next;
+    reg [23:0] qp_update_context_loc_qpn_reg, qp_update_context_loc_qpn_next;
+    reg [23:0] qp_update_context_rem_psn_reg, qp_update_context_rem_psn_next;
+    reg        qp_update_context_valid_reg, qp_update_context_valid_next;
 
     assign s_axis_tready = s_axis_tready_reg;
 
@@ -202,9 +202,9 @@ module RoCE_simple_work_queue #
 
         m_dma_meta_valid_next = m_dma_meta_valid_reg && !m_dma_meta_ready;
 
-        qp_update_valid_next  =  1'b0;
-        qp_update_loc_qpn_next = qp_update_loc_qpn_reg;
-        qp_update_rem_psn_next = qp_update_rem_psn_reg;
+        qp_update_context_valid_next  =  qp_update_context_valid_reg && !m_qp_update_context_ready;
+        qp_update_context_loc_qpn_next = qp_update_context_loc_qpn_reg;
+        qp_update_context_rem_psn_next = qp_update_context_rem_psn_reg;
 
         error_qp_not_rts_next = 1'b0;
         error_loc_qpn_next = error_loc_qpn_reg;
@@ -219,34 +219,29 @@ module RoCE_simple_work_queue #
 
         case (state_reg)
             STATE_IDLE: begin
-                if (refresh_counter_reg >= REFRESH_CACHE_TICKS && cache_qp_active_reg) begin
-                    m_qp_context_req_valid_next = 1'b1;
-                    m_qp_local_qpn_req_next = cache_qp_loc_qpn_reg;
-                    state_next = STATE_UPDATE_QP_STATE_PSN;
-                end else begin
-                    if (s_wr_req_valid && s_wr_req_ready) begin
-                        if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the right range
-                            if (!cache_qp_active_reg) begin // QP not active, load QP CTX to cache (regs)
-                                state_next = STATE_LOAD_QP_CACHE;
-                                m_qp_context_req_valid_next = 1'b1;
-                                m_qp_local_qpn_req_next = s_wr_req_loc_qp;
-                            end else begin // QP active, fetch QP CTX from cache instead
-                                if (qp_req_cooldown == 3'd0) begin
-                                    state_next = STATE_NEW_WORK_REQ;
-                                end else begin
-                                    state_next = STATE_WAIT_REQ_CD;
-                                end
+                s_wr_req_ready_next = 1'b1;
+                if (s_wr_req_valid && s_wr_req_ready) begin
+                    if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the right range
+                        s_wr_req_ready_next = 1'b0;
+                        if (!cache_qp_active_reg) begin // QP not active, load QP CTX to cache (regs)
+                            state_next = STATE_LOAD_QP_CACHE;
+                            m_qp_context_req_valid_next = 1'b1;
+                            m_qp_local_qpn_req_next = s_wr_req_loc_qp;
+                        end else begin // QP active, fetch QP CTX from cache instead
+                            if (qp_req_cooldown == 3'd0) begin
+                                state_next = STATE_NEW_WORK_REQ;
+                            end else begin
+                                state_next = STATE_WAIT_REQ_CD;
                             end
-                        end else begin
-                            error_qp_not_rts_next = 1'b1;
-                            error_loc_qpn_next = s_wr_req_loc_qp;
-                            s_wr_req_ready_next = 1'b0;
-                            state_next = STATE_DROP_AXIS;
                         end
                     end else begin
-                        s_wr_req_ready_next = 1'b1;
-                        state_next = STATE_IDLE;
+                        error_qp_not_rts_next = 1'b1;
+                        error_loc_qpn_next = s_wr_req_loc_qp;
+                        s_wr_req_ready_next = 1'b0;
+                        state_next = STATE_DROP_AXIS;
                     end
+                end else begin
+                    state_next = STATE_IDLE;
                 end
             end
             STATE_LOAD_QP_CACHE: begin
@@ -340,6 +335,7 @@ module RoCE_simple_work_queue #
                 if (s_axis_tvalid && s_axis_tready && s_axis_tlast && (|s_axis_tuser[1:0])) begin
                     state_next = STATE_IDLE;
                     s_axis_tready_next = 1'b0;
+                    s_wr_req_ready_next = 1'b1;
                 end else begin
                     state_next = STATE_DROP_AXIS;
                 end
@@ -350,12 +346,13 @@ module RoCE_simple_work_queue #
                         // update cache qp state
                         cache_qp_state_next       = s_qp_state;
                         // update rem psn
-                        qp_update_valid_next   = 1'b1;
-                        qp_update_loc_qpn_next = cache_qp_loc_qpn_reg;
-                        qp_update_rem_psn_next = cache_qp_rem_psn_reg;
-                    end else begin 
+                        qp_update_context_valid_next   = 1'b1;
+                        qp_update_context_loc_qpn_next = cache_qp_loc_qpn_reg;
+                        qp_update_context_rem_psn_next = cache_qp_rem_psn_reg;
+                    end else begin
                         cache_qp_active_next = 1'b0;
-                    end 
+                    end
+                    s_wr_req_ready_next = 1'b0;
                     state_next = STATE_IDLE;
                 end else begin
                     state_next = STATE_UPDATE_QP_STATE_PSN;
@@ -544,9 +541,9 @@ module RoCE_simple_work_queue #
             qp_cache_update_valid_reg <= 1'b0;
             qp_cache_update_rem_psn_add_reg <= 24'd0;
 
-            qp_update_valid_reg             <= 1'b0;
-            qp_update_loc_qpn_reg           <= 24'd0;
-            qp_update_rem_psn_reg           <= 24'd0;
+            qp_update_context_valid_reg             <= 1'b0;
+            qp_update_context_loc_qpn_reg           <= 24'd0;
+            qp_update_context_rem_psn_reg           <= 24'd0;
 
             cache_qp_active_reg      <= 1'b0;
             cache_qp_state_reg       <= 3'd0;
@@ -572,11 +569,11 @@ module RoCE_simple_work_queue #
             qp_cache_update_valid_reg       <= qp_cache_update_valid_next;
             qp_cache_update_rem_psn_add_reg <= qp_cache_update_rem_psn_add_next;
 
-            qp_update_valid_reg             <= qp_update_valid_next;
-            qp_update_loc_qpn_reg           <= qp_update_loc_qpn_next;
-            qp_update_rem_psn_reg           <= qp_update_rem_psn_next;
+            qp_update_context_valid_reg             <= qp_update_context_valid_next;
+            qp_update_context_loc_qpn_reg           <= qp_update_context_loc_qpn_next;
+            qp_update_context_rem_psn_reg           <= qp_update_context_rem_psn_next;
 
-            cache_qp_active_reg   <= cache_qp_active_next;
+            cache_qp_active_reg  <= cache_qp_active_next;
             cache_qp_state_reg   <= cache_qp_state_next;
             cache_qp_r_key_reg   <= cache_qp_r_key_next;
             cache_qp_rem_qpn_reg <= cache_qp_rem_qpn_next;
@@ -591,7 +588,7 @@ module RoCE_simple_work_queue #
             cache_qp_rem_addr_reg    <= cache_qp_rem_addr_next;
 
 
-            if (qp_update_valid_next) begin
+            if (qp_update_context_valid_next) begin
                 qp_req_cooldown <= COOLDOWN_CLK_TICKS;
             end else if (qp_req_cooldown == 3'd0) begin
                 qp_req_cooldown <= 3'd0;
@@ -610,7 +607,7 @@ module RoCE_simple_work_queue #
         end else begin
             if (cache_qp_active_reg) begin
                 if (refresh_counter_reg >= REFRESH_CACHE_TICKS) begin
-                    if (qp_update_valid_reg) begin
+                    if (state_reg == STATE_UPDATE_QP_STATE_PSN) begin
                         refresh_counter_reg <= 0;
                     end
                 end else begin
@@ -621,9 +618,9 @@ module RoCE_simple_work_queue #
             end
         end
     end
-    assign m_qp_update_context_valid = qp_update_valid_reg;
-    assign m_qp_update_loc_qpn       = qp_update_loc_qpn_reg;
-    assign m_qp_update_rem_psn       = qp_update_rem_psn_reg;
+    assign m_qp_update_context_valid   = qp_update_context_valid_reg;
+    assign m_qp_update_context_loc_qpn = qp_update_context_loc_qpn_reg;
+    assign m_qp_update_context_rem_psn = qp_update_context_rem_psn_reg;
 
 
 endmodule

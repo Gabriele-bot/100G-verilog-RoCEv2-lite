@@ -245,6 +245,7 @@ module cmac_gty_wrapper #(
   wire drp_rdy_cmac;
   reg [15:0] drp_do_ctrl_reg = 0;
   reg drp_rdy_ctrl_reg = 1'b0;
+ 
   
 
   assign drp_do  = drp_do_reg;

@@ -860,37 +860,37 @@ module network_wrapper_roce_generic #(
     */
 
     RoCE_stack_wrapper #(
-        .QP_CH_DATA_WIDTH                (STACK_DATA_WIDTH),                 
+        .QP_CH_DATA_WIDTH                (STACK_DATA_WIDTH/2),                 
         .QP_CH_KEEP_ENABLE               (1),                
-        .QP_CH_KEEP_WIDTH                (STACK_DATA_WIDTH/8),                 
+        .QP_CH_KEEP_WIDTH                (STACK_DATA_WIDTH/2/8),                 
         .OUT_DATA_WIDTH                  (STACK_DATA_WIDTH),                   
         .OUT_KEEP_ENABLE                 (1),                  
         .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),                   
         .CLOCK_PERIOD                    (RoCE_CLOCK_PERIOD),                     
         .DEBUG                           (DEBUG), 
-        .REFRESH_CACHE_TICKS             (16383),                           
+        .REFRESH_CACHE_TICKS             (32763),                           
         .RETRANSMISSION                  (1),                   
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(18), 
         .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)                    
     ) RoCE_stack_wrapper_instance (
         .clk(clk_stack),
         .rst(rst_stack),
         .flow_ctrl_pause          (flow_ctrl_pause),
 
-        .s_wr_req_valid           ('{default:0}),          
-        .s_wr_req_ready           (),          
-        .s_wr_req_tx_type         ('{default:0}),        
-        .s_wr_req_is_immediate    ('{default:0}),   
-        .s_wr_req_immediate_data  ('{default:0}), 
-        .s_wr_req_loc_qp          ('{default:0}),         
-        .s_wr_req_addr_offset     ('{default:0}),    
-        .s_wr_req_dma_length      ('{default:0}), 
-        .s_axis_tdata             ('{default:0}),
-        .s_axis_tkeep             ('{default:0}),
-        .s_axis_tvalid            ('{default:0}),
-        .s_axis_tready            (),
-        .s_axis_tlast             ('{default:0}),
-        .s_axis_tuser             ('{default:0}),  
+        //.s_wr_req_valid           ('{default:0}),          
+        //.s_wr_req_ready           (),          
+        //.s_wr_req_tx_type         ('{default:0}),        
+        //.s_wr_req_is_immediate    ('{default:0}),   
+        //.s_wr_req_immediate_data  ('{default:0}), 
+        //.s_wr_req_loc_qp          ('{default:0}),         
+        //.s_wr_req_addr_offset     ('{default:0}),    
+        //.s_wr_req_dma_length      ('{default:0}), 
+        //.s_axis_tdata             ('{default:0}),
+        //.s_axis_tkeep             ('{default:0}),
+        //.s_axis_tvalid            ('{default:0}),
+        //.s_axis_tready            (),
+        //.s_axis_tlast             ('{default:0}),
+        //.s_axis_tuser             ('{default:0}),  
 
         .s_udp_hdr_valid          (s_rx_udp_hdr_valid),
         .s_udp_hdr_ready          (s_rx_udp_hdr_ready),
@@ -958,7 +958,7 @@ module network_wrapper_roce_generic #(
         .pmtu           (ctrl_pmtu),
         .RoCE_udp_port  (ctrl_RoCE_udp_port),
         .loc_ip_addr    (ctrl_local_ip),
-        .timeout_period (64'd15000), //4.3 ns * 15000 = 64 us
+        .timeout_period (64'd10000), //4.3 ns * 15000 = 64 us
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7)
         

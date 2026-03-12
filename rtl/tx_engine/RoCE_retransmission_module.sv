@@ -167,8 +167,10 @@ module RoCE_retransmission_module #(
     /*
     Close QP in case failed transfer (e.g. rnr retry count reached, retry count reached, irreversible error)
     */
-    output  wire          m_qp_close_params_valid,
-    output  wire [151:0]  m_qp_close_params,
+    output  wire         m_qp_close_valid,
+    input   wire         m_qp_close_ready,
+    output  wire [23:0]  m_qp_close_loc_qpn,
+    output  wire [23:0]  m_qp_close_rem_psn,
     /*
     Status ?
     */
@@ -227,14 +229,15 @@ module RoCE_retransmission_module #(
     STATE_WAIT_RAM_OUTPUT = 5'd3,
     STATE_DMA_READ_INIT   = 5'd4,
     STATE_DMA_READ        = 5'd5,
-    STATE_RNR_WAIT        = 5'd6;
+    STATE_RNR_WAIT        = 5'd6,
+    STATE_DRAIN_INPUT     = 5'd7;
 
     reg [3:0] state_reg = STATE_IDLE, state_next;
 
     localparam AXI_MAX_BURST_LEN_COMP = 4096/(DATA_WIDTH/8);
     localparam AXI_MAX_BURST_LEN = 256 <= AXI_MAX_BURST_LEN_COMP ? 256 : AXI_MAX_BURST_LEN_COMP;
     localparam BURST_SIZE = AXI_MAX_BURST_LEN * 8;
-    
+
 
     reg [3:0] memory_steps;
     reg [12:0] pmtu_val;
@@ -441,6 +444,8 @@ module RoCE_retransmission_module #(
     wire [179 :0] hdr_data_in, hdr_data_out;
     reg [179 :0] hdr_data_out_reg, hdr_data_out_next;
 
+    reg drain_input_next, drain_input_reg;
+
     simple_dpram #(
         .ADDR_WIDTH(HEADER_ADDR_WIDTH),
         .DATA_WIDTH(180),
@@ -469,8 +474,9 @@ module RoCE_retransmission_module #(
     reg [BUFFER_ADDR_WIDTH-1:0] s_axis_dma_read_debug_addr;
     reg [AXI_DMA_LENGTH-1:0]    s_axis_dma_read_debug_len;
 
-    reg [127:0] m_qp_close_params_reg;
-    reg         m_qp_close_params_valid_reg;
+    reg [23:0] m_qp_close_loc_qpn_next, m_qp_close_loc_qpn_reg = 24'd0;
+    reg [23:0] m_qp_close_rem_psn_next, m_qp_close_rem_psn_reg = 24'd0;
+    reg        m_qp_close_valid_next, m_qp_close_valid_reg = 1'b0;
 
 
     // BTH fields
@@ -508,19 +514,9 @@ module RoCE_retransmission_module #(
         end
     end
 
-    always @(posedge clk) begin
-        if (stop_transfer) begin
-            m_qp_close_params_reg[31 :0  ] <= curr_rem_ip_addr_reg;
-            m_qp_close_params_reg[55 :32 ] <= curr_rem_qpn_reg    ;
-            m_qp_close_params_reg[79 :56 ] <= curr_loc_qpn_reg    ;
-            m_qp_close_params_reg[111:80 ] <= curr_r_key_reg      ;
-            m_qp_close_params_reg[127:112] <= curr_p_key_reg      ;
-        end
-        m_qp_close_params_valid_reg <= stop_transfer;
-    end
-
-    assign m_qp_close_params = m_qp_close_params_reg;
-    assign m_qp_close_params_valid = m_qp_close_params_valid_reg;
+    assign m_qp_close_loc_qpn = m_qp_close_loc_qpn_reg;
+    assign m_qp_close_rem_psn = m_qp_close_rem_psn_reg;
+    assign m_qp_close_valid   = m_qp_close_valid_reg;
 
     reg [63:0] timeout_period_reg;
     reg [2:0 ] retry_count_reg;
@@ -674,7 +670,11 @@ Simple DMA write logic
         retry_counter_next     = retry_counter_reg;
         rnr_retry_counter_next = rnr_retry_counter_reg;
 
-        stop_transfer_next     = stop_transfer_reg;
+        stop_transfer_next     = 1'b0;
+
+        m_qp_close_valid_next = m_qp_close_valid_reg && ! m_qp_close_ready;
+        m_qp_close_loc_qpn_next = m_qp_close_loc_qpn_reg;
+        m_qp_close_rem_psn_next = m_qp_close_rem_psn_reg;
 
         s_roce_bth_psn_memory_next = s_roce_bth_psn_memory_reg;
 
@@ -712,6 +712,8 @@ Simple DMA write logic
         n_retransmit_triggers_next     = n_retransmit_triggers_reg;
         n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg;
 
+        drain_input_next = drain_input_reg;
+
         last_acked_psn_next = last_acked_psn_reg;
         if (s_roce_aeth_valid && (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00)) begin
             last_acked_psn_next = s_roce_rx_bth_psn;
@@ -725,6 +727,8 @@ Simple DMA write logic
 
         case (state_reg)
             STATE_IDLE: begin
+
+                drain_input_next = 1'b0;
 
                 s_roce_bth_ready_next               = !m_roce_bth_valid_next && !(rnr_timeout_counter > 0 || trigger_retransmit) ;
 
@@ -840,6 +844,9 @@ Simple DMA write logic
                             last_sent_psn_next = last_acked_psn_reg;
                             state_next  = STATE_IDLE;
                             stop_transfer_next = 1'b1;
+                            m_qp_close_valid_next = 1'b1;
+                            m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                            m_qp_close_rem_psn_next = last_acked_psn_reg;
                             //n_rnr_retransmit_triggers_next = 32'd0;
                         end
                     end
@@ -868,6 +875,9 @@ Simple DMA write logic
                             last_sent_psn_next = last_acked_psn_reg;
                             state_next  = STATE_IDLE;
                             stop_transfer_next = 1'b1;
+                            m_qp_close_valid_next = 1'b1;
+                            m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                            m_qp_close_rem_psn_next = last_acked_psn_reg;
                             //n_retransmit_triggers_next = 32'd0;
                         end
                     end else begin
@@ -913,6 +923,9 @@ Simple DMA write logic
                                 last_sent_psn_next = last_acked_psn_reg;
                                 state_next  = STATE_IDLE;
                                 stop_transfer_next = 1'b1;
+                                m_qp_close_valid_next = 1'b1;
+                                m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                                m_qp_close_rem_psn_next = last_acked_psn_reg;
                                 //n_rnr_retransmit_triggers_next = 32'd0;
                             end
                         end
@@ -941,6 +954,9 @@ Simple DMA write logic
                                 last_sent_psn_next = last_acked_psn_reg;
                                 state_next  = STATE_IDLE;
                                 stop_transfer_next = 1'b1;
+                                m_qp_close_valid_next = 1'b1;
+                                m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                                m_qp_close_rem_psn_next = last_acked_psn_reg;
                                 //n_retransmit_triggers_next = 32'd0;
                             end
                         end else begin
@@ -979,7 +995,20 @@ Simple DMA write logic
                 //hdr_data_out_next = hdr_data_out;
 
                 if (last_buffered_psn_reg + 1 == s_roce_bth_psn_memory_reg ) begin
-                    state_next                           = STATE_IDLE;
+                    // no need for retransmission
+                    if (retry_counter_reg == retry_count_reg) begin // reached retry, drain input if any
+                        stop_transfer_next                   = 1'b1;
+                        m_qp_close_valid_next                = 1'b1;
+                        m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                        m_qp_close_rem_psn_next = last_acked_psn_reg;
+                        if (s_roce_bth_valid) begin
+                            state_next                           = STATE_DRAIN_INPUT;
+                        end else begin
+                            state_next                           = STATE_IDLE;
+                        end
+                    end else begin
+                        state_next                           = STATE_IDLE;
+                    end
                 end else begin
                     hdr_ram_addr_next = s_roce_bth_psn_memory_reg;
 
@@ -1046,7 +1075,19 @@ Simple DMA write logic
 
                 if (m_axis_dma_read_fifo_data_tready && m_axis_dma_read_fifo_data_tvalid && m_axis_dma_read_fifo_data_tlast) begin
                     if (trigger_retransmit  || rnr_timeout_counter > 0) begin
-                        state_next                           = STATE_IDLE;
+                        if (retry_counter_reg == retry_count_reg) begin // reached retry, drain input if any
+                            stop_transfer_next                   = 1'b1;
+                            m_qp_close_valid_next                = 1'b1;
+                            m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
+                            m_qp_close_rem_psn_next = last_acked_psn_reg;
+                            if (s_roce_bth_valid) begin
+                                state_next                           = STATE_DRAIN_INPUT;
+                            end else begin
+                                state_next                           = STATE_IDLE;
+                            end
+                        end else begin
+                            state_next                           = STATE_IDLE;
+                        end
                     end else begin
                         state_next                           = STATE_READ_RAM_HEADER;
                         s_roce_bth_psn_memory_next = s_roce_bth_psn_memory_reg + 1;
@@ -1061,6 +1102,16 @@ Simple DMA write logic
                     state_next = STATE_READ_RAM_HEADER;
                 end else begin
                     state_next = STATE_RNR_WAIT;
+                end
+            end
+            STATE_DRAIN_INPUT: begin
+                stop_transfer_next = 1'b0;
+                drain_input_next = 1'b1;
+                if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tready && s_roce_payload_axis_tlast & !s_roce_bth_valid) begin
+                    drain_input_next = 1'b0;
+                    state_next = STATE_IDLE;
+                end else begin
+                    state_next = STATE_DRAIN_INPUT;
                 end
             end
         endcase
@@ -1171,6 +1222,19 @@ Simple DMA write logic
         if (rst) begin
             state_reg                       <= STATE_IDLE;
 
+            m_roce_reth_length_reg <= 'd0;
+            m_roce_reth_r_key_reg  <= 'd0;
+            m_roce_reth_v_addr_reg <= 'd0;
+
+            m_roce_bth_op_code_reg <= 'd0;
+            m_roce_bth_p_key_reg   <= 'd0;
+            m_roce_bth_psn_reg     <= 'd0;
+            m_roce_bth_dest_qp_reg <= 'd0;
+            m_roce_bth_src_qp_reg  <= 'd0;
+            m_roce_bth_ack_req_reg <= 'd0;
+
+            m_roce_immdh_data_reg  <= 'd0;
+
             s_axis_dma_read_desc_addr_reg  <= 0;
             s_axis_dma_read_desc_len_reg   <= 0;
             s_axis_dma_read_desc_valid_reg <= 0;
@@ -1207,6 +1271,8 @@ Simple DMA write logic
             rnr_retry_counter_reg <= 4'd0;
             n_retransmit_triggers_reg     <= 32'd0;
             n_rnr_retransmit_triggers_reg <= 32'd0;
+
+            drain_input_reg <= 1'b0;
         end else begin
 
             last_acked_psn_reg <= last_acked_psn_next;
@@ -1239,8 +1305,8 @@ Simple DMA write logic
 
             if (store_reth) begin
                 m_roce_reth_length_reg <= s_roce_reth_length;
-                m_roce_reth_r_key_reg <= s_roce_reth_r_key ;
-                m_roce_reth_v_addr_reg <= s_roce_reth_v_addr    ;
+                m_roce_reth_r_key_reg  <= s_roce_reth_r_key ;
+                m_roce_reth_v_addr_reg <= s_roce_reth_v_addr;
             end
 
             if (store_immdh) begin
@@ -1305,14 +1371,25 @@ Simple DMA write logic
                 n_rnr_retransmit_triggers_reg <= 32'd0;
 
                 stop_transfer_reg <= 1'b0;
+
+                m_qp_close_valid_reg  <= 1'b0;
+                m_qp_close_loc_qpn_reg <= 24'd256;
+                m_qp_close_rem_psn_reg <= 24'd0;
             end else begin
                 retry_counter_reg     <= retry_counter_next;
                 rnr_retry_counter_reg <= rnr_retry_counter_next;
                 n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
                 n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
 
-                stop_transfer_reg <= stop_transfer_next;
+                stop_transfer_reg    <= stop_transfer_next;
+
+                m_qp_close_valid_reg   <= m_qp_close_valid_next;
+                m_qp_close_loc_qpn_reg <= m_qp_close_loc_qpn_next;
+                m_qp_close_rem_psn_reg <= m_qp_close_rem_psn_next;
+
             end
+
+            drain_input_reg <= drain_input_next;
         end
 
 
@@ -1332,9 +1409,9 @@ Simple DMA write logic
     assign m_roce_bth_valid     = m_roce_bth_valid_reg;
     assign m_roce_reth_valid    = m_roce_reth_valid_reg;
     assign m_roce_immdh_valid   = m_roce_immdh_valid_reg;
-    assign s_roce_bth_ready     = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input;
-    assign s_roce_reth_ready    = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input;
-    assign s_roce_immdh_ready   = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input;
+    assign s_roce_bth_ready     = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input || drain_input_reg;
+    assign s_roce_reth_ready    = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input || drain_input_reg;
+    assign s_roce_immdh_ready   = (axis_mux_select ? s_roce_bth_ready_reg : 1'b0) && ~stall_input || drain_input_reg;
 
     assign m_roce_bth_op_code   = axis_mux_select ?  m_roce_bth_op_code_reg : retrans_roce_bth_op_code_reg;
     assign m_roce_bth_p_key     = axis_mux_select ?  m_roce_bth_p_key_reg   : retrans_roce_bth_p_key_reg  ;
@@ -1456,8 +1533,8 @@ Simple DMA write logic
 
     assign s_axis_broadcast_tdata     = s_roce_payload_axis_tdata;
     assign s_axis_broadcast_tkeep     = s_roce_payload_axis_tkeep;
-    assign s_axis_broadcast_tvalid    = s_roce_payload_axis_tvalid & ~stall_input_payload;
-    assign s_roce_payload_axis_tready = s_axis_broadcast_tready    & ~stall_input_payload;
+    assign s_axis_broadcast_tvalid    = s_roce_payload_axis_tvalid & ~stall_input_payload & !drain_input_reg;
+    assign s_roce_payload_axis_tready = s_axis_broadcast_tready    & ~stall_input_payload || drain_input_reg;
     assign s_axis_broadcast_tlast     = s_roce_payload_axis_tlast;
     assign s_axis_broadcast_tuser     = s_roce_payload_axis_tuser;
 
@@ -1492,7 +1569,10 @@ Simple DMA write logic
         .m_axis_tuser ({s_axis_dma_write_fifo_data_tuser, axis_bypass_tuser})
     );
 
-    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) || (state_reg == STATE_IDLE && (!(trigger_retransmit && !m_roce_bth_valid) || !(rnr_timeout_counter > 0 && !m_roce_bth_valid)));
+    assign axis_mux_select = (state_reg == STATE_DMA_WRITE) ||
+    (state_reg == STATE_IDLE &&
+    (!(trigger_retransmit && !m_roce_bth_valid) || !(rnr_timeout_counter > 0 && !m_roce_bth_valid) || (retry_counter_reg == retry_count_reg))
+    );
 
     axis_mux #(
         .S_COUNT(2),
