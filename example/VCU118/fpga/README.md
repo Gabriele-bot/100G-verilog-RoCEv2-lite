@@ -32,9 +32,8 @@ Or run this command to arping the board (you might need to be a sudoer)
 To open a Queue Pair run the command (script is in the `Scripts` folder :D).
 
     python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -r 1
-    python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 3
 
 If succeded you can start sending data, you need an application for that otherwise the NIC won't send any ACKs.. this is up to you on how to develop the softwre part.  
 To send dummy data you can use this command
 
-    python3 send_connection_info.py -ir '22.1.212.10' -il '22.1.212.11' -rq 256 -r 0 -s -l 16000 -n 100
+    python3 send_connection_info.py -ir '22.1.212.10' -rq 256 -r 0 -s -l 16000 -n 100

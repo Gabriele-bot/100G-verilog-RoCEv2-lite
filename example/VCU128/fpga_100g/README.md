@@ -1,15 +1,15 @@
 # Markdown syntax guide
-# VCU118 Example Design
+# VCU128 Example Design
 
 ## Introduction
 
-This example design targets the Xilinx VCU118 FPGA board.
+This example design targets the Xilinx VCU128 FPGA board.
 
 VCU118 design:
 *  fpga: 100Gbps target 1 RoCE module (1 QSFP)
 
 ### Project infos
-*  FPGA: xcvu9p-flga2104-2L-e
+*  FPGA: xcvu37p-fsvh2892-2L-e
 *  MAC: Xilinx CMAC
 
 ## How to build
@@ -19,7 +19,7 @@ in PATH, you might need the lncence for the Xilinx cmac IP.
 
 ## How to test
 
-Program the VCU118 board with Vivado and chenge the IP address if needed (default is `22.1.212.10`), should be done via the VIO.  Then run
+Program the VCU128 board with Vivado and chenge the IP address if needed (default is `22.1.212.10`), should be done via the VIO.  Then run
 
     ping 22.1.212.10
 

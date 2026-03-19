@@ -180,6 +180,7 @@ module RoCE_retransmission_module #(
     output wire [23:0]                   psn_diff,
     output wire [BUFFER_ADDR_WIDTH -1:0] used_memory, // in bytes
     output wire [31:0]                   n_retransmit_triggers,
+    output wire [31:0]                   n_rnr_retransmit_triggers,
     /*
     Configuration
     */
@@ -498,11 +499,12 @@ module RoCE_retransmission_module #(
     assign ram_we = s_roce_bth_valid && s_roce_bth_ready;
     assign hdr_ram_addr = axis_mux_select ? s_roce_bth_psn[HEADER_ADDR_WIDTH - 1:0] : hdr_ram_addr_reg;
 
-    assign last_buffered_psn     = last_buffered_psn_reg;
-    assign last_acked_psn        = last_acked_psn_reg;
-    assign psn_diff              = psn_diff_reg;
-    assign used_memory           = psn_diff_reg << memory_steps;
-    assign n_retransmit_triggers = n_retransmit_triggers_reg;
+    assign last_buffered_psn         = last_buffered_psn_reg;
+    assign last_acked_psn            = last_acked_psn_reg;
+    assign psn_diff                  = psn_diff_reg;
+    assign used_memory               = psn_diff_reg << memory_steps;
+    assign n_retransmit_triggers     = n_retransmit_triggers_reg;
+    assign n_rnr_retransmit_triggers = n_rnr_retransmit_triggers_reg;
 
     always @(posedge clk) begin
         if (s_qp_params_valid) begin
@@ -878,7 +880,6 @@ Simple DMA write logic
                             m_qp_close_valid_next = 1'b1;
                             m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
                             m_qp_close_rem_psn_next = last_acked_psn_reg;
-                            //n_retransmit_triggers_next = 32'd0;
                         end
                     end else begin
                         retry_counter_next = 3'd1;
@@ -957,7 +958,6 @@ Simple DMA write logic
                                 m_qp_close_valid_next = 1'b1;
                                 m_qp_close_loc_qpn_next = curr_loc_qpn_reg;
                                 m_qp_close_rem_psn_next = last_acked_psn_reg;
-                                //n_retransmit_triggers_next = 32'd0;
                             end
                         end else begin
                             retry_counter_next = 3'd1;
@@ -1376,8 +1376,8 @@ Simple DMA write logic
                 m_qp_close_loc_qpn_reg <= 24'd256;
                 m_qp_close_rem_psn_reg <= 24'd0;
             end else begin
-                retry_counter_reg     <= retry_counter_next;
-                rnr_retry_counter_reg <= rnr_retry_counter_next;
+                retry_counter_reg             <= retry_counter_next;
+                rnr_retry_counter_reg         <= rnr_retry_counter_next;
                 n_retransmit_triggers_reg     <= n_retransmit_triggers_next;
                 n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
 

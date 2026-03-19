@@ -7,7 +7,11 @@ module RoCE_udp_tx  #(
     // If disabled, tkeep assumed to be 1'b1
     parameter KEEP_ENABLE = (DATA_WIDTH>8),
     // tkeep signal width (words per cycle)
-    parameter KEEP_WIDTH = (DATA_WIDTH/8)
+    parameter KEEP_WIDTH = (DATA_WIDTH/8),
+    // migration request value (hardcoded)
+    parameter MIG_REQ = 1'b1,
+    // Forward ECN (hardcoded) BECN not relevan for SEND or WRITE packets
+    parameter FECN = 1'b1
 ) (
     input wire clk,
     input wire rst,
@@ -149,7 +153,9 @@ RoCE RDMA WRITE Frame.
  Pad count                   2 bits
  Header version              4 bits
  Partition key               2 octets
- Reserved                    1 octet
+ FECN                        1 bit
+ BECN                        1 bit
+ Reserved                    6 bits
  Queue Pair Number           3 octets
  Ack request                 1 bit
  Reserved                    7 bits
@@ -603,10 +609,10 @@ the UDP headers, and transmits the complete UDP payload as AXI stream interface.
                     end
 
                 `_HEADER_BTH_FIELD_(0,  roce_bth_op_code_reg[0*8 +: 8])
-                `_HEADER_BTH_FIELD_(1,  {solicited_event_reg, 1'b1, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
+                `_HEADER_BTH_FIELD_(1,  {solicited_event_reg, MIG_REQ, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
                 `_HEADER_BTH_FIELD_(2,  roce_bth_p_key_reg[1*8 +: 8])
                 `_HEADER_BTH_FIELD_(3,  roce_bth_p_key_reg[0*8 +: 8])
-                `_HEADER_BTH_FIELD_(4,  {8'd0}) //reserved
+                `_HEADER_BTH_FIELD_(4,  {FECN, 1'b0, 6'd0}) // FECN, BECN, reserved
                 `_HEADER_BTH_FIELD_(5,  roce_bth_dest_qp_reg[2*8 +: 8])
                 `_HEADER_BTH_FIELD_(6,  roce_bth_dest_qp_reg[1*8 +: 8])
                 `_HEADER_BTH_FIELD_(7,  roce_bth_dest_qp_reg[0*8 +: 8])
@@ -645,10 +651,10 @@ the UDP headers, and transmits the complete UDP payload as AXI stream interface.
                     end
 
                 `_HEADER_BTH_RETH_FIELD_(0,  roce_bth_op_code_reg[0*8 +: 8])
-                `_HEADER_BTH_RETH_FIELD_(1,  {solicited_event_reg, 1'b1, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
+                `_HEADER_BTH_RETH_FIELD_(1,  {solicited_event_reg, MIG_REQ, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
                 `_HEADER_BTH_RETH_FIELD_(2,  roce_bth_p_key_reg[1*8 +: 8])
                 `_HEADER_BTH_RETH_FIELD_(3,  roce_bth_p_key_reg[0*8 +: 8])
-                `_HEADER_BTH_RETH_FIELD_(4,  {8'd0}) //reserved
+                `_HEADER_BTH_RETH_FIELD_(4,  {FECN, 1'b0, 6'd0}) // FECN, BECN, reserved
                 `_HEADER_BTH_RETH_FIELD_(5,  roce_bth_dest_qp_reg[2*8 +: 8])
                 `_HEADER_BTH_RETH_FIELD_(6,  roce_bth_dest_qp_reg[1*8 +: 8])
                 `_HEADER_BTH_RETH_FIELD_(7,  roce_bth_dest_qp_reg[0*8 +: 8])
@@ -703,10 +709,10 @@ the UDP headers, and transmits the complete UDP payload as AXI stream interface.
                     end
 
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(0,  roce_bth_op_code_reg[0*8 +: 8])
-                `_HEADER_BTH_RETH_IMMDH_FIELD_(1,  {solicited_event_reg, 1'b1, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
+                `_HEADER_BTH_RETH_IMMDH_FIELD_(1,  {solicited_event_reg, MIG_REQ, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(2,  roce_bth_p_key_reg[1*8 +: 8])
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(3,  roce_bth_p_key_reg[0*8 +: 8])
-                `_HEADER_BTH_RETH_IMMDH_FIELD_(4,  {8'd0}) //reserved
+                `_HEADER_BTH_RETH_IMMDH_FIELD_(4,  {FECN, 1'b0, 6'd0}) // FECN, BECN, reserved
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(5,  roce_bth_dest_qp_reg[2*8 +: 8])
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(6,  roce_bth_dest_qp_reg[1*8 +: 8])
                 `_HEADER_BTH_RETH_IMMDH_FIELD_(7,  roce_bth_dest_qp_reg[0*8 +: 8])
@@ -765,10 +771,10 @@ the UDP headers, and transmits the complete UDP payload as AXI stream interface.
                     end
 
                 `_HEADER_BTH_IMMDH_FIELD_(0,  roce_bth_op_code_reg[0*8 +: 8])
-                `_HEADER_BTH_IMMDH_FIELD_(1,  {solicited_event_reg, 1'b1, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
+                `_HEADER_BTH_IMMDH_FIELD_(1,  {solicited_event_reg, MIG_REQ, 2'd0, 4'd0}) // sol event, mig request, pad_count, header version
                 `_HEADER_BTH_IMMDH_FIELD_(2,  roce_bth_p_key_reg[1*8 +: 8])
                 `_HEADER_BTH_IMMDH_FIELD_(3,  roce_bth_p_key_reg[0*8 +: 8])
-                `_HEADER_BTH_IMMDH_FIELD_(4,  {8'd0}) //reserved
+                `_HEADER_BTH_IMMDH_FIELD_(4,  {FECN, 1'b0, 6'd0}) // FECN, BECN, reserved
                 `_HEADER_BTH_IMMDH_FIELD_(5,  roce_bth_dest_qp_reg[2*8 +: 8])
                 `_HEADER_BTH_IMMDH_FIELD_(6,  roce_bth_dest_qp_reg[1*8 +: 8])
                 `_HEADER_BTH_IMMDH_FIELD_(7,  roce_bth_dest_qp_reg[0*8 +: 8])

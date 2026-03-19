@@ -118,6 +118,7 @@ module RoCE_stack_wrapper #(
     output wire [31:0] s_qp_spy_rem_ip_addr,
     output wire [7:0]  s_qp_spy_syndrome,
 
+
     /*
      * Configuration
      */
@@ -128,23 +129,34 @@ module RoCE_stack_wrapper #(
     input  wire [ 2 :0] retry_count,
     input  wire [ 2 :0] rnr_retry_count,
 
-    // perf monitor
+    /*
+     * LOC QPN status
+     */
+    input  wire [23:0] monitor_loc_qpn,
+
     input  wire [3:0]  cfg_latency_avg_po2,
     input  wire [4:0]  cfg_throughput_avg_po2,
-    input  wire [23:0] monitor_loc_qpn,
+
     output wire [31:0] transfer_time_avg,
     output wire [31:0] transfer_time_moving_avg,
     output wire [31:0] transfer_time_inst,
     output wire [31:0] latency_avg,
     output wire [31:0] latency_moving_avg,
-    output wire [31:0] latency_inst
+    output wire [31:0] latency_inst,
+
+    output wire [23:0]                                  last_buffered_psn,
+    output wire [23:0]                                  last_acked_psn,
+    output wire [23:0]                                  psn_diff,
+    output wire [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] used_memory,
+    output wire [31:0]                                  n_retransmit_triggers,
+    output wire [31:0]                                  n_rnr_retransmit_triggers
 
 );
 
     import RoCE_params::*; // Imports RoCE parameters
 
     // instntate N_QUEUE_PAIRS modules
-    localparam ARB_HEADER_LENGTH = 12+3+16+4+8+4; // BTH + SRC_QPN +  RETH + IMMD + SRC_UDP_PORT + DEST_IP_ADDR
+    localparam ARB_HEADER_LENGTH = 12+3+16+4+8+4; // BTH + SRC_QPN +  RETH + IMMD + UDP_HDR + DEST_IP_ADDR
 
     // UDP frame connections to CM                
     wire                          rx_udp_cm_hdr_valid;
@@ -312,6 +324,7 @@ module RoCE_stack_wrapper #(
     wire [N_QUEUE_PAIRS-1                :0]  s_roce_qp_arb_payload_axis_tready;
     wire [N_QUEUE_PAIRS-1                :0]  s_roce_qp_arb_payload_axis_tlast;
     wire [N_QUEUE_PAIRS-1                :0]  s_roce_qp_arb_payload_axis_tuser;
+    
 
     wire                           m_roce_qp_arb_hdr_valid;
     wire                           m_roce_qp_arb_hdr_ready;
@@ -322,6 +335,38 @@ module RoCE_stack_wrapper #(
     wire                           m_roce_qp_arb_payload_axis_tready;
     wire                           m_roce_qp_arb_payload_axis_tlast;
     wire                           m_roce_qp_arb_payload_axis_tuser;
+
+    // status
+    wire [23:0]                                  tx_eng_last_buffered_psn [N_QUEUE_PAIRS-1:0];
+    wire [23:0]                                  tx_eng_last_acked_psn [N_QUEUE_PAIRS-1:0];
+    wire [23:0]                                  tx_eng_psn_diff [N_QUEUE_PAIRS-1:0];
+    wire [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] tx_eng_used_memory [N_QUEUE_PAIRS-1:0];
+    wire [31:0]                                  tx_eng_n_retransmit_triggers [N_QUEUE_PAIRS-1:0];
+    wire [31:0]                                  tx_eng_n_rnr_retransmit_triggers [N_QUEUE_PAIRS-1:0];
+
+    reg [23:0]                                  last_buffered_psn_reg;
+    reg [23:0]                                  last_acked_psn_reg;
+    reg [23:0]                                  psn_diff_reg;
+    reg [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] used_memory_reg;
+    reg [31:0]                                  n_retransmit_triggers_reg;
+    reg [31:0]                                  n_rnr_retransmit_triggers_reg;
+
+    wire latency_inst_valid;
+
+    //Histo params
+    localparam HISTO_DEPTH = 4096;
+    
+    reg [3 :0] latency_inst_valid_pipes;
+    reg [31:0] latency_inst_pipes [3:0];
+
+    reg  [23:0]                    monitor_loc_qpn_del;
+    wire [23:0]                    histo_latency;
+    wire [$clog2(HISTO_DEPTH)-1:0] histo_index;
+    wire                           rst_done_latency;
+
+    reg [32 : 0] read_histo_counter;
+
+    integer m;
 
     // redirect udp rx traffic either to CM or RoCE RX
 
@@ -833,7 +878,7 @@ module RoCE_stack_wrapper #(
 
     // TX path
 
-    
+
 
     wire [ARB_HEADER_LENGTH*8*N_QUEUE_PAIRS-1:0] s_roce_arb_header;
 
@@ -1105,6 +1150,13 @@ module RoCE_stack_wrapper #(
 
                 .stop_transfer(stop_transfer),
 
+                .last_buffered_psn        (tx_eng_last_buffered_psn[i]),
+                .last_acked_psn           (tx_eng_last_acked_psn[i]),
+                .psn_diff                 (tx_eng_psn_diff[i]),
+                .used_memory              (tx_eng_used_memory[i]),
+                .n_retransmit_triggers    (tx_eng_n_retransmit_triggers[i]),
+                .n_rnr_retransmit_triggers(tx_eng_n_rnr_retransmit_triggers[i]),
+
                 .pmtu(pmtu),
                 .RoCE_udp_port(RoCE_udp_port),
                 .loc_ip_addr(loc_ip_addr),
@@ -1123,7 +1175,7 @@ module RoCE_stack_wrapper #(
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
                 .REG_TYPE(2),
-                .LENGTH(2)
+                .LENGTH(1)
             ) qp_channel_axis_register_payload (
                 .clk(clk),
                 .rst(rst),
@@ -1161,6 +1213,7 @@ module RoCE_stack_wrapper #(
 
                 axis_fifo_adapter #(
                     .DEPTH(4200),
+                    .RAM_PIPELINE(2),
                     .S_DATA_WIDTH(QP_CH_DATA_WIDTH),
                     .S_KEEP_ENABLE(1),
                     .S_KEEP_WIDTH(QP_CH_KEEP_WIDTH),
@@ -1232,9 +1285,9 @@ module RoCE_stack_wrapper #(
             roce_tx_eng_ip_dest_ip
             };
 
-            
 
-            
+
+
             axis_pipeline_register #(
                 .DATA_WIDTH(ARB_HEADER_LENGTH*8),
                 .KEEP_ENABLE(0),
@@ -1242,7 +1295,7 @@ module RoCE_stack_wrapper #(
                 .DEST_ENABLE(0),
                 .USER_ENABLE(0),
                 .REG_TYPE(2),
-                .LENGTH(3)
+                .LENGTH(2)
             ) qp_channel_axis_register_hdr (
                 .clk(clk),
                 .rst(rst),
@@ -1359,7 +1412,9 @@ module RoCE_stack_wrapper #(
 
 
     RoCE_udp_tx #(
-        .DATA_WIDTH(OUT_DATA_WIDTH)
+        .DATA_WIDTH(OUT_DATA_WIDTH),
+        .MIG_REQ(1'b1),
+        .FECN   (1'b0)
     ) RoCE_udp_tx_instance (
         .clk                            (clk),
         .rst                            (rst),
@@ -1539,10 +1594,73 @@ module RoCE_stack_wrapper #(
         .latency_avg             (latency_avg),
         .latency_moving_avg      (latency_moving_avg),
         .latency_inst            (latency_inst),
+        .latency_inst_valid      (latency_inst_valid),
         .cfg_latency_avg_po2     (cfg_latency_avg_po2),
         .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
         .monitor_loc_qpn         (monitor_loc_qpn)
     );
+
+
+    always @(posedge clk) begin
+        if (rst) begin
+            latency_inst_valid_pipes <= 'd0;
+            for (m = 0; m < 4; m++) begin
+                latency_inst_pipes[m] <= 'd0;
+            end
+            read_histo_counter <= 'd0;
+        end else begin
+            read_histo_counter <= read_histo_counter + 1;
+            latency_inst_valid_pipes <= {latency_inst_valid_pipes[2:0], latency_inst_valid};
+            latency_inst_pipes       <= {latency_inst_pipes[2:0]      , latency_inst};
+            monitor_loc_qpn_del <= monitor_loc_qpn;
+        end
+    end
+
+
+    // Histogramm
+    histogrammer #(
+        .BRAM_SIZE       (HISTO_DEPTH),
+        .INPUT_DATA_WIDTH(32),
+        .HISTO_DATA_WIDTH(24),
+        .INPUT_VALUE_LSB (4) // granularity of CLOCK_PERIOD * 2**INPUT_VALUE_LSB, e.g. clock period = 3.1 ns and value of 4 will give you ~0.05us
+    ) latency_histogrammer_instance (
+        .clk     (clk),
+        .rst     (rst || monitor_loc_qpn_del != monitor_loc_qpn), // reset when changing monitor qpn
+        .valid   (latency_inst_valid_pipes[3]),
+        .data_in (latency_inst_pipes[3]),
+        .trigger_read_mem  (read_histo_counter == 33'h1ffff_ffff), // every ~ 26 s
+        .histo_index_out   (histo_index),
+        .histo_dout        (histo_latency),
+        .rst_done(rst_done_latency)
+    );
+
+    
+    ila_latency_distrib ila_latency_distrib_instance(
+        .clk(clk),
+        .probe0(histo_latency),
+        .probe1(histo_index)
+    );
+    
+
+
+    // ease timings?
+    always @(posedge clk) begin
+        last_buffered_psn_reg         <= tx_eng_last_buffered_psn        [monitor_loc_qpn-256];
+        last_acked_psn_reg            <= tx_eng_last_acked_psn           [monitor_loc_qpn-256];
+        psn_diff_reg                  <= tx_eng_psn_diff                 [monitor_loc_qpn-256];
+        used_memory_reg               <= tx_eng_used_memory              [monitor_loc_qpn-256];
+        n_retransmit_triggers_reg     <= tx_eng_n_retransmit_triggers    [monitor_loc_qpn-256];
+        n_rnr_retransmit_triggers_reg <= tx_eng_n_rnr_retransmit_triggers[monitor_loc_qpn-256];
+    end
+
+
+
+    assign last_buffered_psn         = last_buffered_psn_reg        ;
+    assign last_acked_psn            = last_acked_psn_reg           ;
+    assign psn_diff                  = psn_diff_reg                 ;
+    assign used_memory               = used_memory_reg              ;
+    assign n_retransmit_triggers     = n_retransmit_triggers_reg    ;
+    assign n_rnr_retransmit_triggers = n_rnr_retransmit_triggers_reg;
 
 
 

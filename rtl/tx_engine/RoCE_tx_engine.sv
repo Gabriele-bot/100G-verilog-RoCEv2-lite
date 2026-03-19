@@ -139,6 +139,16 @@ module RoCE_tx_engine #(
 
     output wire stop_transfer,
 
+    /*
+    Status
+    */
+    output wire [23:0]                                  last_buffered_psn,
+    output wire [23:0]                                  last_acked_psn,
+    output wire [23:0]                                  psn_diff,
+    output wire [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] used_memory, // in bytes
+    output wire [31:0]                                  n_retransmit_triggers,
+    output wire [31:0]                                  n_rnr_retransmit_triggers,
+
 
     /* Configuration
      */
@@ -668,12 +678,13 @@ module RoCE_tx_engine #(
                 .m_qp_close_loc_qpn(qp_close_loc_qpn),
                 .m_qp_close_rem_psn(qp_close_rem_psn),
                 //status
-                .stop_transfer        (stop_transfer),
-                .last_buffered_psn    (),
-                .last_acked_psn       (),
-                .psn_diff             (),
-                .used_memory          (),
-                .n_retransmit_triggers(),
+                .stop_transfer            (stop_transfer),
+                .last_buffered_psn        (last_buffered_psn),
+                .last_acked_psn           (last_acked_psn),
+                .psn_diff                 (psn_diff),
+                .used_memory              (used_memory),
+                .n_retransmit_triggers    (n_retransmit_triggers),
+                .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
                 // Config
                 .cfg_valid(cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
                 .timeout_period(timeout_period),
@@ -782,75 +793,7 @@ module RoCE_tx_engine #(
     assign wr_error_qp_not_rts_out = wr_error_qp_not_rts;
     assign wr_error_loc_qpn_out    = wr_error_loc_qpn;
 
-    generate
-        if (DEBUG) begin
-
-            wire [26:0] post_framer_n_valid_up;
-            wire [26:0] post_framer_n_ready_up;
-            wire [26:0] post_framer_n_both_up;
-
-            wire [26:0] post_wqe_n_valid_up;
-            wire [26:0] post_wqe_n_ready_up;
-            wire [26:0] post_wqe_n_both_up;
-
-            wire [26:0] m_wr_req_n_valid_up;
-            wire [26:0] m_wr_req_n_ready_up;
-            wire [26:0] m_wr_req_n_both_up;
-
-
-            axis_handshake_monitor #(
-                .window_width(27)
-            ) axis_handshake_monitor_post_framer_instance (
-                .clk(clk),
-                .rst(rst),
-                .s_axis_tvalid(m_payload_framer_axis_tvalid),
-                .m_axis_tready(m_payload_framer_axis_tready),
-                .n_valid_up(post_framer_n_valid_up),
-                .n_ready_up(post_framer_n_ready_up),
-                .n_both_up (post_framer_n_both_up )
-            );
-
-            axis_handshake_monitor #(
-                .window_width(27)
-            ) axis_handshake_monitor_post_wqe_instance (
-                .clk(clk),
-                .rst(rst),
-                .s_axis_tvalid(m_payload_queue_axis_tvalid),
-                .m_axis_tready(m_payload_queue_axis_tready),
-                .n_valid_up(post_wqe_n_valid_up),
-                .n_ready_up(post_wqe_n_ready_up),
-                .n_both_up (post_wqe_n_both_up)
-            );
-
-            axis_handshake_monitor #(
-                .window_width(27)
-            ) axis_handshake_monitor_m_wr_req_instance (
-                .clk(clk),
-                .rst(rst),
-                .s_axis_tvalid(m_wr_req_valid),
-                .m_axis_tready(m_wr_req_ready),
-                .n_valid_up(m_wr_req_n_valid_up),
-                .n_ready_up(m_wr_req_n_ready_up),
-                .n_both_up (m_wr_req_n_both_up)
-            );
-
-            vio_axis_monitor vio_axis_monitor_inst (
-                .clk(clk),
-                .probe_in0(post_framer_n_valid_up),
-                .probe_in1(post_framer_n_ready_up),
-                .probe_in2(post_framer_n_both_up ),
-                .probe_in3(post_wqe_n_valid_up),
-                .probe_in4(post_wqe_n_ready_up),
-                .probe_in5(post_wqe_n_both_up ),
-                .probe_in6(m_wr_req_n_valid_up),
-                .probe_in7(m_wr_req_n_ready_up),
-                .probe_in8(m_wr_req_n_both_up )
-            );
-
-        end
-
-    endgenerate
-
+    
 endmodule
 
 `resetall

@@ -1,6 +1,10 @@
 example/VCU118/fpga/.Xil
+example/VCU118/fpga/*.bit
 example/VCU118/fpga_100g/.Xil
+example/VCU118/fpga_100g/*.bit
+example/VCU128/fpga_100g/.Xil
+example/VCU128/fpga_100g/*.bit
+sim/xgmii_sim/roce-x11/.vagrant
 scratch
-
 */*.log
 */*.jou
