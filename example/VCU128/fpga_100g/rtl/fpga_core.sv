@@ -724,8 +724,8 @@ module fpga_core #(
         .DEBUG                           (0),
         .REFRESH_CACHE_TICKS             (32767),
         .RETRANSMISSION                  (1),
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(19),
-        .N_QUEUE_PAIRS                   (4)
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
+        .N_QUEUE_PAIRS                   (8)
     ) RoCE_stack_wrapper_instance (
         .clk(clk),
         .rst(rst),
@@ -845,7 +845,7 @@ module fpga_core #(
         .pmtu(pmtu),
         .RoCE_udp_port(RoCE_udp_port),
         .loc_ip_addr(local_ip),
-        .timeout_period (64'd30000), //3.1 ns * 30000 = 93 us
+        .timeout_period (64'd15000), //3.1 ns * 15000 = 46 us
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7)
 

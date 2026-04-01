@@ -78,7 +78,7 @@ module RoCE_qp_state_module #(
 
   // RX BTH
   input  wire        s_roce_rx_bth_valid,
-  output wire        s_roce_rx_bth_ready,
+  //output wire        s_roce_rx_bth_ready,
   input  wire [ 7:0] s_roce_rx_bth_op_code,
   input  wire [15:0] s_roce_rx_bth_p_key,
   input  wire [23:0] s_roce_rx_bth_psn,
@@ -86,7 +86,7 @@ module RoCE_qp_state_module #(
   input  wire        s_roce_rx_bth_ack_req,
   // RX AETH                  
   input  wire        s_roce_rx_aeth_valid,
-  output wire        s_roce_rx_aeth_ready,
+  //output wire        s_roce_rx_aeth_ready,
   input  wire [ 7:0] s_roce_rx_aeth_syndrome,
   input  wire [23:0] s_roce_rx_aeth_msn,
 
@@ -340,7 +340,7 @@ module RoCE_qp_state_module #(
           end
         end
 
-        if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid & s_roce_rx_aeth_ready) begin
+        if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
           // recieved an ACK packet
           if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
             // QP goes to error state if a NAK is received, but not a PSN sequence error (the latter will trigger retransmission)
@@ -387,7 +387,7 @@ module RoCE_qp_state_module #(
   always @(posedge clk) begin
 
     // write first, else read
-    if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid & s_roce_rx_aeth_ready) begin
+    if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
       // local qp must be between 256 and 256+MAX_QUEUE_PAIRS
       if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
         if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin // ACK
@@ -674,8 +674,8 @@ module RoCE_qp_state_module #(
   assign qp_spy_r_key         = qp_spy_context_pipe[RKEY_OFFSET       +: 32];
   assign qp_spy_syndrome      = qp_spy_context_pipe[SYNDROME_OFFSET   +: 8];
 
-  assign s_roce_rx_bth_ready  = 1'b1;
-  assign s_roce_rx_aeth_ready = 1'b1;
+  //assign s_roce_rx_bth_ready  = 1'b1;
+  //assign s_roce_rx_aeth_ready = 1'b1;
 
 
   assign last_acked_psn  = last_acked_psn_reg;

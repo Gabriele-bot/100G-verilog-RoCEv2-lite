@@ -541,7 +541,7 @@ module RoCE_retransmission_module #(
         .AXI_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .AXI_STRB_WIDTH(DATA_WIDTH/8),
         .AXI_ID_WIDTH(1),
-        .AXI_MAX_BURST_LEN(256),
+        .AXI_MAX_BURST_LEN(AXI_MAX_BURST_LEN),
         .AXIS_DATA_WIDTH(DATA_WIDTH),
         .AXIS_KEEP_ENABLE(1),
         .AXIS_KEEP_WIDTH(DATA_WIDTH/8),

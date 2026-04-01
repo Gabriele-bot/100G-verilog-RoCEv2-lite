@@ -52,7 +52,7 @@ module RoCE_tx_engine #(
     output wire [31:0] m_roce_reth_length,
 
     output wire [31:0] m_roce_immdh_data,
-    
+
 
     output wire [47:0] m_roce_eth_dest_mac,
     output wire [47:0] m_roce_eth_src_mac,
@@ -287,6 +287,9 @@ module RoCE_tx_engine #(
     wire                                        m_axi_rvalid;
     wire                                        m_axi_rready;
 
+    // remove!!
+    wire [3:0] stall_qp;
+
     wire [15:0] source_udp_port = 16'd40128 + LOCAL_QPN;
 
     reg        qp_active;
@@ -472,7 +475,7 @@ module RoCE_tx_engine #(
         .s_axis_tuser              (m_payload_queue_axis_tuser),
 
         .m_roce_bth_valid          (m_roce_to_retrans_bth_valid),
-        .m_roce_bth_ready          (m_roce_to_retrans_bth_ready),
+        .m_roce_bth_ready          (m_roce_to_retrans_bth_ready && !stall_qp[0]),
         .m_roce_bth_op_code        (m_roce_to_retrans_bth.op_code),
         .m_roce_bth_p_key          (m_roce_to_retrans_bth.p_key),
         .m_roce_bth_psn            (m_roce_to_retrans_bth.psn),
@@ -480,12 +483,12 @@ module RoCE_tx_engine #(
         .m_roce_bth_src_qp         (m_roce_to_retrans_bth_src_qp),
         .m_roce_bth_ack_req        (m_roce_to_retrans_bth.ack_request),
         .m_roce_reth_valid         (m_roce_to_retrans_reth_valid),
-        .m_roce_reth_ready         (m_roce_to_retrans_reth_ready),
+        .m_roce_reth_ready         (m_roce_to_retrans_reth_ready && !stall_qp[0]),
         .m_roce_reth_v_addr        (m_roce_to_retrans_reth.vaddr),
         .m_roce_reth_r_key         (m_roce_to_retrans_reth.r_key),
         .m_roce_reth_length        (m_roce_to_retrans_reth.dma_length),
         .m_roce_immdh_valid        (m_roce_to_retrans_immdh_valid),
-        .m_roce_immdh_ready        (m_roce_to_retrans_immdh_ready),
+        .m_roce_immdh_ready        (m_roce_to_retrans_immdh_ready && !stall_qp[0]),
         .m_roce_immdh_data         (m_roce_to_retrans_immdh.immediate_data),
         .m_eth_dest_mac            (m_roce_to_retrans_eth_dest_mac),
         .m_eth_src_mac             (m_roce_to_retrans_eth_src_mac),
@@ -530,7 +533,8 @@ module RoCE_tx_engine #(
             assign s_qp_params[127:112] = 16'hffff; // p_key
             assign s_qp_params[151:128] = cm_qp_rem_psn;
 
-
+            /*
+            
             RoCE_retransmission_module #(
                 .DATA_WIDTH(DATA_WIDTH),
                 .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
@@ -693,6 +697,689 @@ module RoCE_tx_engine #(
                 .pmtu(pmtu),
                 .en_retrans(en_retrans)
             );
+            */
+
+            wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-1:0] m_axis_dma_write_desc_addr;
+            wire [12:0]                                 m_axis_dma_write_desc_len;
+            wire                                        m_axis_dma_write_desc_valid;
+            wire                                        m_axis_dma_write_desc_ready;
+
+            wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-1:0] m_axis_dma_read_desc_addr;
+            wire [12:0]                                 m_axis_dma_read_desc_len;
+            wire                                        m_axis_dma_read_desc_valid;
+            wire                                        m_axis_dma_read_desc_ready;
+            /*
+             * DMA Write status
+             */
+            wire [12:0]                  s_axis_dma_write_desc_status_len;
+            wire [3 :0]                  s_axis_dma_write_desc_status_error;
+            wire                         s_axis_dma_write_desc_status_valid;
+            // DMA write payload
+            wire [DATA_WIDTH   - 1 :0] m_dma_write_axis_tdata;
+            wire [DATA_WIDTH/8 - 1 :0] m_dma_write_axis_tkeep;
+            wire                       m_dma_write_axis_tvalid;
+            wire                       m_dma_write_axis_tready;
+            wire                       m_dma_write_axis_tlast;
+            wire                       m_dma_write_axis_tuser;
+            // DMA Read payload
+            wire [DATA_WIDTH   - 1 :0] s_dma_read_axis_tdata;
+            wire [DATA_WIDTH/8 - 1 :0] s_dma_read_axis_tkeep;
+            wire                       s_dma_read_axis_tvalid;
+            wire                       s_dma_read_axis_tready;
+            wire                       s_dma_read_axis_tlast;
+            wire                       s_dma_read_axis_tuser;
+
+            wire hdr_ram_we, hdr_ram_re;
+            wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-1-1:0] hdr_ram_waddr, hdr_ram_raddr;
+            wire [199:0] hdr_ram_din, hdr_ram_dout;
+            wire hdr_ram_dout_valid;
+            reg [3:0] hdr_ram_dout_valid_pipes;
+
+            wire                       m_rd_table_we;
+            wire [$clog2(4)-1:0]       m_rd_table_qpn;
+            wire [24-1:0]              m_rd_table_psn;
+
+            wire                       s_rd_table_re;
+            wire [$clog2(4)-1:0]       s_rd_table_qpn;
+            wire [24-1:0]              s_rd_table_psn;
+
+            wire                       m_wr_table_we;
+            wire [$clog2(4)-1:0]       m_wr_table_qpn;
+            wire [24-1:0]              m_wr_table_psn;
+
+            wire                       s_wr_table_re;
+            wire [$clog2(4)-1:0]       s_wr_table_qpn;
+            wire [24-1:0]              s_wr_table_psn;
+
+            wire                       m_cpl_table_we;
+            wire [$clog2(4)-1:0]       m_cpl_table_qpn;
+            wire [24-1:0]              m_cpl_table_psn;
+
+            wire                       s_cpl_table_re;
+            wire [$clog2(4)-1:0]       s_cpl_table_qpn;
+            wire [24-1:0]              s_cpl_table_psn;
+
+            wire                       m_rd_table_we_rtr;
+            wire [$clog2(4)-1:0]       m_rd_table_qpn_rtr;
+            wire [24-1:0]              m_rd_table_psn_rtr;
+
+            wire                       m_wr_table_we_rtr;
+            wire [$clog2(4)-1:0]       m_wr_table_qpn_rtr;
+            wire [24-1:0]              m_wr_table_psn_rtr;
+
+            wire                       m_cpl_table_we_rtr;
+            wire [$clog2(4)-1:0]       m_cpl_table_qpn_rtr;
+            wire [24-1:0]              m_cpl_table_psn_rtr;
+
+            wire         rtr_wr_qp_close_valid   = (qp_close_valid && qp_close_ready) | (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP);
+            wire  [23:0] rtr_wr_qp_close_loc_qpn = (qp_close_valid && qp_close_ready) ? qp_close_loc_qpn : cm_qp_loc_qpn;
+
+            RoCE_rtr_write_module #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
+                .MAX_QPS(4),
+                .CLOCK_PERIOD(CLOCK_PERIOD),
+                .DEBUG(0)
+            ) RoCE_rtr_write_module_instance (
+                .clk(clk),
+                .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == LOCAL_QPN && qp_active) || (cm_qp_valid && cm_qp_loc_qpn == LOCAL_QPN && cm_qp_req_type == REQ_OPEN_QP)),
+
+                .s_roce_bth_valid            (m_roce_to_retrans_bth_valid && !stall_qp[0]),
+                .s_roce_bth_ready            (m_roce_to_retrans_bth_ready),
+                .s_roce_bth_op_code          (m_roce_to_retrans_bth.op_code),
+                .s_roce_bth_p_key            (m_roce_to_retrans_bth.p_key),
+                .s_roce_bth_psn              (m_roce_to_retrans_bth.psn),
+                .s_roce_bth_dest_qp          (m_roce_to_retrans_bth.qp_number),
+                .s_roce_bth_src_qp           (m_roce_to_retrans_bth_src_qp),
+                .s_roce_bth_ack_req          (m_roce_to_retrans_bth.ack_request),
+                .s_roce_reth_valid           (m_roce_to_retrans_reth_valid && !stall_qp[0]),
+                .s_roce_reth_ready           (m_roce_to_retrans_reth_ready),
+                .s_roce_reth_v_addr          (m_roce_to_retrans_reth.vaddr),
+                .s_roce_reth_r_key           (m_roce_to_retrans_reth.r_key),
+                .s_roce_reth_length          (m_roce_to_retrans_reth.dma_length),
+                .s_roce_immdh_valid          (m_roce_to_retrans_immdh_valid && !stall_qp[0]),
+                .s_roce_immdh_ready          (m_roce_to_retrans_immdh_ready),
+                .s_roce_immdh_data           (m_roce_to_retrans_immdh.immediate_data),
+                .s_eth_dest_mac              (m_roce_to_retrans_eth_dest_mac),
+                .s_eth_src_mac               (m_roce_to_retrans_eth_src_mac),
+                .s_eth_type                  (m_roce_to_retrans_eth_type),
+                .s_ip_version                (m_roce_to_retrans_ip_version),
+                .s_ip_ihl                    (m_roce_to_retrans_ip_ihl),
+                .s_ip_dscp                   (m_roce_to_retrans_ip_dscp),
+                .s_ip_ecn                    (m_roce_to_retrans_ip_ecn),
+                .s_ip_identification         (m_roce_to_retrans_ip_identification),
+                .s_ip_flags                  (m_roce_to_retrans_ip_flags),
+                .s_ip_fragment_offset        (m_roce_to_retrans_ip_fragment_offset),
+                .s_ip_ttl                    (m_roce_to_retrans_ip_ttl),
+                .s_ip_protocol               (m_roce_to_retrans_ip_protocol),
+                .s_ip_header_checksum        (m_roce_to_retrans_ip_header_checksum),
+                .s_ip_source_ip              (m_roce_to_retrans_ip_source_ip),
+                .s_ip_dest_ip                (m_roce_to_retrans_ip_dest_ip),
+                .s_udp_source_port           (m_roce_to_retrans_udp_source_port),
+                .s_udp_dest_port             (m_roce_to_retrans_udp_dest_port),
+                .s_udp_length                (m_roce_to_retrans_udp_length),
+                .s_udp_checksum              (m_roce_to_retrans_udp_checksum),
+
+                .s_roce_payload_axis_tdata   (m_roce_to_retrans_payload_axis_tdata),
+                .s_roce_payload_axis_tkeep   (m_roce_to_retrans_payload_axis_tkeep),
+                .s_roce_payload_axis_tvalid  (m_roce_to_retrans_payload_axis_tvalid),
+                .s_roce_payload_axis_tready  (m_roce_to_retrans_payload_axis_tready),
+                .s_roce_payload_axis_tlast   (m_roce_to_retrans_payload_axis_tlast),
+                .s_roce_payload_axis_tuser   (m_roce_to_retrans_payload_axis_tuser),
+
+                .m_axis_dma_write_desc_addr (m_axis_dma_write_desc_addr),
+                .m_axis_dma_write_desc_len  (m_axis_dma_write_desc_len),
+                .m_axis_dma_write_desc_valid(m_axis_dma_write_desc_valid),
+                .m_axis_dma_write_desc_ready(m_axis_dma_write_desc_ready),
+
+                .s_axis_dma_write_desc_status_len  (s_axis_dma_write_desc_status_len),
+                .s_axis_dma_write_desc_status_error(s_axis_dma_write_desc_status_error),
+                .s_axis_dma_write_desc_status_valid(s_axis_dma_write_desc_status_valid),
+
+                .m_dma_write_axis_tdata (m_dma_write_axis_tdata),
+                .m_dma_write_axis_tkeep (m_dma_write_axis_tkeep),
+                .m_dma_write_axis_tvalid(m_dma_write_axis_tvalid),
+                .m_dma_write_axis_tready(m_dma_write_axis_tready),
+                .m_dma_write_axis_tlast (m_dma_write_axis_tlast),
+                .m_dma_write_axis_tuser (m_dma_write_axis_tuser),
+
+                .hdr_ram_we        (hdr_ram_we),
+                .hdr_ram_addr      (hdr_ram_waddr),
+                .hdr_ram_data      (hdr_ram_din),
+
+                .m_wr_table_we  (m_wr_table_we_rtr),
+                .m_wr_table_qpn (m_wr_table_qpn_rtr),
+                .m_wr_table_psn (m_wr_table_psn_rtr),
+
+                .s_qp_close_valid  (rtr_wr_qp_close_valid),
+                .s_qp_close_loc_qpn(rtr_wr_qp_close_loc_qpn),
+
+                .s_qp_open_valid  (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
+                .s_qp_open_loc_qpn(cm_qp_loc_qpn),
+
+                .pmtu(pmtu)
+            );
+
+            
+
+            RoCE_rtr_read_module #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
+                .MAX_QPS(4),
+                .CLOCK_PERIOD(CLOCK_PERIOD),
+                .DEBUG(DEBUG)
+            ) RoCE_rtr_read_module_instance (
+                .clk(clk),
+                .rst(rst),
+                .s_roce_rx_aeth_valid        (s_roce_ack_aeth_valid),
+                .s_roce_rx_aeth_ready        (s_roce_ack_aeth_ready),
+                .s_roce_rx_aeth_syndrome     (s_roce_ack_aeth_syndrome),
+                .s_roce_rx_bth_psn           (s_roce_ack_bth_psn),
+                .s_roce_rx_bth_op_code       (s_roce_ack_bth_op_code),
+                .s_roce_rx_bth_dest_qp       (s_roce_ack_bth_dest_qp),
+
+                .s_roce_rx_last_not_acked_psn(0),
+
+                .m_roce_bth_valid  (m_roce_bth_valid),
+                .m_roce_bth_ready  (m_roce_bth_ready),
+                .m_roce_bth_op_code(m_roce_bth_op_code),
+                .m_roce_bth_p_key  (m_roce_bth_p_key),
+                .m_roce_bth_psn    (m_roce_bth_psn),
+                .m_roce_bth_dest_qp(m_roce_bth_dest_qp),
+                .m_roce_bth_src_qp (m_roce_bth_src_qp),
+                .m_roce_bth_ack_req(m_roce_bth_ack_req),
+                .m_roce_reth_valid (m_roce_reth_valid),
+                .m_roce_reth_ready (m_roce_reth_ready),
+                .m_roce_reth_v_addr(m_roce_reth_v_addr),
+                .m_roce_reth_r_key (m_roce_reth_r_key),
+                .m_roce_reth_length(m_roce_reth_length),
+                .m_roce_immdh_valid(m_roce_immdh_valid),
+                .m_roce_immdh_ready(m_roce_immdh_ready),
+                .m_roce_immdh_data (m_roce_immdh_data),
+
+                .m_eth_dest_mac      (m_roce_eth_dest_mac),
+                .m_eth_src_mac       (m_roce_eth_src_mac),
+                .m_eth_type          (m_roce_eth_type),
+                .m_ip_version        (m_roce_ip_version),
+                .m_ip_ihl            (m_roce_ip_ihl),
+                .m_ip_dscp           (m_roce_ip_dscp),
+                .m_ip_ecn            (m_roce_ip_ecn),
+                .m_ip_identification (m_roce_ip_identification),
+                .m_ip_flags          (m_roce_ip_flags),
+                .m_ip_fragment_offset(m_roce_ip_fragment_offset),
+                .m_ip_ttl            (m_roce_ip_ttl),
+                .m_ip_protocol       (m_roce_ip_protocol),
+                .m_ip_header_checksum(m_roce_ip_header_checksum),
+                .m_ip_source_ip      (m_roce_ip_source_ip),
+                .m_ip_dest_ip        (m_roce_ip_dest_ip),
+                .m_udp_source_port   (m_roce_udp_source_port),
+                .m_udp_dest_port     (m_roce_udp_dest_port),
+                .m_udp_length        (m_roce_udp_length),
+                .m_udp_checksum      (m_roce_udp_checksum),
+
+                .m_roce_payload_axis_tdata (m_roce_payload_axis_tdata),
+                .m_roce_payload_axis_tkeep (m_roce_payload_axis_tkeep),
+                .m_roce_payload_axis_tvalid(m_roce_payload_axis_tvalid),
+                .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
+                .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
+                .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
+
+                .m_axis_dma_read_desc_addr (m_axis_dma_read_desc_addr),
+                .m_axis_dma_read_desc_len  (m_axis_dma_read_desc_len),
+                .m_axis_dma_read_desc_valid(m_axis_dma_read_desc_valid),
+                .m_axis_dma_read_desc_ready(m_axis_dma_read_desc_ready),
+
+                .s_axis_dma_read_desc_status_len(),
+                .s_axis_dma_read_desc_status_error(),
+                .s_axis_dma_read_desc_status_valid(),
+
+                .s_dma_read_axis_tdata (s_dma_read_axis_tdata),
+                .s_dma_read_axis_tkeep (s_dma_read_axis_tkeep),
+                .s_dma_read_axis_tvalid(s_dma_read_axis_tvalid),
+                .s_dma_read_axis_tready(s_dma_read_axis_tready),
+                .s_dma_read_axis_tlast (s_dma_read_axis_tlast),
+                .s_dma_read_axis_tuser (s_dma_read_axis_tuser),
+
+                .m_qp_close_valid  (qp_close_valid),
+                .m_qp_close_ready  (qp_close_ready),
+                .m_qp_close_loc_qpn(qp_close_loc_qpn),
+                .m_qp_close_rem_psn(qp_close_rem_psn),
+
+                .hdr_ram_re        (hdr_ram_re),
+                .hdr_ram_addr      (hdr_ram_raddr),
+                .hdr_ram_data      (hdr_ram_dout),
+                .hdr_ram_data_valid(hdr_ram_dout_valid),
+
+                .m_rd_table_we  (m_rd_table_we_rtr),
+                .m_rd_table_qpn (m_rd_table_qpn_rtr),
+                .m_rd_table_psn (m_rd_table_psn_rtr),
+
+                .s_rd_table_re  (s_rd_table_re),
+                .s_rd_table_qpn (s_rd_table_qpn),
+                .s_rd_table_psn (s_rd_table_psn),
+
+                .s_wr_table_re  (s_wr_table_re),
+                .s_wr_table_qpn (s_wr_table_qpn),
+                .s_wr_table_psn (s_wr_table_psn),
+
+                .s_cpl_table_re (s_cpl_table_re),
+                .s_cpl_table_qpn(s_cpl_table_qpn),
+                .s_cpl_table_psn(s_cpl_table_psn),
+
+                .mem_full(),
+                .stall_qp(stall_qp),
+                .loc_ip_addr(loc_ip_addr),
+                .pmtu(pmtu),
+                .timeout_period(32'd5000),
+                .retry_count(3'd7),
+                .rnr_retry_count(3'd7)
+            );
+
+            simple_dpram #(
+                .ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH-8),
+                .DATA_WIDTH(200),
+                .STRB_WIDTH(1),
+                .NPIPES(2),
+                .STYLE("auto")
+            ) hdr_ram_instance (
+                .clk(clk),
+                .rst(rst),
+                .waddr(hdr_ram_waddr),
+                .raddr(hdr_ram_raddr),
+                .din(hdr_ram_din),
+                .dout(hdr_ram_dout),
+                .strb(1),
+                .ena(1'b1),
+                .ren(hdr_ram_re),
+                .wen(hdr_ram_we)
+            );
+
+            reg                       m_rd_table_we_rst;
+            reg [$clog2(4)-1:0]       m_rd_table_qpn_rst;
+            reg [24-1:0]              m_rd_table_psn_rst;
+
+            reg                       m_wr_table_we_rst;
+            reg [$clog2(4)-1:0]       m_wr_table_qpn_rst;
+            reg [24-1:0]              m_wr_table_psn_rst;
+
+            reg                       m_cpl_table_we_rst;
+            reg [$clog2(4)-1:0]       m_cpl_table_qpn_rst;
+            reg [24-1:0]              m_cpl_table_psn_rst;
+
+            // when qp_close reset all table to same psn (24'hff_ffff)
+            always @(posedge clk) begin
+                if (rst) begin
+                    m_rd_table_we_rst  <= 1'b0;
+                    m_rd_table_qpn_rst <= 24'd0;
+                    m_rd_table_psn_rst <= 24'd0;
+
+                    m_wr_table_we_rst  <= 1'b0;
+                    m_wr_table_qpn_rst <= 24'd0;
+                    m_wr_table_psn_rst <= 24'd0;
+
+                    m_cpl_table_we_rst  <= 1'b0;
+                    m_cpl_table_qpn_rst <= 24'd0;
+                    m_cpl_table_psn_rst <= 24'd0;
+                end else begin
+                    if (qp_close_valid || (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP)) begin
+                        m_rd_table_we_rst  <= 1'b1;
+                        m_rd_table_qpn_rst <= qp_close_loc_qpn[$clog2(4)-1:0];
+                        m_rd_table_psn_rst <= 24'hFF_FFFF;
+
+                        m_wr_table_we_rst  <= 1'b1;
+                        m_wr_table_qpn_rst <= qp_close_loc_qpn[$clog2(4)-1:0];
+                        m_wr_table_psn_rst <= 24'hFF_FFFF;
+
+                        m_cpl_table_we_rst  <= 1'b1;
+                        m_cpl_table_qpn_rst <= qp_close_loc_qpn[$clog2(4)-1:0];
+                        m_cpl_table_psn_rst <= 24'hFF_FFFF;
+                    end else if (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP) begin
+                        m_rd_table_we_rst  <= 1'b1;
+                        m_rd_table_qpn_rst <= cm_qp_loc_qpn[$clog2(4)-1:0];
+                        m_rd_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+
+                        m_wr_table_we_rst  <= 1'b1;
+                        m_wr_table_qpn_rst <= cm_qp_loc_qpn[$clog2(4)-1:0];
+                        m_wr_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+
+                        m_cpl_table_we_rst  <= 1'b1;
+                        m_cpl_table_qpn_rst <= cm_qp_loc_qpn[$clog2(4)-1:0];
+                        m_cpl_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+                    end else begin
+                        m_rd_table_we_rst  <= 1'b0;
+                        m_rd_table_qpn_rst <= 24'd0;
+                        m_rd_table_psn_rst <= 24'd0;
+
+                        m_wr_table_we_rst  <= 1'b0;
+                        m_wr_table_qpn_rst <= 24'd0;
+                        m_wr_table_psn_rst <= 24'd0;
+
+                        m_cpl_table_we_rst  <= 1'b0;
+                        m_cpl_table_qpn_rst <= 24'd0;
+                        m_cpl_table_psn_rst <= 24'd0;
+                    end
+                end
+            end
+
+            assign m_rd_table_we  = m_rd_table_we_rst | m_rd_table_we_rtr; 
+            assign m_rd_table_qpn = m_rd_table_we_rst ? m_rd_table_qpn_rst : m_rd_table_qpn_rtr;
+            assign m_rd_table_psn = m_rd_table_we_rst ? m_rd_table_psn_rst : m_rd_table_psn_rtr;
+
+            assign m_wr_table_we  = m_wr_table_we_rst | m_wr_table_we_rtr; 
+            assign m_wr_table_qpn = m_wr_table_we_rst ? m_wr_table_qpn_rst : m_wr_table_qpn_rtr;
+            assign m_wr_table_psn = m_wr_table_we_rst ? m_wr_table_psn_rst : m_wr_table_psn_rtr;
+
+
+            always @(posedge clk) begin
+                hdr_ram_dout_valid_pipes[3:0] <= {hdr_ram_dout_valid_pipes[2:0], hdr_ram_re};
+            end
+            assign hdr_ram_dout_valid = hdr_ram_dout_valid_pipes[3];
+
+            simple_dpram #(
+                .ADDR_WIDTH($clog2(4)),
+                .DATA_WIDTH(24),
+                .STRB_WIDTH(1),
+                .NPIPES(-1),
+                .INIT_VALUE(24'hff_ffff),
+                .STYLE("auto")
+            ) wr_table_instance (
+                .clk(clk),
+                .rst(rst),
+                .waddr(m_wr_table_qpn),
+                .raddr(s_wr_table_qpn),
+                .din(m_wr_table_psn),
+                .dout(s_wr_table_psn),
+                .strb(1),
+                .ena(1'b1),
+                .ren(s_wr_table_re),
+                .wen(m_wr_table_we)
+            );
+
+            simple_dpram #(
+                .ADDR_WIDTH($clog2(4)),
+                .DATA_WIDTH(24),
+                .STRB_WIDTH(1),
+                .NPIPES(-1),
+                .INIT_VALUE(24'hff_ffff),
+                .STYLE("auto")
+            ) rd_table_instance (
+                .clk(clk),
+                .rst(rst),
+                .waddr (m_rd_table_qpn),
+                .raddr (s_rd_table_qpn),
+                .din   (m_rd_table_psn),
+                .dout  (s_rd_table_psn),
+                .strb  (1),
+                .ena   (1'b1),
+                .ren   (s_rd_table_re),
+                .wen   (m_rd_table_we)
+            );
+
+            assign m_cpl_table_we  = (s_roce_ack_aeth_valid & s_roce_ack_aeth_ready && s_roce_ack_bth_op_code == RC_RDMA_ACK && s_roce_ack_aeth_syndrome[6:5] == 2'b00) | m_cpl_table_we_rst;
+            assign m_cpl_table_qpn = m_cpl_table_we_rst ? m_cpl_table_qpn_rst : s_roce_ack_bth_dest_qp;
+            assign m_cpl_table_psn = m_cpl_table_we_rst ? m_cpl_table_psn_rst : s_roce_ack_bth_psn;
+
+            simple_dpram #(
+                .ADDR_WIDTH($clog2(4)),
+                .DATA_WIDTH(24),
+                .STRB_WIDTH(1),
+                .NPIPES(-1),
+                .INIT_VALUE(24'hff_ffff),
+                .STYLE("auto")
+            ) cpl_table_instance (
+                .clk(clk),
+                .rst(rst),
+                .waddr (m_cpl_table_qpn),
+                .raddr (s_cpl_table_qpn),
+                .din   (m_cpl_table_psn),
+                .dout  (s_cpl_table_psn),
+                .strb  (1),
+                .ena   (1'b1),
+                .ren   (s_cpl_table_re),
+                .wen   (m_cpl_table_we)
+            );
+
+            /*
+    AXI fifo INTERFACE
+    */
+            wire [0                :0]                  m_axi_fifo_awid;
+            wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-1:0] m_axi_fifo_awaddr;
+            wire [7:0]                                  m_axi_fifo_awlen;
+            wire [2:0]                                  m_axi_fifo_awsize;
+            wire [1:0]                                  m_axi_fifo_awburst;
+            wire                                        m_axi_fifo_awlock;
+            wire [3:0]                                  m_axi_fifo_awcache;
+            wire [2:0]                                  m_axi_fifo_awprot;
+            wire                                        m_axi_fifo_awvalid;
+            wire                                        m_axi_fifo_awready;
+            wire [DATA_WIDTH   - 1 : 0]                 m_axi_fifo_wdata;
+            wire [DATA_WIDTH/8 - 1 : 0]                 m_axi_fifo_wstrb;
+            wire                                        m_axi_fifo_wlast;
+            wire                                        m_axi_fifo_wvalid;
+            wire                                        m_axi_fifo_wready;
+            wire [0             :0]                     m_axi_fifo_bid;
+            wire [1:0]                                  m_axi_fifo_bresp;
+            wire                                        m_axi_fifo_bvalid;
+            wire                                        m_axi_fifo_bready;
+            wire [0               :0]                   m_axi_fifo_arid;
+            wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-1:0] m_axi_fifo_araddr;
+            wire [7:0]                                  m_axi_fifo_arlen;
+            wire [2:0]                                  m_axi_fifo_arsize;
+            wire [1:0]                                  m_axi_fifo_arburst;
+            wire                                        m_axi_fifo_arlock;
+            wire [3:0]                                  m_axi_fifo_arcache;
+            wire [2:0]                                  m_axi_fifo_arprot;
+            wire                                        m_axi_fifo_arvalid;
+            wire                                        m_axi_fifo_arready;
+            wire [0             :0]                     m_axi_fifo_rid;
+            wire [DATA_WIDTH   - 1 : 0]                 m_axi_fifo_rdata;
+            wire [1:0]                                  m_axi_fifo_rresp;
+            wire                                        m_axi_fifo_rlast;
+            wire                                        m_axi_fifo_rvalid;
+            wire                                        m_axi_fifo_rready;
+
+
+            axi_dma #(
+                .AXI_DATA_WIDTH(DATA_WIDTH),
+                .AXI_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
+                .AXI_STRB_WIDTH(DATA_WIDTH/8),
+                .AXI_ID_WIDTH(1),
+                .AXI_MAX_BURST_LEN(256),
+                .AXIS_DATA_WIDTH(DATA_WIDTH),
+                .AXIS_KEEP_ENABLE(1),
+                .AXIS_KEEP_WIDTH(DATA_WIDTH/8),
+                .AXIS_LAST_ENABLE(1),
+                .AXIS_ID_ENABLE(0),
+                .AXIS_DEST_ENABLE(0),
+                .AXIS_USER_ENABLE(1),
+                .AXIS_USER_WIDTH(1),
+                .LEN_WIDTH(13),
+                .TAG_WIDTH(1),
+                .ENABLE_SG(0),
+                .ENABLE_UNALIGNED(1)
+            ) axi_dma_instance (
+                .clk(clk),
+                .rst(rst),
+                .s_axis_read_desc_addr         (m_axis_dma_read_desc_addr),
+                .s_axis_read_desc_len          (m_axis_dma_read_desc_len),
+                .s_axis_read_desc_tag          (0),
+                .s_axis_read_desc_id           (0),
+                .s_axis_read_desc_dest         (0),
+                .s_axis_read_desc_user         (0),
+                .s_axis_read_desc_valid        (m_axis_dma_read_desc_valid),
+                .s_axis_read_desc_ready        (m_axis_dma_read_desc_ready),
+
+                .m_axis_read_desc_status_tag   (),
+                .m_axis_read_desc_status_error (),
+                .m_axis_read_desc_status_valid (),
+
+                .m_axis_read_data_tdata        (s_dma_read_axis_tdata),
+                .m_axis_read_data_tkeep        (s_dma_read_axis_tkeep),
+                .m_axis_read_data_tvalid       (s_dma_read_axis_tvalid),
+                .m_axis_read_data_tready       (s_dma_read_axis_tready),
+                .m_axis_read_data_tlast        (s_dma_read_axis_tlast),
+                .m_axis_read_data_tid          (),
+                .m_axis_read_data_tdest        (),
+                .m_axis_read_data_tuser        (s_dma_read_axis_tuser),
+
+                .s_axis_write_desc_addr        (m_axis_dma_write_desc_addr),
+                .s_axis_write_desc_len         (m_axis_dma_write_desc_len),
+                .s_axis_write_desc_tag         (1'b0),
+                .s_axis_write_desc_valid       (m_axis_dma_write_desc_valid),
+                .s_axis_write_desc_ready       (m_axis_dma_write_desc_ready),
+
+                .m_axis_write_desc_status_len  (s_axis_dma_write_desc_status_len),
+                .m_axis_write_desc_status_tag  (),
+                .m_axis_write_desc_status_id   (),
+                .m_axis_write_desc_status_dest (),
+                .m_axis_write_desc_status_user (),
+                .m_axis_write_desc_status_error(s_axis_dma_write_desc_status_error),
+                .m_axis_write_desc_status_valid(s_axis_dma_write_desc_status_valid),
+
+                .s_axis_write_data_tdata       (m_dma_write_axis_tdata),
+                .s_axis_write_data_tkeep       (m_dma_write_axis_tkeep),
+                .s_axis_write_data_tvalid      (m_dma_write_axis_tvalid),
+                .s_axis_write_data_tready      (m_dma_write_axis_tready),
+                .s_axis_write_data_tlast       (m_dma_write_axis_tlast),
+                .s_axis_write_data_tid         (0),
+                .s_axis_write_data_tdest       (0),
+                .s_axis_write_data_tuser       (m_dma_write_axis_tuser),
+
+                .m_axi_awid                    (m_axi_fifo_awid),
+                .m_axi_awaddr                  (m_axi_fifo_awaddr),
+                .m_axi_awlen                   (m_axi_fifo_awlen),
+                .m_axi_awsize                  (m_axi_fifo_awsize),
+                .m_axi_awburst                 (m_axi_fifo_awburst),
+                .m_axi_awlock                  (m_axi_fifo_awlock),
+                .m_axi_awcache                 (m_axi_fifo_awcache),
+                .m_axi_awprot                  (m_axi_fifo_awprot),
+                .m_axi_awvalid                 (m_axi_fifo_awvalid),
+                .m_axi_awready                 (m_axi_fifo_awready),
+                .m_axi_wdata                   (m_axi_fifo_wdata),
+                .m_axi_wstrb                   (m_axi_fifo_wstrb),
+                .m_axi_wlast                   (m_axi_fifo_wlast),
+                .m_axi_wvalid                  (m_axi_fifo_wvalid),
+                .m_axi_wready                  (m_axi_fifo_wready),
+                .m_axi_bid                     (m_axi_fifo_bid),
+                .m_axi_bresp                   (m_axi_fifo_bresp),
+                .m_axi_bvalid                  (m_axi_fifo_bvalid),
+                .m_axi_bready                  (m_axi_fifo_bready),
+                .m_axi_arid                    (m_axi_fifo_arid),
+                .m_axi_araddr                  (m_axi_fifo_araddr),
+                .m_axi_arlen                   (m_axi_fifo_arlen),
+                .m_axi_arsize                  (m_axi_fifo_arsize),
+                .m_axi_arburst                 (m_axi_fifo_arburst),
+                .m_axi_arlock                  (m_axi_fifo_arlock),
+                .m_axi_arcache                 (m_axi_fifo_arcache),
+                .m_axi_arprot                  (m_axi_fifo_arprot),
+                .m_axi_arvalid                 (m_axi_fifo_arvalid),
+                .m_axi_arready                 (m_axi_fifo_arready),
+                .m_axi_rid                     (m_axi_fifo_rid),
+                .m_axi_rdata                   (m_axi_fifo_rdata),
+                .m_axi_rresp                   (m_axi_fifo_rresp),
+                .m_axi_rlast                   (m_axi_fifo_rlast),
+                .m_axi_rvalid                  (m_axi_fifo_rvalid),
+                .m_axi_rready                  (m_axi_fifo_rready),
+                .read_enable                   (1'b1),
+                .write_enable                  (1'b1),
+                .write_abort                   (1'b0)
+            );
+
+            axi_fifo #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
+                .STRB_WIDTH(DATA_WIDTH/8),
+                .READ_FIFO_DEPTH(64),
+                .WRITE_FIFO_DEPTH(64),
+                .ID_WIDTH(1)
+            ) axi_fifo_instance (
+                .clk(clk),
+                .rst(rst),
+                .s_axi_awid    (m_axi_fifo_awid),
+                .s_axi_awaddr  (m_axi_fifo_awaddr),
+                .s_axi_awlen   (m_axi_fifo_awlen),
+                .s_axi_awsize  (m_axi_fifo_awsize),
+                .s_axi_awburst (m_axi_fifo_awburst),
+                .s_axi_awlock  (m_axi_fifo_awlock),
+                .s_axi_awcache (m_axi_fifo_awcache),
+                .s_axi_awprot  (m_axi_fifo_awprot),
+
+                .s_axi_awvalid (m_axi_fifo_awvalid),
+                .s_axi_awready (m_axi_fifo_awready),
+                .s_axi_wdata   (m_axi_fifo_wdata),
+                .s_axi_wstrb   (m_axi_fifo_wstrb),
+                .s_axi_wlast   (m_axi_fifo_wlast),
+
+                .s_axi_wvalid  (m_axi_fifo_wvalid),
+                .s_axi_wready  (m_axi_fifo_wready),
+                .s_axi_bid     (m_axi_fifo_bid),
+                .s_axi_bresp   (m_axi_fifo_bresp),
+
+                .s_axi_bvalid  (m_axi_fifo_bvalid),
+                .s_axi_bready  (m_axi_fifo_bready),
+                .s_axi_arid    (m_axi_fifo_arid),
+                .s_axi_araddr  (m_axi_fifo_araddr),
+                .s_axi_arlen   (m_axi_fifo_arlen),
+                .s_axi_arsize  (m_axi_fifo_arsize),
+                .s_axi_arburst (m_axi_fifo_arburst),
+                .s_axi_arlock  (m_axi_fifo_arlock),
+                .s_axi_arcache (m_axi_fifo_arcache),
+                .s_axi_arprot  (m_axi_fifo_arprot),
+
+                .s_axi_arvalid (m_axi_fifo_arvalid),
+                .s_axi_arready (m_axi_fifo_arready),
+                .s_axi_rid     (m_axi_fifo_rid),
+                .s_axi_rdata   (m_axi_fifo_rdata),
+                .s_axi_rresp   (m_axi_fifo_rresp),
+                .s_axi_rlast   (m_axi_fifo_rlast),
+
+                .s_axi_rvalid  (m_axi_fifo_rvalid),
+                .s_axi_rready  (m_axi_fifo_rready),
+                .m_axi_awid    (m_axi_awid),
+                .m_axi_awaddr  (m_axi_awaddr),
+                .m_axi_awlen   (m_axi_awlen),
+                .m_axi_awsize  (m_axi_awsize),
+                .m_axi_awburst (m_axi_awburst),
+                .m_axi_awlock  (m_axi_awlock),
+                .m_axi_awcache (m_axi_awcache),
+                .m_axi_awprot  (m_axi_awprot),
+                //.m_axi_awqos   (m_axi_awqos),
+                //.m_axi_awregion(m_axi_awregion),
+                //.m_axi_awuser  (m_axi_awuser),
+                .m_axi_awvalid (m_axi_awvalid),
+                .m_axi_awready (m_axi_awready),
+                .m_axi_wdata   (m_axi_wdata),
+                .m_axi_wstrb   (m_axi_wstrb),
+                .m_axi_wlast   (m_axi_wlast),
+                //.m_axi_wuser   (m_axi_wuser),
+                .m_axi_wvalid  (m_axi_wvalid),
+                .m_axi_wready  (m_axi_wready),
+                .m_axi_bid     (m_axi_bid),
+                .m_axi_bresp   (m_axi_bresp),
+                //.m_axi_buser   (m_axi_buser),
+                .m_axi_bvalid  (m_axi_bvalid),
+                .m_axi_bready  (m_axi_bready),
+                .m_axi_arid    (m_axi_arid),
+                .m_axi_araddr  (m_axi_araddr),
+                .m_axi_arlen   (m_axi_arlen),
+                .m_axi_arsize  (m_axi_arsize),
+                .m_axi_arburst (m_axi_arburst),
+                .m_axi_arlock  (m_axi_arlock),
+                .m_axi_arcache (m_axi_arcache),
+                .m_axi_arprot  (m_axi_arprot),
+                //.m_axi_arqos   (m_axi_arqos),
+                //.m_axi_arregion(m_axi_arregion),
+                //.m_axi_aruser  (m_axi_aruser),
+                .m_axi_arvalid (m_axi_arvalid),
+                .m_axi_arready (m_axi_arready),
+                .m_axi_rid     (m_axi_rid),
+                .m_axi_rdata   (m_axi_rdata),
+                .m_axi_rresp   (m_axi_rresp),
+                .m_axi_rlast   (m_axi_rlast),
+                //.m_axi_ruser   (m_axi_ruser),
+                .m_axi_rvalid  (m_axi_rvalid),
+                .m_axi_rready  (m_axi_rready)
+            );
 
             axi_ram_mod #(
                 .DATA_WIDTH(DATA_WIDTH),
@@ -793,7 +1480,9 @@ module RoCE_tx_engine #(
     assign wr_error_qp_not_rts_out = wr_error_qp_not_rts;
     assign wr_error_loc_qpn_out    = wr_error_loc_qpn;
 
-    
+    assign s_roce_ack_bth_ready = s_roce_ack_aeth_ready;
+
+
 endmodule
 
 `resetall

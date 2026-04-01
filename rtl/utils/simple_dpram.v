@@ -7,6 +7,7 @@ module simple_dpram #
     parameter STRB_WIDTH = DATA_WIDTH/8,
     parameter SIZE = 1 << ADDR_WIDTH,
     parameter NPIPES = 1,
+    parameter INIT_VALUE = {DATA_WIDTH{1'b0}},
     parameter STYLE  = "bram"
 )
 (
@@ -36,6 +37,13 @@ module simple_dpram #
     integer i;
 
     (*ram_style=STYLE*) reg [DATA_WIDTH-1:0] mem [SIZE-1:0];
+
+    initial begin
+        for(i = 0; i < SIZE ; i = i + 1) begin
+            mem[i] = INIT_VALUE;
+        end
+    end
+
     always @(posedge clk) begin
         if (ena) begin
             if (ren) begin

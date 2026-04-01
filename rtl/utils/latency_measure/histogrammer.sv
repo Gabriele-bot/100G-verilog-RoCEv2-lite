@@ -12,6 +12,7 @@ module histogrammer #(
     input  wire [INPUT_DATA_WIDTH-1:0] data_in,
 
     input  wire trigger_read_mem,
+    output wire                         histo_dout_valid,
     output wire [HISTO_DATA_WIDTH-1 :0] histo_dout,
     output wire [$clog2(BRAM_SIZE)-1:0] histo_index_out,
     output wire rst_done
@@ -25,93 +26,118 @@ module histogrammer #(
     reg [INDEX_WIDTH  :0] reset_index;
     reg reset_done_reg;
     reg [HISTO_DATA_WIDTH -1:0] dout_reg;
-    reg [$clog2(BRAM_SIZE)-1:0] histo_index_out_reg;
+    reg [$clog2(BRAM_SIZE)-1:0] histo_index_out_pipes [2:0];
+    reg [1:0] histo_dout_valid_pipes;
 
 
-    // pipelien write and read
-    reg [HISTO_DATA_WIDTH-1:0] histo_previous_val;
-    reg [INDEX_WIDTH     -1:0] histo_previous_idx;
+    // pipeline write and read
     reg [HISTO_DATA_WIDTH-1:0] histo_new_val;
-    reg [INDEX_WIDTH     -1:0] histo_new_idx;
-    reg [1:0]                  input_valid_pipe;
-    
+
+    reg [INDEX_WIDTH     -1:0] histo_wr_idx_pipes [2:0];
+
+
+    reg [2:0]                  input_valid_pipe;
+
     reg read_mem;
     reg [$clog2(BRAM_SIZE)  :0] raddr_counter;
     reg [$clog2(BRAM_SIZE)-1:0] raddr;
 
+    wire [$clog2(BRAM_SIZE)-1:0] addra;
+    wire [$clog2(BRAM_SIZE)-1:0] addrb;
+
+    wire [HISTO_DATA_WIDTH-1:0] dinb;
+
     wire [HISTO_DATA_WIDTH-1:0] douta;
     wire [HISTO_DATA_WIDTH-1:0] doutb;
 
+    wire web, reb;
+
+    // !! WARNING!!
+    // Histrogrammer not able to update the ram properly if valids are not spread by 3 clock cycles!!!
+
+
+    // Port A
+    /*
+    READ
+    Read counts stored in the RAM, use data_in as address
+    WRITE
+    Used to reset the memory
+    */    
+
+    // Port B
+    /*
+    READ
+    Read counts stored in the RAM when read mem is triggered
+    WRITE
+    Write histogram updated value
+    */ 
+
+
+    // 2 clycles latency
     true_dpram #(
         .ADDR_WIDTH($clog2(BRAM_SIZE)),
         .DATA_WIDTH(HISTO_DATA_WIDTH),
         .STRB_WIDTH(1),
         .NPIPES(0),
         .INIT_VALUE(0),
-        .STYLE("bram")
+        .STYLE("auto")
     ) true_dpram_instance (
         .clka (clk),
         .rsta (rst),
-        .addra(data_in[INPUT_VALUE_LSB+:INDEX_WIDTH]),
-        .dina (),
+        .addra(addra),
+        .dina ('d0),
         .douta(douta),
         .strba(1'b1),
         .ena  (1),
         .rea  (valid),
-        .wea  (0),
+        .wea  (reset_index < BRAM_SIZE),
 
         .clkb (clk),
         .rstb (rst),
-        .addrb(raddr_counter[$clog2(BRAM_SIZE)-1:0]),
-        .dinb (0),
+        .addrb(addrb),
+        .dinb (dinb),
         .doutb(doutb),
-        .strbb(0),
-        .enb  (1),
-        .reb  (1),
-        .web  (0)
+        .strbb(1'b1),
+        .enb  (reset_done_reg), // disable port b if in reset phase
+        .reb  (reb),
+        .web  (web)
     );
-
-    // write logic
 
     always @(posedge clk) begin
         if (rst) begin
-            reset_index <= 0;
-            reset_done_reg <= 1'b0;
+            reset_index         <= 0;
+            reset_done_reg      <= 1'b0;
             input_valid_pipe[0] <= 1'b0;
             input_valid_pipe[1] <= 1'b0;
             raddr_counter <= BRAM_SIZE;
+            histo_index_out_pipes <= {'d0,'d0,'d0};
+            histo_wr_idx_pipes    <= {'d0,'d0,'d0};
+            histo_dout_valid_pipes <= 2'b00;
         end else begin
             if (reset_index < BRAM_SIZE) begin
-                histogram[reset_index] <= 'd0;
-                reset_index <= reset_index + 1;
-                reset_done_reg <= 1'b0;
+                reset_index         <= reset_index + 1;
+                reset_done_reg      <= 1'b0;
+                input_valid_pipe[0] <= 1'b0;
+                input_valid_pipe[1] <= 1'b0;
+                input_valid_pipe[2] <= 1'b0;
             end else begin
                 reset_done_reg <= 1'b1;
                 if (raddr_counter >= BRAM_SIZE) begin // if not reading the mem, continously updating the histo
-                    input_valid_pipe[0] <= valid;
-                    input_valid_pipe[1] <= input_valid_pipe[0];
-                    // first read the memory
-                    if (valid) begin
-                        index = data_in[INPUT_VALUE_LSB+:INDEX_WIDTH];
-                        histo_previous_val <= histogram[index];
-                        // keep track of the index
-                        histo_previous_idx <= data_in[INPUT_VALUE_LSB+:INDEX_WIDTH];
-                    end
-                    //add one
-                    if (input_valid_pipe[0]) begin
-                        histo_new_val <= histo_previous_val + 1;
-                        histo_new_idx <= histo_previous_idx;
-                    end
-                    // now write
+                    input_valid_pipe   <= {input_valid_pipe[1:0], valid};
+                    histo_wr_idx_pipes <= {histo_wr_idx_pipes[1:0], data_in[INPUT_VALUE_LSB+:INDEX_WIDTH]};
                     if (input_valid_pipe[1]) begin
-                        histogram[histo_new_idx] <= histo_new_val;
+                        histo_new_val <= douta + 1;
                     end
+
+                    histo_dout_valid_pipes[0]  <= 1'b0;
                 end else begin // reading the mem
-                    raddr_counter       <= raddr_counter + 1;
-                    raddr               = raddr_counter[$clog2(BRAM_SIZE)-1:0]; // variable
-                    dout_reg            <= histogram[raddr];
-                    histo_index_out_reg <= raddr;
+                    raddr_counter              <= raddr_counter + 1;
+                    raddr                      = raddr_counter[$clog2(BRAM_SIZE)-1:0]; // variable
+                    dout_reg                   <= histogram[raddr];
+                    histo_index_out_pipes[2:0] <= {histo_index_out_pipes[1:0], raddr};
+                    histo_dout_valid_pipes[0]  <= 1'b1;
                 end
+                histo_dout_valid_pipes[1]  <= histo_dout_valid_pipes[0];
 
                 // if read mem is triggered
                 if (trigger_read_mem) begin
@@ -122,10 +148,18 @@ module histogrammer #(
         end
     end
 
-    assign read_mem = raddr_counter < BRAM_SIZE;
+    // if reset on going write zero everywhere
+    // if not use data_in as address
+    assign addra = reset_index < BRAM_SIZE ? reset_index : data_in[INPUT_VALUE_LSB+:INDEX_WIDTH];
 
-    assign histo_dout = dout_reg;
-    assign histo_index_out = histo_index_out_reg;
+    assign addrb = raddr_counter >= BRAM_SIZE ? histo_wr_idx_pipes[2] : raddr_counter[$clog2(BRAM_SIZE)-1:0];
+    assign web = input_valid_pipe[2] && raddr_counter >= BRAM_SIZE;
+    assign reb = raddr_counter < BRAM_SIZE;
+    assign dinb = histo_new_val;
+
+    assign histo_dout_valid = histo_dout_valid_pipes[1];
+    assign histo_dout = doutb;
+    assign histo_index_out = histo_index_out_pipes[1];
     assign rst_done = reset_done_reg;
 
 endmodule
