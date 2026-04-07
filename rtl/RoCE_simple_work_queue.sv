@@ -415,12 +415,12 @@ module RoCE_simple_work_queue #
 
     assign m_dma_meta_valid = m_dma_meta_valid_reg;
     assign m_dma_length     = m_dma_length_fifo_out_reg;
-    assign m_rem_qpn        = cache_qp_rem_qpn_next;
-    assign m_loc_qpn        = cache_qp_loc_qpn_next;
-    assign m_rem_psn        = cache_qp_rem_psn_next;
-    assign m_r_key          = cache_qp_r_key_next;
-    assign m_rem_ip_addr    = cache_qp_rem_ip_addr_next;
-    assign m_rem_addr       = cache_qp_rem_addr_next + m_rem_addr_offset_fifo_out_reg;
+    assign m_rem_qpn        = cache_qp_rem_qpn_reg;
+    assign m_loc_qpn        = cache_qp_loc_qpn_reg;
+    assign m_rem_psn        = cache_qp_rem_psn_reg;
+    assign m_r_key          = cache_qp_r_key_reg;
+    assign m_rem_ip_addr    = cache_qp_rem_ip_addr_reg;
+    assign m_rem_addr       = cache_qp_rem_addr_reg + m_rem_addr_offset_fifo_out_reg;
     assign m_immediate_data = m_immediate_data_fifo_out_reg;
     assign m_is_immediate   = m_is_immediate_fifo_out_reg;
     assign m_transfer_type  = m_transfer_type_fifo_out_reg;
