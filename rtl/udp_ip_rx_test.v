@@ -117,8 +117,7 @@ parameter BYTE_LANES = KEEP_ENABLE ? KEEP_WIDTH : 1;
 
 parameter HDR_SIZE = 8;
 
-parameter CYCLE_
-COUNT = (HDR_SIZE+BYTE_LANES-1)/BYTE_LANES;
+parameter CYCLE_COUNT = (HDR_SIZE+BYTE_LANES-1)/BYTE_LANES;
 
 parameter PTR_WIDTH = $clog2(CYCLE_COUNT);
 
