@@ -155,6 +155,15 @@ module ip_test #(
   localparam [1:0] STATE_IDLE = 2'd0,  STATE_COMPUTE_CHECKSUM = 2'd1, STATE_ARP_QUERY = 2'd2, STATE_WAIT_PACKET = 2'd3;
 
   reg [1:0] state_reg = STATE_IDLE, state_next;
+  
+  reg [  5:0] outgoing_ip_dscp_reg, outgoing_ip_dscp_next;
+  reg [  1:0] outgoing_ip_ecn_reg, outgoing_ip_ecn_next;
+  reg [ 15:0] outgoing_ip_length_reg, outgoing_ip_length_next;
+  reg [  7:0] outgoing_ip_ttl_reg, outgoing_ip_ttl_next;
+  reg [  7:0] outgoing_ip_protocol_reg, outgoing_ip_protocol_next;
+  reg [ 31:0] outgoing_ip_source_ip_reg, outgoing_ip_source_ip_next;
+  reg [ 31:0] outgoing_ip_dest_ip_reg, outgoing_ip_dest_ip_next;
+  reg         outgoing_is_roce_packet_reg, outgoing_is_roce_packet_next;
 
   reg outgoing_ip_hdr_valid_reg = 1'b0, outgoing_ip_hdr_valid_next;
   wire outgoing_ip_hdr_ready;
@@ -171,11 +180,14 @@ module ip_test #(
   wire                  m_eth_payload_fifo_axis_tlast ;
   wire [1:0]            m_eth_payload_fifo_axis_tuser ;
 
+  reg [15:0] s_ip_identification_reg;
+
+
   /*
    * IP frame processing
    */
   ip_eth_rx_test #(
-  .DATA_WIDTH(DATA_WIDTH)
+    .DATA_WIDTH(DATA_WIDTH)
   ) ip_eth_rx_inst (
     .clk(clk),
     .rst(rst),
@@ -225,8 +237,18 @@ module ip_test #(
   );
 
 
+  always @(posedge clk) begin
+    if (rst) begin
+      s_ip_identification_reg <= 16'd0;
+    end else begin
+      if (outgoing_ip_hdr_valid_reg & outgoing_ip_hdr_ready) begin
+        s_ip_identification_reg <= s_ip_identification_reg + 1;
+      end
+    end
+  end
+
   ip_eth_tx_test #(
-  .DATA_WIDTH(DATA_WIDTH)
+    .DATA_WIDTH(DATA_WIDTH)
   ) ip_eth_tx_inst (
     .clk(clk),
     .rst(rst),
@@ -236,18 +258,18 @@ module ip_test #(
     .s_eth_dest_mac         (outgoing_eth_dest_mac_reg),
     .s_eth_src_mac          (local_mac),
     .s_eth_type             (16'h0800),
-    .s_ip_dscp              (s_ip_dscp),
-    .s_ip_ecn               (s_ip_ecn),
-    .s_ip_length            (s_ip_length),
-    .s_ip_identification    (16'd0),
+    .s_ip_dscp              (outgoing_ip_dscp_reg),
+    .s_ip_ecn               (outgoing_ip_ecn_reg),
+    .s_ip_length            (outgoing_ip_length_reg),
+    .s_ip_identification    (s_ip_identification_reg),
     .s_ip_flags             (3'b010),
     .s_ip_fragment_offset   (13'd0),
-    .s_ip_ttl               (s_ip_ttl),
-    .s_ip_protocol          (s_ip_protocol),
+    .s_ip_ttl               (outgoing_ip_ttl_reg),
+    .s_ip_protocol          (outgoing_ip_protocol_reg),
     .s_ip_hdr_checksum      (~hdr_sum_temp_reg),
-    .s_ip_source_ip         (s_ip_source_ip),
-    .s_ip_dest_ip           (s_ip_dest_ip),
-    .s_is_roce_packet       (s_is_roce_packet),
+    .s_ip_source_ip         (outgoing_ip_source_ip_reg),
+    .s_ip_dest_ip           (outgoing_ip_dest_ip_reg),
+    .s_is_roce_packet       (outgoing_is_roce_packet_reg),
 
     .s_ip_payload_axis_tdata(s_ip_payload_axis_tdata),
     .s_ip_payload_axis_tkeep(s_ip_payload_axis_tkeep),
@@ -349,6 +371,15 @@ module ip_test #(
     hdr_sum_next = hdr_sum_reg;
     hdr_sum_temp_next = hdr_sum_temp_reg;
 
+    outgoing_ip_dscp_next = outgoing_ip_dscp_reg;
+    outgoing_ip_ecn_next = outgoing_ip_ecn_reg;
+    outgoing_ip_length_next = outgoing_ip_length_reg;
+    outgoing_ip_ttl_next = outgoing_ip_ttl_reg;
+    outgoing_ip_protocol_next = outgoing_ip_protocol_reg;
+    outgoing_ip_source_ip_next = outgoing_ip_source_ip_reg;
+    outgoing_ip_dest_ip_next = outgoing_ip_dest_ip_reg;
+    outgoing_is_roce_packet_next = outgoing_is_roce_packet_reg;
+
     outgoing_ip_hdr_valid_next = outgoing_ip_hdr_valid_reg && !outgoing_ip_hdr_ready;
     outgoing_eth_dest_mac_next = outgoing_eth_dest_mac_reg;
 
@@ -356,10 +387,18 @@ module ip_test #(
       STATE_IDLE: begin
         // wait for outgoing packet
         if (s_ip_hdr_valid) begin
+          outgoing_ip_dscp_next = s_ip_dscp;
+          outgoing_ip_ecn_next = s_ip_ecn;
+          outgoing_ip_length_next = s_ip_length;
+          outgoing_ip_ttl_next = s_ip_ttl;
+          outgoing_ip_protocol_next = s_ip_protocol;
+          outgoing_ip_source_ip_next = s_ip_source_ip;
+          outgoing_ip_dest_ip_next = s_ip_dest_ip;
+          outgoing_is_roce_packet_next = s_is_roce_packet;
           if (s_is_roce_packet) begin
             hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
             s_ip_length_roce +
-            16'd0 +
+            s_ip_identification_reg +
             {3'b010, 13'd0} +
             {s_ip_ttl, s_ip_protocol} +
             s_ip_source_ip[31:16] +
@@ -369,7 +408,7 @@ module ip_test #(
           end else begin
             hdr_sum_next = {4'd4, 4'd5, s_ip_dscp, s_ip_ecn} +
             s_ip_length +
-            16'd0 +
+            s_ip_identification_reg +
             {3'b010, 13'd0} +
             {s_ip_ttl, s_ip_protocol} +
             s_ip_source_ip[31:16] +
@@ -455,6 +494,15 @@ module ip_test #(
       s_ip_hdr_ready_reg <= 1'b0;
       outgoing_ip_hdr_valid_reg <= 1'b0;
 
+      outgoing_ip_dscp_reg      <= 6'd0;
+      outgoing_ip_ecn_reg       <= 2'd0;
+      outgoing_ip_length_reg    <= 16'd0;
+      outgoing_ip_ttl_reg       <= 8'h40;
+      outgoing_ip_protocol_reg  <= 8'h11;
+      outgoing_ip_source_ip_reg <= local_ip;
+      outgoing_ip_dest_ip_reg   <= {8'hFF, 8'hFF, 8'hFF, 8'hFF};
+      outgoing_is_roce_packet_reg <= 1'b0;
+
       last_ip_addr_query_reg <= {8'hFF, 8'hFF, 8'hFF, 8'hFF};
       cached_mac_address_reg <= 48'h00_00_00_00_00_00;
 
@@ -470,14 +518,25 @@ module ip_test #(
 
       s_ip_hdr_ready_reg <= s_ip_hdr_ready_next;
 
+      outgoing_ip_dscp_reg <= outgoing_ip_dscp_next;
+      outgoing_ip_ecn_reg <= outgoing_ip_ecn_next;
+      outgoing_ip_length_reg <= outgoing_ip_length_next;
+      outgoing_ip_ttl_reg <= outgoing_ip_ttl_next;
+      outgoing_ip_protocol_reg <= outgoing_ip_protocol_next;
+      outgoing_ip_source_ip_reg <= outgoing_ip_source_ip_next;
+      outgoing_ip_dest_ip_reg <= outgoing_ip_dest_ip_next;
+      outgoing_is_roce_packet_reg <= outgoing_is_roce_packet_next;
+
       outgoing_ip_hdr_valid_reg <= outgoing_ip_hdr_valid_next;
+
+      hdr_sum_reg      <= hdr_sum_next;
+      hdr_sum_temp_reg <= hdr_sum_temp_next;
+
+      outgoing_eth_dest_mac_reg <= outgoing_eth_dest_mac_next;
 
     end
 
-    hdr_sum_reg      <= hdr_sum_next;
-    hdr_sum_temp_reg <= hdr_sum_temp_next;
-
-    outgoing_eth_dest_mac_reg <= outgoing_eth_dest_mac_next;
+    
   end
 
 endmodule
