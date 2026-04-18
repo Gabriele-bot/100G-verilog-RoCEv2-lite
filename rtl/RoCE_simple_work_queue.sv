@@ -320,7 +320,7 @@ module RoCE_simple_work_queue #
                         m_qp_local_qpn_req_next = cache_qp_loc_qpn_reg;
                         state_next = STATE_UPDATE_QP_STATE_PSN;
                     end else begin
-                        s_wr_req_ready_next = 1'b1;
+                        s_wr_req_ready_next = 1'b1; // if stall asserted, dont accept new work request
                         s_axis_tready_next = 1'b0;
                         state_next = STATE_IDLE;
                     end
@@ -333,9 +333,9 @@ module RoCE_simple_work_queue #
                 m_axis_tvalid_int   = 1'b0;
                 s_axis_tready_next  = 1'b1;
                 if (s_axis_tvalid && s_axis_tready && s_axis_tlast && (|s_axis_tuser[1:0])) begin
-                    state_next = STATE_IDLE;
+                    s_wr_req_ready_next = 1'b0;
                     s_axis_tready_next = 1'b0;
-                    s_wr_req_ready_next = 1'b1;
+                    state_next = STATE_IDLE;
                 end else begin
                     state_next = STATE_DROP_AXIS;
                 end

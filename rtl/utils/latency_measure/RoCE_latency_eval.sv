@@ -116,7 +116,7 @@ module RoCE_latency_eval (
     .dout(ram_dout),
     .strb(1'b1),
     .ena(1),
-    .ren(s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn),
+    .ren(s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn && (s_roce_rx_aeth_syndrome[6:5] == 2'b00)),
     .wen(s_roce_tx_bth_valid && s_roce_tx_bth_src_qp == monitor_loc_qpn)
   );
 

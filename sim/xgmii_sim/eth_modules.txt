@@ -86,3 +86,8 @@ lib/axi/rtl/axi_fifo_rd.v
 lib/axi/rtl/axi_register_wr.v
 lib/axi/rtl/axi_register_rd.v
 lib/axi/rtl/axi_register.v
+lib/axi/rtl/axi_interconnect.v
+lib/axi/rtl/axi_crossbar_addr.v
+lib/axi/rtl/axi_crossbar_rd.v
+lib/axi/rtl/axi_crossbar_wr.v
+lib/axi/rtl/axi_crossbar.v

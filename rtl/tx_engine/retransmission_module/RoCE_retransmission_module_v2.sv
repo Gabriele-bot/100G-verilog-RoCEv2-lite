@@ -6,12 +6,13 @@ module RoCE_retransmission_module_v2 #(
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter MAX_QPS = 4,
     parameter CLOCK_PERIOD = 6.4,
+    parameter USE_XILINX_XPM_SDPRAM = 1,
     parameter DEBUG = 0
 ) (
     input wire clk,
     input wire rst,
-    input wire rst_retry_cntr,
-    input wire flow_ctrl_pause, // stops timeout counter
+    // TODO add this!!
+    input wire flow_ctrl_pause, // stops timeout counter 
     /*
      * RoCE RX ACKed PSNs
      */
@@ -160,6 +161,20 @@ module RoCE_retransmission_module_v2 #(
     input  wire                         m_axi_rlast,
     input  wire                         m_axi_rvalid,
     output wire                         m_axi_rready,
+    // CM signals
+    input wire        cm_qp_valid,
+
+    input wire [2 :0] cm_qp_req_type,
+    input wire [31:0] cm_qp_dma_transfer_length,
+    input wire [23:0] cm_qp_rem_qpn,
+    input wire [23:0] cm_qp_loc_qpn,
+    input wire [23:0] cm_qp_rem_psn,
+    input wire [23:0] cm_qp_loc_psn,
+    input wire [31:0] cm_qp_r_key,
+    input wire [63:0] cm_qp_rem_addr,
+    input wire [31:0] cm_qp_rem_ip_addr,
+    input wire        qp_is_immediate,
+    input wire        qp_tx_type,
 
     /*
     Close QP in case failed transfer (e.g. rnr retry count reached, retry count reached, irreversible error)
@@ -171,6 +186,7 @@ module RoCE_retransmission_module_v2 #(
     /*
     Status ?
     */
+    // TODO add this as well
     output wire [MAX_QPS-1:0]            stall_qp,
     output wire [31:0]                   n_retransmit_triggers [MAX_QPS-1:0],
     output wire [31:0]                   n_rnr_retransmit_triggers [MAX_QPS-1:0],
@@ -189,6 +205,21 @@ module RoCE_retransmission_module_v2 #(
 );
 
     import RoCE_params::*; // Imports RoCE parameters
+
+    localparam AXI_MAX_BURST_LEN_COMP = 4096/(DATA_WIDTH/8);
+    localparam AXI_MAX_BURST_LEN = 256 <= AXI_MAX_BURST_LEN_COMP ? 256 : AXI_MAX_BURST_LEN_COMP;
+    localparam BURST_SIZE = AXI_MAX_BURST_LEN * 8;
+
+    localparam RAM_OP_CODE_OFFSET   = 0;
+    localparam RAM_PSN_OFFSET       = RAM_OP_CODE_OFFSET   + 8;
+    localparam RAM_VADDR_OFFSET     = RAM_PSN_OFFSET       + 24;
+    localparam RAM_RETH_LEN_OFFSET  = RAM_VADDR_OFFSET     + 64;
+    localparam RAM_IMMD_DATA_OFFSET = RAM_RETH_LEN_OFFSET  + 32;
+    localparam RAM_UDP_LEN_OFFSET   = RAM_IMMD_DATA_OFFSET + 32;
+    localparam HDR_DATA_WIDTH       = RAM_UDP_LEN_OFFSET   + 16; // in bits
+
+    // TODO segment HDR ram as well
+    //localparam N_HDR_RAM = BUFFER_ADDR_WIDTH > 24 ? 8 : (BUFFER_ADDR_WIDTH > 22 ? 4 : (BUFFER_ADDR_WIDTH > 20 ? 2 : 1)); // needs to be a power of 2
 
     wire [BUFFER_ADDR_WIDTH-1:0] m_axis_dma_write_desc_addr;
     wire [12:0]                                 m_axis_dma_write_desc_len;
@@ -221,39 +252,134 @@ module RoCE_retransmission_module_v2 #(
     wire                       s_dma_read_axis_tuser;
 
     wire hdr_ram_we, hdr_ram_re;
-    wire [BUFFER_ADDR_WIDTH-1-1:0] hdr_ram_waddr, hdr_ram_raddr;
-    wire [199:0] hdr_ram_din, hdr_ram_dout;
+    wire [BUFFER_ADDR_WIDTH-8-1:0] hdr_ram_waddr, hdr_ram_raddr;
+    wire [HDR_DATA_WIDTH-1:0] hdr_ram_din, hdr_ram_dout;
     wire hdr_ram_dout_valid;
     reg [3:0] hdr_ram_dout_valid_pipes;
 
     wire                       m_rd_table_we;
-    wire [$clog2(4)-1:0]       m_rd_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] m_rd_table_qpn;
     wire [24-1:0]              m_rd_table_psn;
 
     wire                       s_rd_table_re;
-    wire [$clog2(4)-1:0]       s_rd_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] s_rd_table_qpn;
     wire [24-1:0]              s_rd_table_psn;
 
     wire                       m_wr_table_we;
-    wire [$clog2(4)-1:0]       m_wr_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] m_wr_table_qpn;
     wire [24-1:0]              m_wr_table_psn;
 
     wire                       s_wr_table_re;
-    wire [$clog2(4)-1:0]       s_wr_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] s_wr_table_qpn;
     wire [24-1:0]              s_wr_table_psn;
 
     wire                       m_cpl_table_we;
-    wire [$clog2(4)-1:0]       m_cpl_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn;
     wire [24-1:0]              m_cpl_table_psn;
 
     wire                       s_cpl_table_re;
-    wire [$clog2(4)-1:0]       s_cpl_table_qpn;
+    wire [$clog2(MAX_QPS)-1:0] s_cpl_table_qpn;
     wire [24-1:0]              s_cpl_table_psn;
+
+    wire                       m_rd_table_we_rtr;
+    wire [$clog2(MAX_QPS)-1:0] m_rd_table_qpn_rtr;
+    wire [24-1:0]              m_rd_table_psn_rtr;
+
+    wire                       m_wr_table_we_rtr;
+    wire [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_rtr;
+    wire [24-1:0]              m_wr_table_psn_rtr;
+
+    wire                       m_cpl_table_we_rtr;
+    wire [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn_rtr;
+    wire [24-1:0]              m_cpl_table_psn_rtr;
+
+    wire         rtr_wr_qp_close_valid   = (m_qp_close_valid && m_qp_close_ready) | (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP);
+    wire  [23:0] rtr_wr_qp_close_loc_qpn = (m_qp_close_valid && m_qp_close_ready) ? m_qp_close_loc_qpn : cm_qp_loc_qpn;
+
+    reg                       m_rd_table_we_rst;
+    reg [$clog2(MAX_QPS)-1:0] m_rd_table_qpn_rst;
+    reg [24-1:0]              m_rd_table_psn_rst;
+
+    reg                       m_wr_table_we_rst;
+    reg [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_rst;
+    reg [24-1:0]              m_wr_table_psn_rst;
+
+    reg                       m_cpl_table_we_rst;
+    reg [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn_rst;
+    reg [24-1:0]              m_cpl_table_psn_rst;
+
+    wire roce_rx_aeth_ready;
+
+    assign  s_roce_rx_bth_ready  = roce_rx_aeth_ready;
+    assign  s_roce_rx_aeth_ready = roce_rx_aeth_ready;
+
+    // when qp_close reset all table to same psn (24'hff_ffff)
+    always @(posedge clk) begin
+        if (rst) begin
+            m_rd_table_we_rst  <= 1'b0;
+            m_rd_table_qpn_rst <= 'd0;
+            m_rd_table_psn_rst <= 24'd0;
+
+            m_wr_table_we_rst  <= 1'b0;
+            m_wr_table_qpn_rst <= 'd0;
+            m_wr_table_psn_rst <= 24'd0;
+
+            m_cpl_table_we_rst  <= 1'b0;
+            m_cpl_table_qpn_rst <= 'd0;
+            m_cpl_table_psn_rst <= 24'd0;
+        end else begin
+            if (rtr_wr_qp_close_valid) begin
+                m_rd_table_we_rst  <= 1'b1;
+                m_rd_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_rd_table_psn_rst <= 24'hFF_FFFF;
+
+                m_wr_table_we_rst  <= 1'b1;
+                m_wr_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_wr_table_psn_rst <= 24'hFF_FFFF;
+
+                m_cpl_table_we_rst  <= 1'b1;
+                m_cpl_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_cpl_table_psn_rst <= 24'hFF_FFFF;
+            end else if (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP) begin
+                m_rd_table_we_rst  <= 1'b1;
+                m_rd_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_rd_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+
+                m_wr_table_we_rst  <= 1'b1;
+                m_wr_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_wr_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+
+                m_cpl_table_we_rst  <= 1'b1;
+                m_cpl_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_cpl_table_psn_rst <= cm_qp_rem_psn - 24'd1;
+            end else begin
+                m_rd_table_we_rst  <= 1'b0;
+                m_rd_table_qpn_rst <= 'd0;
+                m_rd_table_psn_rst <= 24'd0;
+
+                m_wr_table_we_rst  <= 1'b0;
+                m_wr_table_qpn_rst <= 'd0;
+                m_wr_table_psn_rst <= 24'd0;
+
+                m_cpl_table_we_rst  <= 1'b0;
+                m_cpl_table_qpn_rst <= 'd0;
+                m_cpl_table_psn_rst <= 24'd0;
+            end
+        end
+    end
+
+    assign m_rd_table_we  = m_rd_table_we_rst | m_rd_table_we_rtr;
+    assign m_rd_table_qpn = m_rd_table_we_rst ? m_rd_table_qpn_rst : m_rd_table_qpn_rtr;
+    assign m_rd_table_psn = m_rd_table_we_rst ? m_rd_table_psn_rst : m_rd_table_psn_rtr;
+
+    assign m_wr_table_we  = m_wr_table_we_rst | m_wr_table_we_rtr;
+    assign m_wr_table_qpn = m_wr_table_we_rst ? m_wr_table_qpn_rst : m_wr_table_qpn_rtr;
+    assign m_wr_table_psn = m_wr_table_we_rst ? m_wr_table_psn_rst : m_wr_table_psn_rtr;
 
     RoCE_rtr_write_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
-        .MAX_QPS(4),
+        .MAX_QPS(MAX_QPS),
         .CLOCK_PERIOD(CLOCK_PERIOD),
         .DEBUG(0)
     ) RoCE_rtr_write_module_instance (
@@ -323,9 +449,15 @@ module RoCE_retransmission_module_v2 #(
         .hdr_ram_addr      (hdr_ram_waddr),
         .hdr_ram_data      (hdr_ram_din),
 
-        .m_wr_table_we  (m_wr_table_we),
-        .m_wr_table_qpn (m_wr_table_qpn),
-        .m_wr_table_psn (m_wr_table_psn),
+        .m_wr_table_we  (m_wr_table_we_rtr),
+        .m_wr_table_qpn (m_wr_table_qpn_rtr),
+        .m_wr_table_psn (m_wr_table_psn_rtr),
+
+        .s_qp_close_valid  (rtr_wr_qp_close_valid),
+        .s_qp_close_loc_qpn(rtr_wr_qp_close_loc_qpn),
+
+        .s_qp_open_valid  (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
+        .s_qp_open_loc_qpn(cm_qp_loc_qpn),
 
         .pmtu(pmtu)
     );
@@ -333,14 +465,14 @@ module RoCE_retransmission_module_v2 #(
     RoCE_rtr_read_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
-        .MAX_QPS(4),
+        .MAX_QPS(MAX_QPS),
         .CLOCK_PERIOD(CLOCK_PERIOD),
         .DEBUG(DEBUG)
     ) RoCE_rtr_read_module_instance (
         .clk(clk),
         .rst(rst),
         .s_roce_rx_aeth_valid        (s_roce_rx_aeth_valid),
-        .s_roce_rx_aeth_ready        (s_roce_rx_aeth_ready),
+        .s_roce_rx_aeth_ready        (roce_rx_aeth_ready),
         .s_roce_rx_aeth_syndrome     (s_roce_rx_aeth_syndrome),
         .s_roce_rx_bth_psn           (s_roce_rx_bth_psn),
         .s_roce_rx_bth_op_code       (s_roce_rx_bth_op_code),
@@ -408,14 +540,24 @@ module RoCE_retransmission_module_v2 #(
         .s_dma_read_axis_tlast (s_dma_read_axis_tlast),
         .s_dma_read_axis_tuser (s_dma_read_axis_tuser),
 
+        .m_qp_close_valid  (m_qp_close_valid),
+        .m_qp_close_ready  (m_qp_close_ready),
+        .m_qp_close_loc_qpn(m_qp_close_loc_qpn),
+        .m_qp_close_rem_psn(m_qp_close_rem_psn),
+
+        .s_qp_open_valid      (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
+        .s_qp_open_loc_qpn    (cm_qp_loc_qpn),
+        .s_qp_open_rem_qpn    (cm_qp_rem_qpn),
+        .s_qp_open_rem_ip_addr(cm_qp_rem_ip_addr),
+
         .hdr_ram_re        (hdr_ram_re),
         .hdr_ram_addr      (hdr_ram_raddr),
         .hdr_ram_data      (hdr_ram_dout),
         .hdr_ram_data_valid(hdr_ram_dout_valid),
 
-        .m_rd_table_we  (m_rd_table_we),
-        .m_rd_table_qpn (m_rd_table_qpn),
-        .m_rd_table_psn (m_rd_table_psn),
+        .m_rd_table_we  (m_rd_table_we_rtr),
+        .m_rd_table_qpn (m_rd_table_qpn_rtr),
+        .m_rd_table_psn (m_rd_table_psn_rtr),
 
         .s_rd_table_re  (s_rd_table_re),
         .s_rd_table_qpn (s_rd_table_qpn),
@@ -433,35 +575,96 @@ module RoCE_retransmission_module_v2 #(
         .stall_qp(stall_qp),
         .loc_ip_addr(loc_ip_addr),
         .pmtu(pmtu),
-        .timeout_period(32'd5000)
+        .timeout_period(timeout_period),
+        .retry_count(retry_count),
+        .rnr_retry_count(rnr_retry_count)
     );
 
-    simple_dpram #(
-        .ADDR_WIDTH(BUFFER_ADDR_WIDTH-8),
-        .DATA_WIDTH(200),
-        .STRB_WIDTH(1),
-        .NPIPES(2),
-        .STYLE("auto")
-    ) hdr_ram_instance (
-        .clk(clk),
-        .rst(rst),
-        .waddr(hdr_ram_waddr),
-        .raddr(hdr_ram_raddr),
-        .din(hdr_ram_din),
-        .dout(hdr_ram_dout),
-        .strb(1),
-        .ena(1'b1),
-        .ren(hdr_ram_re),
-        .wen(hdr_ram_we)
-    );
 
+
+    generate
+        if (USE_XILINX_XPM_SDPRAM) begin
+            xpm_memory_sdpram #(
+                .ADDR_WIDTH_A(BUFFER_ADDR_WIDTH-8), // DECIMAL
+                .ADDR_WIDTH_B(BUFFER_ADDR_WIDTH-8), // DECIMAL
+                .AUTO_SLEEP_TIME(0), // DECIMAL
+                .BYTE_WRITE_WIDTH_A(HDR_DATA_WIDTH), // DECIMAL
+                .CASCADE_HEIGHT(4), // DECIMAL
+                .CLOCKING_MODE("common_clock"), // String
+                .ECC_BIT_RANGE("7:0"), // String
+                .ECC_MODE("no_ecc"), // String
+                .ECC_TYPE("none"), // String
+                .IGNORE_INIT_SYNTH(0), // DECIMAL
+                .MEMORY_INIT_FILE("none"), // String
+                .MEMORY_INIT_PARAM("0"), // String
+                .MEMORY_OPTIMIZATION("true"), // String
+                .MEMORY_PRIMITIVE("ultra"), // String
+                .MEMORY_SIZE(2**(BUFFER_ADDR_WIDTH-8)*HDR_DATA_WIDTH), // DECIMAL
+                .MESSAGE_CONTROL(0), // DECIMAL
+                .READ_DATA_WIDTH_B(HDR_DATA_WIDTH), // DECIMAL
+                .READ_LATENCY_B(4), // DECIMAL
+                .READ_RESET_VALUE_B("0"), // String
+                .RST_MODE_A("SYNC"), // String
+                .RST_MODE_B("SYNC"), // String
+                .SIM_ASSERT_CHK(0), // DECIMAL; 0=disable simulation messages, 1=enable simulation messages
+                .USE_EMBEDDED_CONSTRAINT(0), // DECIMAL
+                .USE_MEM_INIT(0), // DECIMAL
+                .USE_MEM_INIT_MMI(0), // DECIMAL
+                .WAKEUP_TIME("disable_sleep"), // String
+                .WRITE_DATA_WIDTH_A(HDR_DATA_WIDTH), // DECIMAL
+                .WRITE_MODE_B("read_first"), // String
+                .WRITE_PROTECT(1) // DECIMAL
+            )
+            hdr_ram_instance (
+                .dbiterrb(),
+                .doutb(hdr_ram_dout),
+                .sbiterrb(),
+                .addra(hdr_ram_waddr),
+                .addrb(hdr_ram_raddr),
+                .clka(clk),
+                .clkb(clk),
+                .dina(hdr_ram_din),
+                .ena(1),
+                .enb(1),
+                .injectdbiterra(0),
+                .injectsbiterra(0),
+                .regceb(1),
+                .rstb(rst),
+                .sleep(0),
+                .wea(hdr_ram_we)
+
+            );
+        end else begin
+            simple_dpram #(
+                .ADDR_WIDTH(BUFFER_ADDR_WIDTH-8),
+                .DATA_WIDTH(HDR_DATA_WIDTH),
+                .STRB_WIDTH(1),
+                .NPIPES(2),
+                .STYLE("ultra")
+            ) hdr_ram_instance (
+                .clk(clk),
+                .rst(rst),
+                .waddr(hdr_ram_waddr),
+                .raddr(hdr_ram_raddr),
+                .din(hdr_ram_din),
+                .dout(hdr_ram_dout),
+                .strb(1),
+                .ena(1'b1),
+                .ren(hdr_ram_re),
+                .wen(hdr_ram_we)
+            );
+        end
+    endgenerate
+
+
+    // End of xpm_memory_sdpram_inst instantiation
     always @(posedge clk) begin
         hdr_ram_dout_valid_pipes[3:0] <= {hdr_ram_dout_valid_pipes[2:0], hdr_ram_re};
     end
     assign hdr_ram_dout_valid = hdr_ram_dout_valid_pipes[3];
 
     simple_dpram #(
-        .ADDR_WIDTH($clog2(4)),
+        .ADDR_WIDTH($clog2(MAX_QPS)),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -481,7 +684,7 @@ module RoCE_retransmission_module_v2 #(
     );
 
     simple_dpram #(
-        .ADDR_WIDTH($clog2(4)),
+        .ADDR_WIDTH($clog2(MAX_QPS)),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -500,12 +703,12 @@ module RoCE_retransmission_module_v2 #(
         .wen   (m_rd_table_we)
     );
 
-    assign m_cpl_table_we  = s_roce_rx_aeth_valid & s_roce_rx_aeth_ready && s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00;
-    assign m_cpl_table_qpn = s_roce_rx_bth_dest_qp;
-    assign m_cpl_table_psn = s_roce_rx_bth_psn;
+    assign m_cpl_table_we  = (s_roce_rx_aeth_valid & s_roce_rx_aeth_ready && s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) | m_cpl_table_we_rst;
+    assign m_cpl_table_qpn = m_cpl_table_we_rst ? m_cpl_table_qpn_rst : s_roce_rx_bth_dest_qp;
+    assign m_cpl_table_psn = m_cpl_table_we_rst ? m_cpl_table_psn_rst : s_roce_rx_bth_psn;
 
     simple_dpram #(
-        .ADDR_WIDTH($clog2(4)),
+        .ADDR_WIDTH($clog2(MAX_QPS)),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -569,7 +772,7 @@ module RoCE_retransmission_module_v2 #(
         .AXI_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .AXI_STRB_WIDTH(DATA_WIDTH/8),
         .AXI_ID_WIDTH(1),
-        .AXI_MAX_BURST_LEN(256),
+        .AXI_MAX_BURST_LEN(AXI_MAX_BURST_LEN),
         .AXIS_DATA_WIDTH(DATA_WIDTH),
         .AXIS_KEEP_ENABLE(1),
         .AXIS_KEEP_WIDTH(DATA_WIDTH/8),
@@ -581,7 +784,7 @@ module RoCE_retransmission_module_v2 #(
         .LEN_WIDTH(13),
         .TAG_WIDTH(1),
         .ENABLE_SG(0),
-        .ENABLE_UNALIGNED(1)
+        .ENABLE_UNALIGNED(0)
     ) axi_dma_instance (
         .clk(clk),
         .rst(rst),
@@ -680,6 +883,7 @@ module RoCE_retransmission_module_v2 #(
     ) axi_fifo_instance (
         .clk(clk),
         .rst(rst),
+
         .s_axi_awid    (m_axi_fifo_awid),
         .s_axi_awaddr  (m_axi_fifo_awaddr),
         .s_axi_awlen   (m_axi_fifo_awlen),
@@ -688,20 +892,20 @@ module RoCE_retransmission_module_v2 #(
         .s_axi_awlock  (m_axi_fifo_awlock),
         .s_axi_awcache (m_axi_fifo_awcache),
         .s_axi_awprot  (m_axi_fifo_awprot),
-
         .s_axi_awvalid (m_axi_fifo_awvalid),
         .s_axi_awready (m_axi_fifo_awready),
+
         .s_axi_wdata   (m_axi_fifo_wdata),
         .s_axi_wstrb   (m_axi_fifo_wstrb),
         .s_axi_wlast   (m_axi_fifo_wlast),
-
         .s_axi_wvalid  (m_axi_fifo_wvalid),
         .s_axi_wready  (m_axi_fifo_wready),
+
         .s_axi_bid     (m_axi_fifo_bid),
         .s_axi_bresp   (m_axi_fifo_bresp),
-
         .s_axi_bvalid  (m_axi_fifo_bvalid),
         .s_axi_bready  (m_axi_fifo_bready),
+
         .s_axi_arid    (m_axi_fifo_arid),
         .s_axi_araddr  (m_axi_fifo_araddr),
         .s_axi_arlen   (m_axi_fifo_arlen),
@@ -710,16 +914,17 @@ module RoCE_retransmission_module_v2 #(
         .s_axi_arlock  (m_axi_fifo_arlock),
         .s_axi_arcache (m_axi_fifo_arcache),
         .s_axi_arprot  (m_axi_fifo_arprot),
-
         .s_axi_arvalid (m_axi_fifo_arvalid),
         .s_axi_arready (m_axi_fifo_arready),
+
         .s_axi_rid     (m_axi_fifo_rid),
         .s_axi_rdata   (m_axi_fifo_rdata),
         .s_axi_rresp   (m_axi_fifo_rresp),
         .s_axi_rlast   (m_axi_fifo_rlast),
-
         .s_axi_rvalid  (m_axi_fifo_rvalid),
         .s_axi_rready  (m_axi_fifo_rready),
+
+
         .m_axi_awid    (m_axi_awid),
         .m_axi_awaddr  (m_axi_awaddr),
         .m_axi_awlen   (m_axi_awlen),
@@ -728,22 +933,20 @@ module RoCE_retransmission_module_v2 #(
         .m_axi_awlock  (m_axi_awlock),
         .m_axi_awcache (m_axi_awcache),
         .m_axi_awprot  (m_axi_awprot),
-        //.m_axi_awqos   (m_axi_awqos),
-        //.m_axi_awregion(m_axi_awregion),
-        //.m_axi_awuser  (m_axi_awuser),
         .m_axi_awvalid (m_axi_awvalid),
         .m_axi_awready (m_axi_awready),
+
         .m_axi_wdata   (m_axi_wdata),
         .m_axi_wstrb   (m_axi_wstrb),
         .m_axi_wlast   (m_axi_wlast),
-        //.m_axi_wuser   (m_axi_wuser),
         .m_axi_wvalid  (m_axi_wvalid),
         .m_axi_wready  (m_axi_wready),
+
         .m_axi_bid     (m_axi_bid),
         .m_axi_bresp   (m_axi_bresp),
-        //.m_axi_buser   (m_axi_buser),
         .m_axi_bvalid  (m_axi_bvalid),
         .m_axi_bready  (m_axi_bready),
+
         .m_axi_arid    (m_axi_arid),
         .m_axi_araddr  (m_axi_araddr),
         .m_axi_arlen   (m_axi_arlen),
@@ -752,16 +955,13 @@ module RoCE_retransmission_module_v2 #(
         .m_axi_arlock  (m_axi_arlock),
         .m_axi_arcache (m_axi_arcache),
         .m_axi_arprot  (m_axi_arprot),
-        //.m_axi_arqos   (m_axi_arqos),
-        //.m_axi_arregion(m_axi_arregion),
-        //.m_axi_aruser  (m_axi_aruser),
         .m_axi_arvalid (m_axi_arvalid),
         .m_axi_arready (m_axi_arready),
+
         .m_axi_rid     (m_axi_rid),
         .m_axi_rdata   (m_axi_rdata),
         .m_axi_rresp   (m_axi_rresp),
         .m_axi_rlast   (m_axi_rlast),
-        //.m_axi_ruser   (m_axi_ruser),
         .m_axi_rvalid  (m_axi_rvalid),
         .m_axi_rready  (m_axi_rready)
     );

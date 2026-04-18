@@ -90,8 +90,10 @@ module generic_arb_mux #(
 
   assign s_hdr_ready = s_hdr_ready_reg;
 
-  assign s_payload_axis_tready = (m_payload_axis_tready_int_reg && grant_valid) << grant_encoded;
+  //assign s_payload_axis_tready = ((m_payload_axis_tready_int_reg && grant_valid) << grant_encoded) & ~({S_COUNT{payload_first}} & {S_COUNT{ack_payload_reg}});
+  assign s_payload_axis_tready = ((m_payload_axis_tready_int_reg && grant_valid) << grant_encoded);
   //assign s_payload_axis_tready = m_payload_axis_tready_int_reg << grant_encoded;
+  
 
   assign m_hdr_valid = m_hdr_valid_reg;
   assign m_hdr = m_hdr_reg;
@@ -174,8 +176,11 @@ module generic_arb_mux #(
 
   //assign request = (s_hdr_valid & ~s_hdr_valid_del) & ~grant;
   assign request = s_hdr_valid & ~grant & ~grant_del;
+  //assign request = s_hdr_valid & ~grant;
+
   //assign acknowledge = grant & s_payload_axis_tvalid & s_payload_axis_tready & s_payload_axis_tlast;
   assign acknowledge = hdr_first ? ack_hdr_reg & ack_payload : (payload_first ? ack_hdr & ack_payload_reg : ack_hdr & ack_payload);
+  //assign acknowledge = hdr_first ? ack_hdr_reg & ack_payload : (payload_first ? ack_hdr & ack_payload_reg : ack_payload);
 
   always @* begin
     frame_next = frame_reg;
@@ -278,7 +283,7 @@ module generic_arb_mux #(
   assign m_payload_axis_tuser = USER_ENABLE ? m_payload_axis_tuser_reg : {USER_WIDTH{1'b0}};
 
   // enable ready input next cycle if output is ready or if both output registers are empty
-  //assign m_payload_axis_tready_int_early = m_payload_axis_tready || (!temp_m_payload_axis_tvalid_reg && !m_payload_axis_tvalid_reg)
+  //assign m_payload_axis_tready_int_early = m_payload_axis_tready || (!temp_m_payload_axis_tvalid_reg && !m_payload_axis_tvalid_reg);
   assign m_payload_axis_tready_int_early = (m_payload_axis_tready || (!temp_m_payload_axis_tvalid_reg && !m_payload_axis_tvalid_reg)) && grant_valid;
 
   always @* begin

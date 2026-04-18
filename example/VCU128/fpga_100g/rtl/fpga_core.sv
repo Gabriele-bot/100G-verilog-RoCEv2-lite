@@ -714,18 +714,18 @@ module fpga_core #(
     );
     */
    RoCE_stack_wrapper #(
-        .QP_CH_DATA_WIDTH                (128),
+        .QP_CH_DATA_WIDTH                (256),
         .QP_CH_KEEP_ENABLE               (1),
-        .QP_CH_KEEP_WIDTH                (16),
+        .QP_CH_KEEP_WIDTH                (32),
         .OUT_DATA_WIDTH                  (512),
         .OUT_KEEP_ENABLE                 (1),
         .OUT_KEEP_WIDTH                  (64),
-        .CLOCK_PERIOD                    (1000/322),
+        .CLOCK_PERIOD                    (1000/322.622),
         .DEBUG                           (0),
         .REFRESH_CACHE_TICKS             (32767),
         .RETRANSMISSION                  (1),
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
-        .N_QUEUE_PAIRS                   (8)
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(23),
+        .N_QUEUE_PAIRS                   (4)
     ) RoCE_stack_wrapper_instance (
         .clk(clk),
         .rst(rst),

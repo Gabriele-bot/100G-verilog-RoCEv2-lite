@@ -243,6 +243,12 @@ module fpga (
   wire                                 [  7:0] qsfp1_rx_pfc_req;
   wire                                 [  7:0] qsfp1_rx_pfc_ack; // define queues with axis ID bus??
 
+  // sync pause req
+  wire                                         qsfp1_rx_lfc_req_net;
+  wire                                         qsfp1_rx_lfc_ack_net;
+  wire                                 [  7:0] qsfp1_rx_pfc_req_net;
+  wire                                 [  7:0] qsfp1_rx_pfc_ack_net; // define queues with axis ID bus??
+
   wire                                         qsfp1_gtpowergood;
 
   wire                                         qsfp1_mgt_refclk_0;
@@ -380,6 +386,37 @@ ila_axis ila_eth_tx(
 );
 */
 
+  // synchronize pause signals from/to rx clock
+  xpm_cdc_array_single #(
+     .DEST_SYNC_FF(3),   
+     .INIT_SYNC_FF(0),   
+     .SIM_ASSERT_CHK(0), 
+     .SRC_INPUT_REG(1),  
+     .WIDTH(9)           
+  )
+  xpm_cdc_array_pause_req (
+     .dest_clk(clk_net_int), 
+     .src_clk(qsfp1_rx_clk_int),
+
+     .dest_out({qsfp1_rx_pfc_req_net, qsfp1_rx_lfc_req_net}), 
+     .src_in({qsfp1_rx_pfc_req, qsfp1_rx_lfc_req})
+  );
+
+  xpm_cdc_array_single #(
+     .DEST_SYNC_FF(3),   
+     .INIT_SYNC_FF(0),   
+     .SIM_ASSERT_CHK(0), 
+     .SRC_INPUT_REG(1),  
+     .WIDTH(9)           
+  )
+  xpm_cdc_array_pause_ack (
+     .dest_clk(qsfp1_rx_clk_int), 
+     .src_clk(clk_net_int),
+
+     .dest_out({qsfp1_rx_pfc_ack, qsfp1_rx_lfc_ack}),
+     .src_in({qsfp1_rx_pfc_ack_net, qsfp1_rx_lfc_ack_net})
+  );
+
   axis_async_fifo #(
       .DEPTH(4200),
       .DATA_WIDTH(512),
@@ -418,10 +455,10 @@ ila_axis ila_eth_tx(
       .m_axis_tdest       (),
       .m_axis_tuser       (qsfp1_tx_axis_tuser_int),
       // Pause
-      .s_pause_req(1'b0),
-      .s_pause_ack(),
-      .m_pause_req(qsfp1_rx_pfc_req[0]),
-      .m_pause_ack(qsfp1_rx_pfc_ack[0]),
+      .s_pause_req(qsfp1_rx_pfc_req_net[0]),
+      .s_pause_ack(qsfp1_rx_pfc_ack_net[0]),
+      .m_pause_req(1'b0),
+      .m_pause_ack(),
       // Status
       .s_status_overflow  (),
       .s_status_bad_frame (),
@@ -441,7 +478,7 @@ ila_axis ila_eth_tx(
       .DEST_ENABLE(0),
       .USER_ENABLE(1),
       .USER_WIDTH(1),
-      .FRAME_FIFO(1'b1),
+      .FRAME_FIFO(0),
       .USER_BAD_FRAME_VALUE(1'b1),
       .USER_BAD_FRAME_MASK(1'b1)
   ) rx_fifo_cmac2stack (

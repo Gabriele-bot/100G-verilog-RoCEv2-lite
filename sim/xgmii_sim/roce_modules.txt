@@ -21,6 +21,9 @@ tx_engine/axis_packet_framer.sv
 tx_engine/RoCE_udp_tx.sv
 tx_engine/RoCE_tx_header_producer.sv
 tx_engine/RoCE_retransmission_module.sv
+tx_engine/retransmission_module/RoCE_rtr_write_module.sv
+tx_engine/retransmission_module/RoCE_rtr_read_module.sv
+tx_engine/retransmission_module/RoCE_retransmission_module_v2.sv
 rx_engine/RoCE_udp_rx_acks.sv
 qp_state/qpn_fifo_init.sv
 qp_state/RoCE_qp_state_module.sv
@@ -35,6 +38,8 @@ utils/RoCE_packet_dropper.sv
 utils/simple_dpram.v
 utils/true_dpram.v
 utils/axi_ram_mod.v	
-tx_engine/RoCE_tx_engine.sv
+utils/axi_ram_xpm.sv
+tx_engine/RoCE_tx_queue.sv
+tx_engine/RoCE_realign_frame_fifo.sv
 RoCE_minimal_stack.sv
 RoCE_stack_wrapper.sv

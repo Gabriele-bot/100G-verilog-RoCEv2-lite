@@ -412,7 +412,7 @@ module axis_packet_framer #(
     assign s_axis_fifo_out_tuser[14:2] = length_post_fifo[12:0];
 
     axis_fifo #(
-        .DEPTH(4096),
+        .DEPTH(1024),
         .DATA_WIDTH(DATA_WIDTH),
         .KEEP_ENABLE(1),
         .KEEP_WIDTH(DATA_WIDTH/8),
@@ -420,7 +420,7 @@ module axis_packet_framer #(
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
         .USER_WIDTH(15),
-        .RAM_PIPELINE(1),
+        .RAM_PIPELINE(2),
         .FRAME_FIFO(0)
     ) output_axis_fifo (
         .clk(clk),

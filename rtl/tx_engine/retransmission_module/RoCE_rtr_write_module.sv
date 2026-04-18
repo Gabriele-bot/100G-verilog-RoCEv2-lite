@@ -85,7 +85,7 @@ module RoCE_rtr_write_module #(
     /*HEADER RAM write */
     output wire                         hdr_ram_we,
     output wire [HEADER_ADDR_WIDTH-1:0] hdr_ram_addr,
-    output wire [199:0]                 hdr_ram_data,
+    output wire [175:0]                 hdr_ram_data,
     /*
     Write table interface, update when succesfully write to mem
     */
@@ -116,19 +116,16 @@ module RoCE_rtr_write_module #(
 
     localparam RAM_OP_CODE_OFFSET   = 0;
     localparam RAM_PSN_OFFSET       = RAM_OP_CODE_OFFSET   + 8;
-    localparam RAM_DEST_QPN_OFFSET  = RAM_PSN_OFFSET       + 24;
-    localparam RAM_VADDR_OFFSET     = RAM_DEST_QPN_OFFSET  + 24;
+    localparam RAM_VADDR_OFFSET     = RAM_PSN_OFFSET       + 24;
     localparam RAM_RETH_LEN_OFFSET  = RAM_VADDR_OFFSET     + 64;
     localparam RAM_IMMD_DATA_OFFSET = RAM_RETH_LEN_OFFSET  + 32;
     localparam RAM_UDP_LEN_OFFSET   = RAM_IMMD_DATA_OFFSET + 32;
     localparam HEADER_MEMORY_SIZE   = RAM_UDP_LEN_OFFSET + 16; // in bits
 
     localparam [2:0]
-    STATE_IDLE      = 3'd0,
-    STATE_DMA_WRITE = 3'd1,
-    STATE_MEM_FULL  = 3'd2,
-    STATE_DRAIN     = 3'd3,
-    STATE_ERROR     = 3'd4;
+    STATE_IDLE           = 3'd0,
+    STATE_DMA_WAIT_READY = 3'd1,
+    STATE_DMA_WRITE      = 3'd2;
 
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
@@ -144,7 +141,7 @@ module RoCE_rtr_write_module #(
 
     reg                            hdr_ram_we_reg, hdr_ram_we_next;
     reg [HEADER_ADDR_WIDTH - 1: 0] hdr_ram_addr_reg, hdr_ram_addr_next;
-    reg [199 :0]                   hdr_ram_data_in_reg, hdr_ram_data_in_next;
+    reg [175 :0]                   hdr_ram_data_in_reg, hdr_ram_data_in_next;
 
 
     wire                      wr_table_fifo_ready;
@@ -155,9 +152,6 @@ module RoCE_rtr_write_module #(
     reg                       m_wr_table_valid_reg;
     reg [24-1:0]              m_wr_table_psn_reg;
     reg [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_reg;
-
-    reg  s_roce_payload_axis_tready_drain_reg, s_roce_payload_axis_tready_drain_next;
-    wire s_roce_payload_axis_tready_dma;
 
 
 
@@ -199,78 +193,75 @@ module RoCE_rtr_write_module #(
         hdr_ram_addr_next  = hdr_ram_addr_reg;
         hdr_ram_data_in_next   = hdr_ram_data_in_reg;
 
-        s_roce_payload_axis_tready_drain_next = 1'b0;
-
         case(state_reg)
             STATE_IDLE : begin
                 s_roce_bth_ready_next               = 1'b1;
 
                 if (s_roce_bth_valid && s_roce_bth_ready) begin
-                    // check if qp needs to be flushed
-                    if (qp_flush_reg[s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0]]) begin
-                        s_roce_payload_axis_tready_drain_next = 1'b1;
-                        state_next                = STATE_DRAIN;
+                    s_roce_bth_ready_next               = 1'b0;
+
+
+                    if (dma_write_desc_ready) begin
+                        //state_next                = STATE_DMA_WRITE;
+                        state_next                = STATE_IDLE;
                     end else begin
-                        state_next                = STATE_DMA_WRITE;
-                        dma_write_desc_valid_next = 1'b1;
-                        dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  =  (s_roce_bth_psn << memory_steps);
-                        dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] =  s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
+                        state_next                = STATE_DMA_WAIT_READY;
+                    end
+                    dma_write_desc_valid_next = 1'b1;
+                    dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  =  (s_roce_bth_psn << memory_steps);
+                    dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] =  s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
 
-                        wr_table_valid_next = 1'b1;
-                        wr_table_psn_next   = s_roce_bth_psn;
-                        wr_table_qpn_next   = s_roce_bth_src_qp;
+                    // if qp need to be flushed, write to mem, but don't update WR pointer
+                    wr_table_valid_next = !qp_flush_reg[s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0]];
+                    wr_table_psn_next   = s_roce_bth_psn;
+                    wr_table_qpn_next   = s_roce_bth_src_qp;
 
-                        hdr_ram_we_next = 1'b1;
-                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  = s_roce_bth_psn[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0];
-                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] = s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
+                    hdr_ram_we_next = 1'b1;
+                    hdr_ram_addr_next[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  = s_roce_bth_psn[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0];
+                    hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] = s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
 
-                        hdr_ram_data_in_next[RAM_OP_CODE_OFFSET+:8]   = s_roce_bth_op_code;
-                        hdr_ram_data_in_next[RAM_PSN_OFFSET+:24]      = s_roce_bth_psn;
-                        hdr_ram_data_in_next[RAM_DEST_QPN_OFFSET+:24] = s_roce_bth_dest_qp;
-                        // RETH Fields
-                        hdr_ram_data_in_next[RAM_VADDR_OFFSET+:64]    = s_roce_reth_v_addr;
-                        hdr_ram_data_in_next[RAM_RETH_LEN_OFFSET+:32] = s_roce_reth_length;
-                        // Immdh field
-                        hdr_ram_data_in_next[RAM_IMMD_DATA_OFFSET+:32] = s_roce_immdh_data;
-                        // UDP length
-                        hdr_ram_data_in_next[RAM_UDP_LEN_OFFSET+:16]   = s_udp_length;
+                    hdr_ram_data_in_next[RAM_OP_CODE_OFFSET+:8]   = s_roce_bth_op_code;
+                    hdr_ram_data_in_next[RAM_PSN_OFFSET+:24]      = s_roce_bth_psn;
+                    // RETH Fields
+                    hdr_ram_data_in_next[RAM_VADDR_OFFSET+:64]    = s_roce_reth_v_addr;
+                    hdr_ram_data_in_next[RAM_RETH_LEN_OFFSET+:32] = s_roce_reth_length;
+                    // Immdh field
+                    hdr_ram_data_in_next[RAM_IMMD_DATA_OFFSET+:32] = s_roce_immdh_data;
+                    // UDP length
+                    hdr_ram_data_in_next[RAM_UDP_LEN_OFFSET+:16]   = s_udp_length;
 
-                        if (~s_roce_reth_valid && ~s_roce_immdh_valid) begin
-                            dma_write_desc_len_next  =  s_udp_length - 12 - 8; // UDP length - BTH - UDP HEADER 
-                        end else if (s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
-                            dma_write_desc_len_next  =  s_udp_length - 12 - 4 - 8; // UDP length - BTH - IMMD - UDP HEADER 
-                        end else if (s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
-                            dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 8; // UDP length - BTH - RETH - UDP HEADER 
-                        end else if (s_roce_reth_valid && s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
-                            dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 4 - 8; // UDP length - BTH - RETH - IMMD - UDP HEADER
-                        end else  begin // what happend here??
-                            dma_write_desc_valid_next = 1'b0;
-                            wr_table_valid_next       = 1'b0;
-                            hdr_ram_we_next           = 1'b0;
-                            state_next                = STATE_IDLE;
-                        end
+                    if (~s_roce_reth_valid && ~s_roce_immdh_valid) begin
+                        dma_write_desc_len_next  =  s_udp_length - 12 - 8; // UDP length - BTH - UDP HEADER 
+                    end else if (s_roce_immdh_valid && s_roce_immdh_ready && ~s_roce_reth_valid ) begin
+                        dma_write_desc_len_next  =  s_udp_length - 12 - 4 - 8; // UDP length - BTH - IMMD - UDP HEADER 
+                    end else if (s_roce_reth_valid &&  s_roce_reth_ready && ~s_roce_immdh_valid) begin
+                        dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 8; // UDP length - BTH - RETH - UDP HEADER 
+                    end else if (s_roce_reth_valid && s_roce_reth_ready & s_roce_immdh_valid & s_roce_immdh_ready) begin
+                        dma_write_desc_len_next  =  s_udp_length - 12 - 16 - 4 - 8; // UDP length - BTH - RETH - IMMD - UDP HEADER
+                    end else  begin // what happend here??
+                        dma_write_desc_valid_next = 1'b0;
+                        wr_table_valid_next       = 1'b0;
+                        hdr_ram_we_next           = 1'b0;
+                        state_next                = STATE_IDLE;
                     end
                 end
             end
-            STATE_DMA_WRITE : begin
-                if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tlast && s_roce_payload_axis_tready_dma) begin // end of transfer
-                    state_next = STATE_IDLE;
+            STATE_DMA_WAIT_READY: begin
+                s_roce_bth_ready_next               = 1'b0;
+                if (dma_write_desc_ready) begin
+                    //state_next                = STATE_DMA_WRITE;
+                    state_next                = STATE_IDLE;
                 end else begin
-                    state_next = STATE_DMA_WRITE;
+                    state_next                = STATE_DMA_WAIT_READY;
                 end
             end
-            STATE_DRAIN: begin
-                s_roce_payload_axis_tready_drain_next = 1'b1;
-                if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tlast && s_roce_payload_axis_tready) begin // end of transfer
-                    s_roce_payload_axis_tready_drain_next = 1'b0;
-                    state_next = STATE_IDLE;
-                end else begin
-                    state_next = STATE_DRAIN;
-                end
-            end
-            STATE_ERROR : begin
-                state_next                = STATE_IDLE;
-            end
+            //STATE_DMA_WRITE : begin
+            //    if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tlast && s_roce_payload_axis_tready) begin // end of transfer
+            //        state_next = STATE_IDLE;
+            //    end else begin
+            //        state_next = STATE_DMA_WRITE;
+            //    end
+            //end
             default : begin
                 state_next                = STATE_IDLE;
             end
@@ -298,8 +289,6 @@ module RoCE_rtr_write_module #(
             qp_close_reg <= 'd0;
             qp_flush_reg <= 'd0;
 
-            s_roce_payload_axis_tready_drain_reg <= 1'b0;
-
             m_wr_table_valid_reg <= 1'b0;
             m_wr_table_qpn_reg   <= 'd0;
             m_wr_table_psn_reg   <= 24'd0;
@@ -320,8 +309,6 @@ module RoCE_rtr_write_module #(
             hdr_ram_we_reg      <= hdr_ram_we_next;
             hdr_ram_addr_reg    <= hdr_ram_addr_next;
             hdr_ram_data_in_reg <= hdr_ram_data_in_next;
-
-            s_roce_payload_axis_tready_drain_reg <= s_roce_payload_axis_tready_drain_next;
 
             // check if there was a close qp signal
             if (s_qp_close_valid) begin
@@ -351,13 +338,12 @@ module RoCE_rtr_write_module #(
                 m_wr_table_qpn_reg   <= 'd0;
                 m_wr_table_psn_reg   <= 24'd0;
             end
-            
 
-            // TODO add qp open to reset the flush state
+
         end
     end
 
-
+    /*
     axis_fifo #(
         .DEPTH((DATA_WIDTH/8)*8), // 8 frames
         .DATA_WIDTH(DATA_WIDTH),
@@ -376,7 +362,7 @@ module RoCE_rtr_write_module #(
         .s_axis_tdata (s_roce_payload_axis_tdata),
         .s_axis_tkeep (s_roce_payload_axis_tkeep),
         .s_axis_tvalid(s_roce_payload_axis_tvalid),
-        .s_axis_tready(s_roce_payload_axis_tready_dma),
+        .s_axis_tready(s_roce_payload_axis_tready),
         .s_axis_tlast (s_roce_payload_axis_tlast),
         .s_axis_tuser (s_roce_payload_axis_tuser),
         .s_axis_tid   (0),
@@ -395,8 +381,13 @@ module RoCE_rtr_write_module #(
         .status_bad_frame (),
         .status_good_frame()
     );
-
-    assign s_roce_payload_axis_tready = s_roce_payload_axis_tready_dma | s_roce_payload_axis_tready_drain_reg;
+    */
+    assign m_dma_write_axis_tdata     = s_roce_payload_axis_tdata;
+    assign m_dma_write_axis_tkeep     = s_roce_payload_axis_tkeep;
+    assign m_dma_write_axis_tvalid    = s_roce_payload_axis_tvalid;
+    assign s_roce_payload_axis_tready = m_dma_write_axis_tready; 
+    assign m_dma_write_axis_tlast     = s_roce_payload_axis_tlast;
+    assign m_dma_write_axis_tuser     = s_roce_payload_axis_tuser;
 
     axis_fifo #(
         .DEPTH(8),

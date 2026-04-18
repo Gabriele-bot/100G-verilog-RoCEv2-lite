@@ -96,7 +96,7 @@ module RoCE_rtr_read_module #(
     /*HEADER RAM read */
     output wire                         hdr_ram_re,
     output wire [HEADER_ADDR_WIDTH-1:0] hdr_ram_addr,
-    input  wire [199:0]                 hdr_ram_data,
+    input  wire [175:0]                 hdr_ram_data,
     input  wire                         hdr_ram_data_valid,
     /*
      Read table interfaces
@@ -128,6 +128,14 @@ module RoCE_rtr_read_module #(
     output  wire [23:0]  m_qp_close_loc_qpn,
     output  wire [23:0]  m_qp_close_rem_psn,
     /*
+    Open QP interface, needed only to store dest qp and dest ip address
+    // TODO add reset counter and other qp related values upon opening
+     */
+    input  wire         s_qp_open_valid,
+    input  wire [23:0]  s_qp_open_loc_qpn,
+    input  wire [23:0]  s_qp_open_rem_qpn,
+    input  wire [31:0]  s_qp_open_rem_ip_addr,
+    /*
     Status
     */
     output wire mem_full,
@@ -146,8 +154,7 @@ module RoCE_rtr_read_module #(
 
     localparam RAM_OP_CODE_OFFSET   = 0;
     localparam RAM_PSN_OFFSET       = RAM_OP_CODE_OFFSET   + 8;
-    localparam RAM_DEST_QPN_OFFSET  = RAM_PSN_OFFSET       + 24;
-    localparam RAM_VADDR_OFFSET     = RAM_DEST_QPN_OFFSET  + 24;
+    localparam RAM_VADDR_OFFSET     = RAM_PSN_OFFSET       + 24;
     localparam RAM_RETH_LEN_OFFSET  = RAM_VADDR_OFFSET     + 64;
     localparam RAM_IMMD_DATA_OFFSET = RAM_RETH_LEN_OFFSET  + 32;
     localparam RAM_UDP_LEN_OFFSET   = RAM_IMMD_DATA_OFFSET + 32;
@@ -179,7 +186,8 @@ module RoCE_rtr_read_module #(
 
     reg [3:0] memory_steps;
     reg [12:0] pmtu_val;
-    reg [24-1:0] psn_stall_thr; // threshold for qp stall
+    reg [24-1:0] psn_stall_thr_stop; // threshold for qp stall
+    reg [24-1:0] psn_stall_thr_release; // threshold fro realease after stalling
 
     reg [$clog2(MAX_QPS)-1:0] round_robin_qpn_reg, round_robin_qpn_next;
 
@@ -229,23 +237,28 @@ module RoCE_rtr_read_module #(
     reg          roce_immdh_ready_next, roce_immdh_ready_reg;
     reg  [ 31:0] roce_immdh_data_next,  roce_immdh_data_reg;
 
-
     reg  [ 15:0] udp_length_next, udp_length_reg;
+    reg  [ 31:0] ip_dest_ip_next, ip_dest_ip_reg;
+
+    reg [31:0] cached_dest_ip_reg [MAX_QPS-1:0];
+    reg [23:0] cached_rem_qpn_reg [MAX_QPS-1:0];
 
     reg s_roce_rx_aeth_ready_reg;
 
     reg transmission_complete_reg, transmission_complete_next;
 
     reg [31:0] timeout_counter [MAX_QPS - 1 : 0];
-    reg [63:0] rnr_counter_reg [MAX_QPS - 1 : 0] = '{default:0};
+    reg [31:0] rnr_counter_reg [MAX_QPS - 1 : 0] = '{default:0};
     reg [$clog2(MAX_QPS)-1:0] round_robin_qpn_timeout_reg;
     reg [MAX_QPS-1:0] qp_transmission_complete_reg, qp_transmission_complete_next;
     reg [MAX_QPS-1:0] qp_timed_out_reg;
     reg [MAX_QPS-1:0] qp_psn_error_reg;
     reg [MAX_QPS-1:0] qp_rnr_wait_reg;
+    reg [MAX_QPS-1:0] qp_rnr_wait_done_reg;
     reg [MAX_QPS-1:0] qp_error_reg;
     reg [MAX_QPS-1:0] qp_closed_reg, qp_closed_next;
     reg [MAX_QPS-1:0] qp_started_retrans_reg, qp_started_retrans_next;
+    reg [MAX_QPS-1:0] qp_started_rnr_retrans_reg, qp_started_rnr_retrans_next;
 
     reg [24-1:0]  psn_nak_reg [MAX_QPS-1:0];
 
@@ -256,6 +269,9 @@ module RoCE_rtr_read_module #(
 
     reg [23:0] retry_psn_mark_reg     [MAX_QPS-1:0];
     reg [23:0] retry_psn_mark_next    [MAX_QPS-1:0];
+
+    reg [23:0] rnr_retry_psn_mark_reg  [MAX_QPS-1:0];
+    reg [23:0] rnr_retry_psn_mark_next [MAX_QPS-1:0];
 
     reg [31:0] total_retry_counter_reg     [MAX_QPS-1:0];
     reg [31:0] total_rnr_retry_counter_reg [MAX_QPS-1:0];
@@ -270,11 +286,14 @@ module RoCE_rtr_read_module #(
     always @(posedge clk) begin
         memory_steps  <= 4'd8 + pmtu;
         pmtu_val      <= 13'd1 << ( pmtu + 13'd8);
-        psn_stall_thr <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - 1;
+        psn_stall_thr_stop    <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - (MAX_QPS + 4); // too little slack?
+        psn_stall_thr_release <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - ((MAX_QPS << 1) + 4);
     end
 
 
     always @(*) begin
+
+        state_next = STATE_CHANGE_QPN;
 
         round_robin_qpn_next = round_robin_qpn_reg;
 
@@ -311,6 +330,8 @@ module RoCE_rtr_read_module #(
 
         udp_length_next       = udp_length_reg;
 
+        ip_dest_ip_next = ip_dest_ip_reg;
+
         qp_transmission_complete_next = qp_transmission_complete_reg;
 
         dma_read_desc_valid_next = dma_read_desc_valid_reg && !dma_read_desc_ready;
@@ -327,6 +348,7 @@ module RoCE_rtr_read_module #(
         total_rnr_retry_counter_next = total_rnr_retry_counter_reg;
 
         retry_psn_mark_next = retry_psn_mark_reg;
+        rnr_retry_psn_mark_next = rnr_retry_psn_mark_reg;
 
         m_qp_close_valid_next = m_qp_close_valid_reg && !m_qp_close_ready;
         m_qp_close_loc_qpn_next = m_qp_close_loc_qpn_reg;
@@ -335,6 +357,7 @@ module RoCE_rtr_read_module #(
         qp_closed_next = qp_closed_reg;
 
         qp_started_retrans_next = qp_started_retrans_reg;
+        qp_started_rnr_retrans_next = qp_started_rnr_retrans_reg;
 
         state_cached_next = state_cached_reg;
 
@@ -345,11 +368,17 @@ module RoCE_rtr_read_module #(
                     m_qp_close_valid_next = 1'b1;
                     m_qp_close_loc_qpn_next = 24'd256 + round_robin_qpn_reg;
                     qp_closed_next[round_robin_qpn_reg] = 1'b1;
+                    qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
+                    qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
                     state_next = STATE_CHANGE_QPN;
                 end else begin
-                    if (qp_rnr_wait_reg[round_robin_qpn_reg]) begin
-                        // if qp in RNR wait skip to the next QP
-                        state_next = STATE_CHANGE_QPN;
+                    if (qp_rnr_wait_reg[round_robin_qpn_reg] && !qp_rnr_wait_done_reg[round_robin_qpn_reg]) begin
+                        // if qp in RNR wait compare table for checking if QP needs to be stalled, then skip to the next one
+                        // TODO check rnr_retry_counter, if value reached (and not 7) trigger close qp
+                        qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
+                        qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
+                        state_next = STATE_FETCH_TABLES;
+                        // TODO add update rd pointer upon finish wait
                     end else if (qp_timed_out_reg[round_robin_qpn_reg]) begin
                         // if timeout, bring rd pointer back to cpl pointer
                         // check retry count
@@ -358,6 +387,8 @@ module RoCE_rtr_read_module #(
                             m_qp_close_valid_next = 1'b1;
                             m_qp_close_loc_qpn_next = 24'd256 + round_robin_qpn_reg;
                             qp_closed_next[round_robin_qpn_reg] = 1'b1;
+                            qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
+                            qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
                             state_cached_next = STATE_CHANGE_QPN;
                             state_next = STATE_WAIT_1CLK;
                         end else begin
@@ -368,11 +399,12 @@ module RoCE_rtr_read_module #(
                             state_cached_next = STATE_UPDATE_RD_TABLE;
                             state_next = STATE_WAIT_1CLK;
                         end
-                    end else if (qp_psn_error_reg[round_robin_qpn_reg]) begin
-                        // if got psn sequence error, bring rd table back to the nak psn
+                    end else if (qp_psn_error_reg[round_robin_qpn_reg] || qp_rnr_wait_done_reg[round_robin_qpn_reg]) begin
+                        // if got psn sequence error or rnr wait finised, bring rd table back to the nak psn, 
                         state_next = STATE_UPDATE_RD_TABLE;
                     end else begin
                         qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
+                        qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
                         // all good, read the tables
                         state_next = STATE_FETCH_TABLES;
                     end
@@ -383,7 +415,7 @@ module RoCE_rtr_read_module #(
                     m_rd_table_we_next = 1'b1;
                     if (qp_timed_out_reg[round_robin_qpn_reg]) begin
                         // timeout
-                        retry_psn_mark_next[round_robin_qpn_reg]      = s_cpl_table_psn;
+                        retry_psn_mark_next[round_robin_qpn_reg]      = s_cpl_table_psn + 1;
                         retry_counter_next[round_robin_qpn_reg]       = retry_counter_reg[round_robin_qpn_reg] + 1;
                         total_retry_counter_next[round_robin_qpn_reg] = total_retry_counter_reg[round_robin_qpn_reg] + 1;
                         m_rd_table_psn_next = s_cpl_table_psn;
@@ -395,6 +427,15 @@ module RoCE_rtr_read_module #(
                         total_retry_counter_next[round_robin_qpn_reg] = total_retry_counter_reg[round_robin_qpn_reg] + 1;
                         m_rd_table_psn_next = psn_nak_reg[round_robin_qpn_reg] - 1;
                         qp_started_retrans_next[round_robin_qpn_reg] = 1'b1;
+                        qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
+                    end else if (qp_rnr_wait_done_reg[round_robin_qpn_reg]) begin
+                        // rnr wait finished
+                        rnr_retry_psn_mark_next[round_robin_qpn_reg]      = psn_nak_reg[round_robin_qpn_reg];
+                        rnr_retry_counter_next[round_robin_qpn_reg]       = rnr_retry_counter_reg[round_robin_qpn_reg] + 1;
+                        total_rnr_retry_counter_next[round_robin_qpn_reg] = total_rnr_retry_counter_reg[round_robin_qpn_reg] + 1;
+                        m_rd_table_psn_next = psn_nak_reg[round_robin_qpn_reg] - 1;
+                        qp_started_retrans_next[round_robin_qpn_reg] = 1'b1;
+                        qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b1;
                     end
                     m_rd_table_qpn_next = round_robin_qpn_reg;
 
@@ -429,11 +470,14 @@ module RoCE_rtr_read_module #(
                 end else begin
                     // if cpl table psn not eq than the psn mark (psn when retransmission is triggered) reset retry counter, it means that a avlid ACK is received 
                     if (s_cpl_table_psn != retry_psn_mark_reg[round_robin_qpn_reg]) begin
-                        retry_counter_next[round_robin_qpn_reg]       = 3'd0;
+                        retry_counter_next[round_robin_qpn_reg] = 3'd0;
+                    end
+                    if (s_cpl_table_psn != rnr_retry_psn_mark_reg[round_robin_qpn_reg]) begin
+                        rnr_retry_counter_next[round_robin_qpn_reg] = 3'd0;
                     end
 
                     // transmission complete, stop timeout counter for that QP
-                    qp_transmission_complete_next[round_robin_qpn_reg] = s_cpl_table_psn == s_wr_table_psn ? 1'b1 : 1'b0;
+                    qp_transmission_complete_next[round_robin_qpn_reg] = s_cpl_table_psn == s_wr_table_psn;
 
                     // check psn for WR and RD
                     if (s_wr_table_psn == s_rd_table_psn) begin
@@ -441,16 +485,31 @@ module RoCE_rtr_read_module #(
                         stall_qp_next[round_robin_qpn_reg] = 1'b0;
                         state_next = STATE_CHANGE_QPN;
                     end else begin
-                        // pointers are not the same, send read command to DMA, but first fetch header values
-                        hdr_ram_re_next   = 1'b1;
-                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  = s_rd_table_psn[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0] + 1;
-                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] = round_robin_qpn_reg[$clog2(MAX_QPS)-1:0];
-                        stall_qp_next[round_robin_qpn_reg] = 1'b0;
-                        if ((s_wr_table_psn -  s_cpl_table_psn) > psn_stall_thr) begin
+                        // pointers are not the same 
+                        if (qp_rnr_wait_reg[round_robin_qpn_reg]) begin
+                            // TODO what happens if this register changes in the middle of the state transistions STATE_CHECK_TIMEOUT --> STATE_FETCH_TABLES --> STATE_COMPARE?
+                            // RNR wait still on going, skip to the next QP
+                            state_next = STATE_CHANGE_QPN;
+                        end else begin
+                            //send read command to DMA, but first fetch header values
+                            hdr_ram_re_next   = 1'b1;
+                            hdr_ram_addr_next[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  = s_rd_table_psn[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0] + 1;
+                            hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] = round_robin_qpn_reg[$clog2(MAX_QPS)-1:0];
+                            stall_qp_next[round_robin_qpn_reg] = 1'b0;
+
+                            state_next = STATE_FETCH_HDR;
+                        end
+                        if ((s_wr_table_psn -  s_cpl_table_psn) > psn_stall_thr_stop) begin
                             // wr pointer and cpl pointer diff too big, stall that QP
                             stall_qp_next[round_robin_qpn_reg] = 1'b1;
+                        end else if (stall_qp_reg[round_robin_qpn_reg]) begin
+                            if ((s_wr_table_psn -  s_cpl_table_psn) <= psn_stall_thr_release) begin
+                                // isteresis
+                                stall_qp_next[round_robin_qpn_reg] = 1'b0;
+                            end else begin
+                                stall_qp_next[round_robin_qpn_reg] = 1'b1;
+                            end
                         end
-                        state_next = STATE_FETCH_HDR;
                     end
                 end
 
@@ -469,7 +528,7 @@ module RoCE_rtr_read_module #(
                     roce_bth_op_code_next == RC_SEND_LAST_IMD;
                     roce_bth_psn_next     = hdr_ram_data[RAM_PSN_OFFSET+:24];
                     roce_bth_p_key_next   = 16'hFFFF;
-                    roce_bth_dest_qp_next = hdr_ram_data[RAM_DEST_QPN_OFFSET+:24];
+                    roce_bth_dest_qp_next = cached_rem_qpn_reg[round_robin_qpn_reg];;
                     roce_bth_src_qp_next  = 24'd256 + round_robin_qpn_reg;
                     roce_bth_ack_req_next = 1'b1;
                     // RETH Fields
@@ -479,6 +538,8 @@ module RoCE_rtr_read_module #(
                     roce_immdh_data_next = hdr_ram_data[RAM_IMMD_DATA_OFFSET+:32];
                     // UDP length
                     udp_length_next = hdr_ram_data[RAM_UDP_LEN_OFFSET+:16];
+
+                    ip_dest_ip_next = cached_dest_ip_reg[round_robin_qpn_reg];
 
                     // DMA read command
                     dma_read_desc_valid_next = 1'b1;
@@ -597,6 +658,8 @@ module RoCE_rtr_read_module #(
 
             udp_length_reg       <= 16'd0;
 
+            ip_dest_ip_reg       <= 32'd0;
+
             qp_transmission_complete_reg <= 'd0;
 
             dma_read_desc_valid_reg <= 1'b0;
@@ -615,6 +678,7 @@ module RoCE_rtr_read_module #(
             round_robin_qpn_timeout_reg <= 'd0;
             qp_timed_out_reg            <= 'd0;
             qp_rnr_wait_reg             <= 'd0;
+            qp_rnr_wait_done_reg        <= 'd0;
             qp_psn_error_reg            <= 'd0;
             qp_error_reg                <= 'd0;
 
@@ -626,6 +690,7 @@ module RoCE_rtr_read_module #(
 
             qp_closed_reg <= 'd0;
             qp_started_retrans_reg <= 'd0;
+            qp_started_rnr_retrans_reg <= 'd0;
 
         end else begin
             state_reg        <= state_next;
@@ -666,6 +731,8 @@ module RoCE_rtr_read_module #(
 
             udp_length_reg       <= udp_length_next;
 
+            ip_dest_ip_reg       <= ip_dest_ip_next;
+
             qp_transmission_complete_reg <= qp_transmission_complete_next;
 
             dma_read_desc_valid_reg <= dma_read_desc_valid_next;
@@ -676,7 +743,8 @@ module RoCE_rtr_read_module #(
 
             stall_qp_reg <= stall_qp_next;
 
-            retry_psn_mark_reg <= retry_psn_mark_next;
+            retry_psn_mark_reg     <= retry_psn_mark_next;
+            rnr_retry_psn_mark_reg <= rnr_retry_psn_mark_next;
 
             m_qp_close_valid_reg   <= m_qp_close_valid_next;
             m_qp_close_loc_qpn_reg <= m_qp_close_loc_qpn_next;
@@ -684,11 +752,19 @@ module RoCE_rtr_read_module #(
 
             qp_closed_reg <= qp_closed_next;
             qp_started_retrans_reg <= qp_started_retrans_next;
+            qp_started_rnr_retrans_reg <= qp_started_rnr_retrans_next;
 
             retry_counter_reg           <= retry_counter_next;
             rnr_retry_counter_reg       <= rnr_retry_counter_next;
             total_retry_counter_reg     <= total_retry_counter_next;
             total_rnr_retry_counter_reg <= total_rnr_retry_counter_next;
+
+            if (s_qp_open_valid) begin
+                if (s_qp_open_loc_qpn >= 24'd256) begin
+                    cached_dest_ip_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]] <= s_qp_open_rem_ip_addr;
+                    cached_rem_qpn_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]] <= s_qp_open_rem_qpn;
+                end
+            end
 
 
             /*
@@ -700,14 +776,24 @@ module RoCE_rtr_read_module #(
             - Recieved a valid ACK on that QP
             */
             // RNR counter logic
-            if (rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS < 0 || rnr_counter_reg[round_robin_qpn_timeout_reg] == 0) begin
-                // RNR wait finished, deassert rnr wait bit
-                rnr_counter_reg[round_robin_qpn_timeout_reg] <= rnr_counter_reg[round_robin_qpn_timeout_reg];
-                qp_rnr_wait_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+            if (qp_rnr_wait_reg[round_robin_qpn_timeout_reg] && !qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg]) begin
+                if (rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS < 0 || rnr_counter_reg[round_robin_qpn_timeout_reg] == 0) begin
+                    // RNR wait finished, deassert rnr wait bit and asser rnr wait done
+                    rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg];
+                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                    qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b1;
+                end else begin
+                    // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
+                    rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS;
+                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                    qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                end
             end else begin
-                // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
-                rnr_counter_reg[round_robin_qpn_timeout_reg]  <= rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS;
-                qp_rnr_wait_reg[round_robin_qpn_timeout_reg] <= 1'b1;
+                // TODO FIX this
+                if (qp_started_retrans_reg[round_robin_qpn_timeout_reg] && qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg]) begin
+                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
+                    qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                end
             end
 
             // decode rx ACKs and timemout counter logic
@@ -718,16 +804,31 @@ module RoCE_rtr_read_module #(
                 case(s_roce_rx_aeth_syndrome[6:5])
                     2'b00:begin // ACK
                     // reset counter
-                        timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_period;
-                        qp_psn_error_reg[round_robin_qpn_timeout_reg] <= 1'b0;
-                        qp_rnr_wait_reg[round_robin_qpn_timeout_reg]  <= 1'b0;
+                        timeout_counter[round_robin_qpn_timeout_reg]      <= timeout_period;
+                        qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
+                        qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
+                        qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                        // reset rnr_retry_counter maybe?
+                        rnr_counter_reg[round_robin_qpn_timeout_reg]  <= 3'd0;
                     end
                     2'b01:begin // RNR NAK
                     // load rnr_counter
-                        timeout_counter[round_robin_qpn_timeout_reg]  <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]] + timeout_period;
-                        rnr_counter_reg[round_robin_qpn_timeout_reg]  <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
-                        qp_psn_error_reg[round_robin_qpn_timeout_reg] <= 1'b0;
-                        qp_rnr_wait_reg[round_robin_qpn_timeout_reg]  <= 1'b1;
+                        psn_nak_reg[round_robin_qpn_timeout_reg]          <= s_roce_rx_bth_psn;
+                        if (rnr_counter_reg[round_robin_qpn_timeout_reg] <= rnr_retry_count) begin
+                            timeout_counter[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]] + timeout_period;
+                            rnr_counter_reg[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
+                            qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
+                            qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                            qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                        end else begin
+                            // retry reached, error state
+                            timeout_counter[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]] + timeout_period;
+                            rnr_counter_reg[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
+                            qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
+                            qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
+                            qp_error_reg[round_robin_qpn_timeout_reg]         <= 1'b1;
+                            qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                        end
                     end
                     2'b10:begin // reserved, should not happen (ignore)
                         timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_counter[round_robin_qpn_timeout_reg] - MAX_QPS;
@@ -744,10 +845,11 @@ module RoCE_rtr_read_module #(
                                     // retry limit reached, close qp
                                     qp_error_reg[round_robin_qpn_timeout_reg] <= 1'b1;
                                 end else begin
-                                    timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_period;
-                                    qp_psn_error_reg[round_robin_qpn_timeout_reg] <= 1'b1;
-                                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]  <= 1'b0;
-                                    psn_nak_reg[round_robin_qpn_timeout_reg]      <= s_roce_rx_bth_psn;
+                                    timeout_counter[round_robin_qpn_timeout_reg]      <= timeout_period;
+                                    qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b1;
+                                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
+                                    qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                                    psn_nak_reg[round_robin_qpn_timeout_reg]          <= s_roce_rx_bth_psn;
                                 end
                             end
 
@@ -803,12 +905,13 @@ module RoCE_rtr_read_module #(
 
     axis_fifo #(
         .DEPTH(8),
-        .DATA_WIDTH(BUFFER_ADDR_WIDTH+13),
-        .KEEP_ENABLE(0),
-        .LAST_ENABLE(0),
-        .ID_ENABLE  (0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(0)
+        .DATA_WIDTH  (BUFFER_ADDR_WIDTH+13),
+        .KEEP_ENABLE (0),
+        .LAST_ENABLE (0),
+        .ID_ENABLE   (0),
+        .DEST_ENABLE (0),
+        .USER_ENABLE (0),
+        .RAM_PIPELINE(1)
     ) dma_read_command_fifo (
         .clk(clk),
         .rst(rst),
@@ -835,16 +938,18 @@ module RoCE_rtr_read_module #(
     );
 
     axis_fifo #(
-        .DEPTH(BURST_SIZE), 
+        .DEPTH(4096), // max packet size, it seems that the datamover doesn't like the tready going up and down during the transfer 
+        //.DEPTH(BURST_SIZE),
         //.DEPTH(DATA_WIDTH/8*4),
-        .DATA_WIDTH(DATA_WIDTH),
-        .KEEP_ENABLE(1),
-        .KEEP_WIDTH(DATA_WIDTH/8),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .FRAME_FIFO(0)
+        .DATA_WIDTH  (DATA_WIDTH),
+        .KEEP_ENABLE (1),
+        .KEEP_WIDTH  (DATA_WIDTH/8),
+        .ID_ENABLE   (0),
+        .DEST_ENABLE (0),
+        .USER_ENABLE (1),
+        .USER_WIDTH  (1),
+        .RAM_PIPELINE(1),
+        .FRAME_FIFO  (0)
     ) dma_read_payload_axis_fifo (
         .clk(clk),
         .rst(rst),
@@ -901,8 +1006,7 @@ module RoCE_rtr_read_module #(
     assign m_ip_ttl = 8'h40;
     assign m_ip_protocol = 8'h11;
     assign m_ip_header_checksum = 0;
-    // change this
-    assign m_ip_dest_ip = {8'd22,8'd1,8'd212,8'd16}; // TODO add proper table
+    assign m_ip_dest_ip = ip_dest_ip_reg;
     assign m_ip_source_ip = loc_ip_addr;
 
     assign m_udp_length      = udp_length_reg;

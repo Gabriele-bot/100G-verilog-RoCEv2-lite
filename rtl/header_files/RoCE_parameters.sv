@@ -92,7 +92,7 @@ package RoCE_params;
     time2clk(1e3/5e5, RoCE_CLOCK_PERIOD), // 500 kHz
     time2clk(1e3/1e6, RoCE_CLOCK_PERIOD), // 1 MHz
     time2clk(1e3/5e6, RoCE_CLOCK_PERIOD), // 5 MHz
-    time2clk(1e3/1e7, RoCE_CLOCK_PERIOD) // 10 MHz
+    time2clk(1e3/1e7, RoCE_CLOCK_PERIOD)  // 10 MHz
 
     };
 
@@ -102,7 +102,7 @@ package RoCE_params;
     /*
     Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
     */
-    parameter MAX_QUEUE_PAIRS = 2**3;
+    parameter MAX_QUEUE_PAIRS = 2**2;
 
     parameter MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
     //REQUESTS types

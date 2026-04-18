@@ -683,7 +683,7 @@ module RoCE_qp_state_module #(
   assign stop_transfer   = stop_transfer_reg;
 
   assign s_qp_update_context_ready = state_reg == STATE_UPDATE_QP;
-  assign s_qp_close_ready = state_reg          == STATE_ERROR_QP;
+  assign s_qp_close_ready          = state_reg == STATE_ERROR_QP;
   assign s_qp_context_req_ready = 1'b1;
 
 
