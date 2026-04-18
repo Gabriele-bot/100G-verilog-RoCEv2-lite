@@ -5,9 +5,7 @@ module RoCE_rtr_write_module #(
     parameter DATA_WIDTH = 64,
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter HEADER_ADDR_WIDTH = BUFFER_ADDR_WIDTH - 8,
-    parameter MAX_QPS = 4,
-    parameter CLOCK_PERIOD = 6.4,
-    parameter DEBUG = 0
+    parameter MAX_QPS = 4
 ) (
     input wire clk,
     input wire rst,

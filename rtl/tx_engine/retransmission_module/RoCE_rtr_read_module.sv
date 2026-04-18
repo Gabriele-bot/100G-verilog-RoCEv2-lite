@@ -5,9 +5,7 @@ module RoCE_rtr_read_module #(
     parameter DATA_WIDTH = 64,
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter HEADER_ADDR_WIDTH = BUFFER_ADDR_WIDTH - 8,
-    parameter MAX_QPS = 4,
-    parameter CLOCK_PERIOD = 6.4,
-    parameter DEBUG = 0
+    parameter MAX_QPS = 4
 ) (
     input wire clk,
     input wire rst,
@@ -135,10 +133,7 @@ module RoCE_rtr_read_module #(
     input  wire [23:0]  s_qp_open_loc_qpn,
     input  wire [23:0]  s_qp_open_rem_qpn,
     input  wire [31:0]  s_qp_open_rem_ip_addr,
-    /*
-    Status
-    */
-    output wire mem_full,
+    
     output wire [MAX_QPS-1:0]  stall_qp, // asserted when qp memory is almost full 
     /*
     Configuration
@@ -147,7 +142,14 @@ module RoCE_rtr_read_module #(
     input wire [2 :0] pmtu,
     input wire [2 :0] retry_count,
     input wire [2 :0] rnr_retry_count,
-    input wire [31:0] timeout_period
+    input wire [31:0] timeout_period,
+    /*
+    QP Status
+    */
+    input  wire [23:0]  monitor_qpn,
+    output wire [31:0]  n_retransmit_triggers,
+    output wire [31:0]  n_rnr_retransmit_triggers,
+    output wire [23:0]  psn_diff // WR - CPL psn difference  
 );
 
     import RoCE_params::*; // Imports RoCE parameters
@@ -282,12 +284,16 @@ module RoCE_rtr_read_module #(
     reg [23:0] m_qp_close_loc_qpn_reg, m_qp_close_loc_qpn_next;
     reg [23:0] m_qp_close_rem_psn_reg, m_qp_close_rem_psn_next;
 
+    reg [31:0] n_retransmit_triggers_reg, n_retransmit_triggers_next;
+    reg [31:0] n_rnr_retransmit_triggers_reg, n_rnr_retransmit_triggers_next;
+    reg [23:0] psn_diff_reg, psn_diff_next;
+
 
     always @(posedge clk) begin
         memory_steps  <= 4'd8 + pmtu;
         pmtu_val      <= 13'd1 << ( pmtu + 13'd8);
-        psn_stall_thr_stop    <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - (MAX_QPS + 4); // too little slack?
-        psn_stall_thr_release <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - ((MAX_QPS << 1) + 4);
+        psn_stall_thr_stop    <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - (MAX_QPS + 6); // too little slack?
+        psn_stall_thr_release <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - ((MAX_QPS << 1) + 6);
     end
 
 
@@ -358,6 +364,15 @@ module RoCE_rtr_read_module #(
 
         qp_started_retrans_next = qp_started_retrans_reg;
         qp_started_rnr_retrans_next = qp_started_rnr_retrans_reg;
+
+        if (round_robin_qpn_reg == (monitor_qpn-256)) begin
+            n_retransmit_triggers_next = total_retry_counter_reg[round_robin_qpn_reg];
+            n_rnr_retransmit_triggers_next = total_rnr_retry_counter_reg[round_robin_qpn_reg];
+        end else begin
+            n_retransmit_triggers_next = n_retransmit_triggers_reg;
+            n_rnr_retransmit_triggers_next = n_rnr_retransmit_triggers_reg;
+        end
+        psn_diff_next = psn_diff_reg;
 
         state_cached_next = state_cached_reg;
 
@@ -461,6 +476,9 @@ module RoCE_rtr_read_module #(
                 end
             end
             STATE_COMPARE: begin
+                if (round_robin_qpn_reg == (monitor_qpn-256)) begin
+                    psn_diff_next = s_wr_table_psn -  s_cpl_table_psn;
+                end
                 if (qp_closed_reg[round_robin_qpn_reg]) begin
                     qp_closed_next[round_robin_qpn_reg] = 1'b0;
 
@@ -692,6 +710,10 @@ module RoCE_rtr_read_module #(
             qp_started_retrans_reg <= 'd0;
             qp_started_rnr_retrans_reg <= 'd0;
 
+            n_retransmit_triggers_reg <= 'd0;
+            n_rnr_retransmit_triggers_reg <= 'd0;
+            psn_diff_reg <= 'd0;
+
         end else begin
             state_reg        <= state_next;
             state_cached_reg <= state_cached_next;
@@ -759,10 +781,20 @@ module RoCE_rtr_read_module #(
             total_retry_counter_reg     <= total_retry_counter_next;
             total_rnr_retry_counter_reg <= total_rnr_retry_counter_next;
 
+            n_retransmit_triggers_reg <= n_retransmit_triggers_next;
+            n_rnr_retransmit_triggers_reg <= n_rnr_retransmit_triggers_next;
+            psn_diff_reg <= psn_diff_next;
+
             if (s_qp_open_valid) begin
                 if (s_qp_open_loc_qpn >= 24'd256) begin
                     cached_dest_ip_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]] <= s_qp_open_rem_ip_addr;
                     cached_rem_qpn_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]] <= s_qp_open_rem_qpn;
+
+                    // reset counters for that qp
+                    retry_counter_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]]           <= 'd0;
+                    rnr_retry_counter_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]]       <= 'd0;
+                    total_retry_counter_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]]     <= 'd0;
+                    total_rnr_retry_counter_reg[s_qp_open_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 'd0;
                 end
             end
 
@@ -1037,6 +1069,10 @@ module RoCE_rtr_read_module #(
     assign m_qp_close_valid = m_qp_close_valid_reg;
     assign m_qp_close_loc_qpn = m_qp_close_loc_qpn_reg;
     assign m_qp_close_rem_psn = 0;
+
+    assign n_retransmit_triggers     = n_retransmit_triggers_reg;
+    assign n_rnr_retransmit_triggers = n_rnr_retransmit_triggers_reg;
+    assign psn_diff                  = psn_diff_reg;
 
 
 endmodule

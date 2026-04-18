@@ -357,7 +357,7 @@ module axi_ram_xpm #
                 end
             end
             READ_STATE_BURST: begin
-                if (s_axi_rready || !ram_rvalid_pipe_reg[0]) begin // all output pipes are empty or rready is asserted
+                if (s_axi_rready || !ram_rvalid_pipe_reg[0]) begin 
                     mem_rd_en = 1'b1;
                     s_axi_rvalid_next = 1'b1;
                     s_axi_rid_next = read_id_reg;
@@ -390,7 +390,7 @@ module axi_ram_xpm #
 
         s_axi_arready_reg <= s_axi_arready_next;
 
-        // just pipe the signals to be aligned wit the ram
+        // just pipe the signals to be aligned with the ram
         ram_rid_pipe_reg <= {ram_rid_pipe_reg[READ_LATENCY-2:0], s_axi_rid_next};   
         ram_rlast_pipe_reg <= {ram_rlast_pipe_reg[READ_LATENCY-2:0], s_axi_rlast_next}; 
         ram_rvalid_pipe_reg <= {ram_rvalid_pipe_reg[READ_LATENCY-2:0], s_axi_rvalid_next};

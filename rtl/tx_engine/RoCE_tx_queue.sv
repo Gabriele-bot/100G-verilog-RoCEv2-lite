@@ -4,7 +4,6 @@
 module RoCE_tx_queue #(
     parameter DATA_WIDTH                       = 256,
     parameter CLOCK_PERIOD                     = 6.4, // in ns
-    parameter DEBUG                            = 0,
     parameter LOCAL_QPN                        = 256,
     parameter REFRESH_CACHE_TICKS              = 32768
 ) (

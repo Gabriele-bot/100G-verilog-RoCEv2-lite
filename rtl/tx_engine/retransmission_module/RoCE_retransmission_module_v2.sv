@@ -6,8 +6,7 @@ module RoCE_retransmission_module_v2 #(
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter MAX_QPS = 4,
     parameter CLOCK_PERIOD = 6.4,
-    parameter USE_XILINX_XPM_SDPRAM = 1,
-    parameter DEBUG = 0
+    parameter USE_XILINX_XPM_SDPRAM = 1
 ) (
     input wire clk,
     input wire rst,
@@ -183,15 +182,8 @@ module RoCE_retransmission_module_v2 #(
     input   wire         m_qp_close_ready,
     output  wire [23:0]  m_qp_close_loc_qpn,
     output  wire [23:0]  m_qp_close_rem_psn,
-    /*
-    Status ?
-    */
-    // TODO add this as well
+    
     output wire [MAX_QPS-1:0]            stall_qp,
-    output wire [31:0]                   n_retransmit_triggers [MAX_QPS-1:0],
-    output wire [31:0]                   n_rnr_retransmit_triggers [MAX_QPS-1:0],
-    output wire [23:0]                   psn_diff [MAX_QPS-1:0],
-    output wire [BUFFER_ADDR_WIDTH -1:0] used_memory [MAX_QPS-1:0], // in bytes
     /*
     Configuration
     */
@@ -201,7 +193,14 @@ module RoCE_retransmission_module_v2 #(
     input wire [2 :0] rnr_retry_count,
     input wire [31:0] loc_ip_addr,
     input wire [2 :0] pmtu,
-    input wire        en_retrans
+
+    /*
+    QP Status
+    */
+    input  wire [23:0]  monitor_qpn,
+    output wire [31:0]  n_retransmit_triggers,
+    output wire [31:0]  n_rnr_retransmit_triggers,
+    output wire [23:0]  psn_diff // WR - CPL psn difference   
 );
 
     import RoCE_params::*; // Imports RoCE parameters
@@ -310,6 +309,7 @@ module RoCE_retransmission_module_v2 #(
 
     wire roce_rx_aeth_ready;
 
+
     assign  s_roce_rx_bth_ready  = roce_rx_aeth_ready;
     assign  s_roce_rx_aeth_ready = roce_rx_aeth_ready;
 
@@ -379,9 +379,7 @@ module RoCE_retransmission_module_v2 #(
     RoCE_rtr_write_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
-        .MAX_QPS(MAX_QPS),
-        .CLOCK_PERIOD(CLOCK_PERIOD),
-        .DEBUG(0)
+        .MAX_QPS(MAX_QPS)
     ) RoCE_rtr_write_module_instance (
         .clk(clk),
         .rst(rst),
@@ -465,9 +463,7 @@ module RoCE_retransmission_module_v2 #(
     RoCE_rtr_read_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
-        .MAX_QPS(MAX_QPS),
-        .CLOCK_PERIOD(CLOCK_PERIOD),
-        .DEBUG(DEBUG)
+        .MAX_QPS(MAX_QPS)
     ) RoCE_rtr_read_module_instance (
         .clk(clk),
         .rst(rst),
@@ -571,13 +567,17 @@ module RoCE_retransmission_module_v2 #(
         .s_cpl_table_qpn(s_cpl_table_qpn),
         .s_cpl_table_psn(s_cpl_table_psn),
 
-        .mem_full(),
         .stall_qp(stall_qp),
         .loc_ip_addr(loc_ip_addr),
         .pmtu(pmtu),
         .timeout_period(timeout_period),
         .retry_count(retry_count),
-        .rnr_retry_count(rnr_retry_count)
+        .rnr_retry_count(rnr_retry_count),
+
+        .monitor_qpn(monitor_qpn),
+        .n_retransmit_triggers(n_retransmit_triggers),
+        .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
+        .psn_diff(psn_diff)
     );
 
 

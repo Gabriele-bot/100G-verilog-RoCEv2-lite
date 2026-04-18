@@ -721,7 +721,7 @@ module fpga_core #(
         .OUT_KEEP_ENABLE                 (1),
         .OUT_KEEP_WIDTH                  (64),
         .CLOCK_PERIOD                    (1000/322.622),
-        .DEBUG                           (0),
+        .DEBUG                           (1),
         .REFRESH_CACHE_TICKS             (32767),
         .RETRANSMISSION                  (1),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(23),
@@ -834,10 +834,7 @@ module fpga_core #(
         .monitor_loc_qpn         (monitor_loc_qpn),
         
         // status
-        .last_buffered_psn        (last_buffered_psn),
-        .last_acked_psn           (last_acked_psn),
         .psn_diff                 (psn_diff),
-        .used_memory              (used_memory),
         .n_retransmit_triggers    (n_retransmit_triggers),
         .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
         
@@ -860,10 +857,10 @@ module fpga_core #(
         .probe_in1(transfer_time_moving_avg),
         .probe_in2(latency_avg),
         .probe_in3(latency_moving_avg),
-        .probe_in4(last_buffered_psn),
-        .probe_in5(last_acked_psn),
+        .probe_in4(0),
+        .probe_in5(0),
         .probe_in6(psn_diff),
-        .probe_in7(used_memory),
+        .probe_in7(0),
         .probe_in8(n_retransmit_triggers),
         .probe_in9(n_rnr_retransmit_triggers)
     );

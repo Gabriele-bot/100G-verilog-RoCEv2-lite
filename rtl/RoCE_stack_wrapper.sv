@@ -144,10 +144,7 @@ module RoCE_stack_wrapper #(
     output wire [31:0] latency_moving_avg,
     output wire [31:0] latency_inst,
 
-    output wire [23:0]                                  last_buffered_psn,
-    output wire [23:0]                                  last_acked_psn,
     output wire [23:0]                                  psn_diff,
-    output wire [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] used_memory,
     output wire [31:0]                                  n_retransmit_triggers,
     output wire [31:0]                                  n_rnr_retransmit_triggers
 
@@ -359,21 +356,6 @@ module RoCE_stack_wrapper #(
     wire                           m_roce_retrans_payload_axis_tready;
     wire                           m_roce_retrans_payload_axis_tlast;
     wire                           m_roce_retrans_payload_axis_tuser;
-
-    // status
-    wire [23:0]                                  tx_eng_last_buffered_psn [N_QUEUE_PAIRS-1:0];
-    wire [23:0]                                  tx_eng_last_acked_psn [N_QUEUE_PAIRS-1:0];
-    wire [23:0]                                  tx_eng_psn_diff [N_QUEUE_PAIRS-1:0];
-    wire [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] tx_eng_used_memory [N_QUEUE_PAIRS-1:0];
-    wire [31:0]                                  tx_eng_n_retransmit_triggers [N_QUEUE_PAIRS-1:0];
-    wire [31:0]                                  tx_eng_n_rnr_retransmit_triggers [N_QUEUE_PAIRS-1:0];
-
-    reg [23:0]                                  last_buffered_psn_reg;
-    reg [23:0]                                  last_acked_psn_reg;
-    reg [23:0]                                  psn_diff_reg;
-    reg [RETRANSMISSION_ADDR_BUFFER_WIDTH -1:0] used_memory_reg;
-    reg [31:0]                                  n_retransmit_triggers_reg;
-    reg [31:0]                                  n_rnr_retransmit_triggers_reg;
 
     wire latency_inst_valid;
 
@@ -1191,7 +1173,6 @@ module RoCE_stack_wrapper #(
             RoCE_tx_queue #(
                 .DATA_WIDTH(QP_CH_DATA_WIDTH),
                 .CLOCK_PERIOD(CLOCK_PERIOD),
-                .DEBUG(i==0),
                 .LOCAL_QPN(256+i),
                 .REFRESH_CACHE_TICKS(REFRESH_CACHE_TICKS)
             ) RoCE_tx_queue_instance (
@@ -1595,7 +1576,7 @@ module RoCE_stack_wrapper #(
 
             assign s_roce_arb_header[i*(ARB_HEADER_LENGTH)*8 +: (ARB_HEADER_LENGTH)*8] = roce_arb_header_temp;
 
-            assign s_roce_qp_arb_hdr_valid[i]      = roce_tx_eng_post_align_bth_valid; 
+            assign s_roce_qp_arb_hdr_valid[i]      = roce_tx_eng_post_align_bth_valid;
 
         end
     endgenerate
@@ -1642,8 +1623,7 @@ module RoCE_stack_wrapper #(
         .DATA_WIDTH       (OUT_DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH), // total buffer, all QPs
         .MAX_QPS          (N_QUEUE_PAIRS),
-        .CLOCK_PERIOD     (CLOCK_PERIOD),
-        .DEBUG            (DEBUG)
+        .CLOCK_PERIOD     (CLOCK_PERIOD)
     ) RoCE_retransmission_module_v2_instance (
         .clk(clk),
         .rst(rst),
@@ -1800,17 +1780,18 @@ module RoCE_stack_wrapper #(
         .m_qp_close_rem_psn(m_qp_close_rem_psn),
 
         .stall_qp                 (stall_qp),
-        .n_retransmit_triggers    (),
-        .n_rnr_retransmit_triggers(),
-        .psn_diff                 (),
-        .used_memory              (),
+
         .cfg_valid                (1),
         .timeout_period           (timeout_period),
         .retry_count              (retry_count),
         .rnr_retry_count          (rnr_retry_count),
         .loc_ip_addr              (loc_ip_addr),
         .pmtu                     (pmtu),
-        .en_retrans               (1)
+
+        .monitor_qpn              (monitor_loc_qpn),
+        .n_retransmit_triggers    (n_retransmit_triggers),
+        .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
+        .psn_diff                 (psn_diff)
     );
 
     axi_crossbar #(
@@ -2303,34 +2284,18 @@ module RoCE_stack_wrapper #(
         .rst_done(rst_done_latency)
     );
 
-
-    //ila_latency_distrib ila_latency_distrib_instance(
-    //    .clk(clk),
-    //    .probe0(histo_latency),
-    //    .probe1(histo_index),
-    //    .probe2(histo_dout_valid)
-    //);
-
-
-
-    // ease timings?
-    always @(posedge clk) begin
-        last_buffered_psn_reg         <= tx_eng_last_buffered_psn        [monitor_loc_qpn-256];
-        last_acked_psn_reg            <= tx_eng_last_acked_psn           [monitor_loc_qpn-256];
-        psn_diff_reg                  <= tx_eng_psn_diff                 [monitor_loc_qpn-256];
-        used_memory_reg               <= tx_eng_used_memory              [monitor_loc_qpn-256];
-        n_retransmit_triggers_reg     <= tx_eng_n_retransmit_triggers    [monitor_loc_qpn-256];
-        n_rnr_retransmit_triggers_reg <= tx_eng_n_rnr_retransmit_triggers[monitor_loc_qpn-256];
-    end
+    generate
+        if (DEBUG) begin
+            ila_latency_distrib ila_latency_distrib_instance(
+                .clk(clk),
+                .probe0(histo_latency),
+                .probe1(histo_index),
+                .probe2(histo_dout_valid)
+            );
+        end
+    endgenerate
 
 
-
-    assign last_buffered_psn         = last_buffered_psn_reg        ;
-    assign last_acked_psn            = last_acked_psn_reg           ;
-    assign psn_diff                  = psn_diff_reg                 ;
-    assign used_memory               = used_memory_reg              ;
-    assign n_retransmit_triggers     = n_retransmit_triggers_reg    ;
-    assign n_rnr_retransmit_triggers = n_rnr_retransmit_triggers_reg;
 
 
 
