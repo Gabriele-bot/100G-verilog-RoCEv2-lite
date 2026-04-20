@@ -133,7 +133,7 @@ module RoCE_rtr_read_module #(
     input  wire [23:0]  s_qp_open_loc_qpn,
     input  wire [23:0]  s_qp_open_rem_qpn,
     input  wire [31:0]  s_qp_open_rem_ip_addr,
-    
+
     output wire [MAX_QPS-1:0]  stall_qp, // asserted when qp memory is almost full 
     /*
     Configuration
@@ -189,7 +189,7 @@ module RoCE_rtr_read_module #(
     reg [3:0] memory_steps;
     reg [12:0] pmtu_val;
     reg [24-1:0] psn_stall_thr_stop; // threshold for qp stall
-    reg [24-1:0] psn_stall_thr_release; // threshold fro realease after stalling
+    reg [24-1:0] psn_stall_thr_release; // threshold for realease after stalling
 
     reg [$clog2(MAX_QPS)-1:0] round_robin_qpn_reg, round_robin_qpn_next;
 
@@ -393,7 +393,21 @@ module RoCE_rtr_read_module #(
                         qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
                         qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
                         state_next = STATE_FETCH_TABLES;
-                        // TODO add update rd pointer upon finish wait
+                        /*
+                        if (rnr_retry_counter_reg[round_robin_qpn_reg] < rnr_retry_count || rnr_retry_count == 3'd7) begin
+                            state_next = STATE_FETCH_TABLES;
+                        end else begin
+                            // rnr retry reached, close qp                        
+                            m_qp_close_valid_next = 1'b1;
+                            m_qp_close_loc_qpn_next = 24'd256 + round_robin_qpn_reg;
+                            qp_closed_next[round_robin_qpn_reg] = 1'b1;
+                            qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
+                            qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
+                            rnr_retry_psn_mark_next[round_robin_qpn_reg] = 24'd0; // to avoid continous rnr retransmission
+                            state_cached_next = STATE_CHANGE_QPN;
+                            state_next = STATE_WAIT_1CLK;
+                        end
+                        */
                     end else if (qp_timed_out_reg[round_robin_qpn_reg]) begin
                         // if timeout, bring rd pointer back to cpl pointer
                         // check retry count
@@ -404,6 +418,7 @@ module RoCE_rtr_read_module #(
                             qp_closed_next[round_robin_qpn_reg] = 1'b1;
                             qp_started_retrans_next[round_robin_qpn_reg] = 1'b0;
                             qp_started_rnr_retrans_next[round_robin_qpn_reg] = 1'b0;
+                            retry_psn_mark_next[round_robin_qpn_reg] = 24'd0; // to avoid continous retransmission
                             state_cached_next = STATE_CHANGE_QPN;
                             state_next = STATE_WAIT_1CLK;
                         end else begin
@@ -481,16 +496,16 @@ module RoCE_rtr_read_module #(
                 end
                 if (qp_closed_reg[round_robin_qpn_reg]) begin
                     qp_closed_next[round_robin_qpn_reg] = 1'b0;
-
+                    // is this one necessary
                     retry_counter_next[round_robin_qpn_reg] = 3'd0;
 
                     state_next = STATE_CHANGE_QPN;
                 end else begin
                     // if cpl table psn not eq than the psn mark (psn when retransmission is triggered) reset retry counter, it means that a avlid ACK is received 
-                    if (s_cpl_table_psn != retry_psn_mark_reg[round_robin_qpn_reg]) begin
+                    if (s_cpl_table_psn != retry_psn_mark_reg[round_robin_qpn_reg] - 1) begin
                         retry_counter_next[round_robin_qpn_reg] = 3'd0;
                     end
-                    if (s_cpl_table_psn != rnr_retry_psn_mark_reg[round_robin_qpn_reg]) begin
+                    if (s_cpl_table_psn != rnr_retry_psn_mark_reg[round_robin_qpn_reg] - 1) begin
                         rnr_retry_counter_next[round_robin_qpn_reg] = 3'd0;
                     end
 
@@ -809,16 +824,22 @@ module RoCE_rtr_read_module #(
             */
             // RNR counter logic
             if (qp_rnr_wait_reg[round_robin_qpn_timeout_reg] && !qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg]) begin
-                if (rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS < 0 || rnr_counter_reg[round_robin_qpn_timeout_reg] == 0) begin
-                    // RNR wait finished, deassert rnr wait bit and asser rnr wait done
-                    rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg];
-                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
-                    qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b1;
-                end else begin
-                    // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
-                    rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS;
-                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                // got a qp close request, reset coutner 
+                if (qp_closed_reg[round_robin_qpn_timeout_reg]) begin
+                    qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
                     qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                end else begin
+                    if (rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS < 0 || rnr_counter_reg[round_robin_qpn_timeout_reg] == 0) begin
+                        // RNR wait finished, deassert rnr wait bit and asser rnr wait done
+                        rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg];
+                        qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                        qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b1;
+                    end else begin
+                        // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
+                        rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS;
+                        qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
+                        qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                    end
                 end
             end else begin
                 // TODO FIX this
@@ -846,14 +867,14 @@ module RoCE_rtr_read_module #(
                     2'b01:begin // RNR NAK
                     // load rnr_counter
                         psn_nak_reg[round_robin_qpn_timeout_reg]          <= s_roce_rx_bth_psn;
-                        if (rnr_counter_reg[round_robin_qpn_timeout_reg] <= rnr_retry_count) begin
+                        if (rnr_retry_counter_reg[round_robin_qpn_timeout_reg] < rnr_retry_count || rnr_retry_count == 3'd7) begin
                             timeout_counter[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]] + timeout_period;
                             rnr_counter_reg[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
                             qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
                             qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
                             qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                         end else begin
-                            // retry reached, error state
+                            // rnr retry reached, error state
                             timeout_counter[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]] + timeout_period;
                             rnr_counter_reg[round_robin_qpn_timeout_reg]      <= RNR_TIMER_VALUES[s_roce_rx_aeth_syndrome[4:0]];
                             qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
@@ -922,6 +943,9 @@ module RoCE_rtr_read_module #(
                 qp_error_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                 qp_timed_out_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                 timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_period;
+                qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
+                qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
+                qp_psn_error_reg[round_robin_qpn_timeout_reg]     <= 1'b0;
             end
 
             if (qp_started_retrans_reg[round_robin_qpn_timeout_reg]) begin

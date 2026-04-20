@@ -726,6 +726,9 @@ module fpga_core #(
         .RETRANSMISSION                  (1),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(23),
         .N_QUEUE_PAIRS                   (4)
+        // Addr buffer 23 bits and 4 QP --> 2**23=8MB, 8MB/4QP = 2MB/QP --> 168 us/qp buffering time (all PMTU packets)
+        // Addr buffer 23 bits and 8 QP --> 2**23=8MB, 8MB/8QP = 1MB/QP --> 83 us/qp buffering time (all PMTU packets)
+	// remeber that you could cap each QP to a lower throughput, e.g. reducing the datapath width ( with the cmac the freq is 322MHz, 128b*322MHz=40Gbps)
     ) RoCE_stack_wrapper_instance (
         .clk(clk),
         .rst(rst),
