@@ -55,6 +55,8 @@ module udp_RoCE_connection_manager_rx #(
      */
     input  wire         s_udp_hdr_valid,
     output wire         s_udp_hdr_ready,
+    input  wire [ 31:0] s_ip_source_ip,
+    input  wire [ 31:0] s_ip_dest_ip,
     input  wire [ 15:0] s_udp_source_port,
     input  wire [ 15:0] s_udp_dest_port,
     input  wire [ 15:0] s_udp_length,
@@ -97,7 +99,11 @@ module udp_RoCE_connection_manager_rx #(
     /*
      * Status signals
      */
-    output wire busy
+    output wire busy,
+    /*
+     * Configuration
+     */
+     input wire [31:0] cfg_loc_ip_addr
 );
 
     parameter KEEP_ENABLE = 1;
@@ -121,7 +127,9 @@ module udp_RoCE_connection_manager_rx #(
     reg read_qp_info_reg = 1'b1, read_qp_info_next;
     reg [PTR_WIDTH-1:0] ptr_reg = 0, ptr_next;
 
-    localparam [2:0] STATE_IDLE = 3'd0, STATE_READ_METADATA = 3'd1;
+    localparam [2:0] STATE_IDLE = 3'd0, 
+                     STATE_READ_METADATA = 3'd1,
+                     STATE_DROP = 3'd2;
 
     reg [2:0] state_reg = STATE_IDLE, state_next;
 
@@ -230,13 +238,15 @@ module udp_RoCE_connection_manager_rx #(
                 txmeta_start_next    = 1'b0;
 
                 if (s_udp_hdr_ready && s_udp_hdr_valid) begin
-                    if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == (QP_INFO_SIZE + 16'd8)) begin
+                    if (s_udp_dest_port == LISTEN_UDP_PORT && s_udp_length == (QP_INFO_SIZE + 16'd8) && s_ip_dest_ip == cfg_loc_ip_addr) begin
                         state_next = STATE_READ_METADATA;
                         udp_port_next = s_udp_dest_port;
                         s_udp_hdr_ready_next = 1'b0;
                         s_udp_payload_axis_tready_next = 1'b1;
                     end else begin
-                        state_next = STATE_IDLE;
+                        s_udp_hdr_ready_next = 1'b0;
+                        s_udp_payload_axis_tready_next = 1'b1;
+                        state_next = STATE_DROP;
                     end
                 end else begin
                     state_next = STATE_IDLE;
@@ -247,7 +257,7 @@ module udp_RoCE_connection_manager_rx #(
                 s_udp_payload_axis_tready_next = 1'b1;
                 state_next = STATE_READ_METADATA;
 
-                if (s_udp_payload_axis_tready && s_udp_payload_axis_tvalid && udp_port_reg == LISTEN_UDP_PORT) begin
+                if (s_udp_payload_axis_tready && s_udp_payload_axis_tvalid) begin
 
                     ptr_next = ptr_reg + 1; 
 
@@ -346,6 +356,15 @@ module udp_RoCE_connection_manager_rx #(
 
                 end else begin
                     state_next = STATE_READ_METADATA;
+                end
+            end
+            STATE_DROP: begin // drop if wrong IP addr or UDP port 
+                if (s_udp_payload_axis_tvalid && s_udp_payload_axis_tready && s_udp_payload_axis_tlast) begin
+                    s_udp_hdr_ready_next = 1'b1;
+                    s_udp_payload_axis_tready_next = 1'b0;
+                    state_next = STATE_IDLE;
+                end else begin
+                    state_next = STATE_DROP;
                 end
             end
         endcase

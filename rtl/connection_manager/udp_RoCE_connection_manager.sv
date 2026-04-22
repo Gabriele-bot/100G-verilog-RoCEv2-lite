@@ -59,6 +59,8 @@ module udp_RoCE_connection_manager #(
      */
     input  wire         s_udp_hdr_valid,
     output wire         s_udp_hdr_ready,
+    input  wire [ 31:0] s_ip_source_ip,
+    input  wire [ 31:0] s_ip_dest_ip,
     input  wire [ 15:0] s_udp_source_port,
     input  wire [ 15:0] s_udp_dest_port,
     input  wire [ 15:0] s_udp_length,
@@ -244,6 +246,8 @@ module udp_RoCE_connection_manager #(
         .rst(rst),
         .s_udp_hdr_valid(s_udp_hdr_valid),
         .s_udp_hdr_ready(s_udp_hdr_ready),
+        .s_ip_source_ip(s_ip_source_ip),
+        .s_ip_dest_ip(s_ip_dest_ip),
         .s_udp_source_port(s_udp_source_port),
         .s_udp_dest_port(s_udp_dest_port),
         .s_udp_length(s_udp_length),
@@ -284,7 +288,9 @@ module udp_RoCE_connection_manager #(
         .m_txmeta_is_immediate(m_txmeta_is_immediate),
         .m_txmeta_tx_type     (m_txmeta_tx_type),
 
-        .busy(busy_rx)
+        .busy(busy_rx),
+
+        .cfg_loc_ip_addr(cfg_loc_ip_addr)
     );
 
 
@@ -406,7 +412,7 @@ module udp_RoCE_connection_manager #(
 
                 case (state_reg)
                     STATE_IDLE: begin
-                        if (m_qp_info_valid && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // check if it is targeting the local ip
+                        if (m_qp_info_valid) begin
                             case(m_qp_info_req_type)
                                 REQ_OPEN_QP: begin
 

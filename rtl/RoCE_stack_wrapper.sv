@@ -161,6 +161,8 @@ module RoCE_stack_wrapper #(
     // UDP frame connections to CM                
     wire                          rx_udp_cm_hdr_valid;
     wire                          rx_udp_cm_hdr_ready;
+    wire [31:0]                   rx_udp_cm_ip_source_ip;
+    wire [31:0]                   rx_udp_cm_ip_dest_ip;
     wire [15:0]                   rx_udp_cm_source_port;
     wire [15:0]                   rx_udp_cm_dest_port;
     wire [15:0]                   rx_udp_cm_length;
@@ -407,11 +409,13 @@ module RoCE_stack_wrapper #(
         end
     end
 
-    assign rx_udp_cm_hdr_valid   = s_select_cm && s_udp_hdr_valid;
-    assign rx_udp_cm_source_port = s_udp_source_port;
-    assign rx_udp_cm_dest_port   = s_udp_dest_port;
-    assign rx_udp_cm_length      = s_udp_length;
-    assign rx_udp_cm_checksum    = s_udp_checksum;
+    assign rx_udp_cm_hdr_valid     = s_select_cm && s_udp_hdr_valid;
+    assign rx_udp_cm_ip_source_ip  = s_ip_source_ip;
+    assign rx_udp_cm_ip_dest_ip    = s_ip_dest_ip;
+    assign rx_udp_cm_source_port   = s_udp_source_port;
+    assign rx_udp_cm_dest_port     = s_udp_dest_port;
+    assign rx_udp_cm_length        = s_udp_length;
+    assign rx_udp_cm_checksum      = s_udp_checksum;
 
     assign rx_udp_cm_payload_axis_tdata = s_udp_payload_axis_tdata;
     assign rx_udp_cm_payload_axis_tkeep = s_udp_payload_axis_tkeep;
@@ -710,6 +714,8 @@ module RoCE_stack_wrapper #(
 
         .s_udp_hdr_valid          (rx_udp_cm_hdr_valid),
         .s_udp_hdr_ready          (rx_udp_cm_hdr_ready),
+        .s_ip_source_ip           (rx_udp_cm_ip_source_ip),
+        .s_ip_dest_ip             (rx_udp_cm_ip_dest_ip),
         .s_udp_source_port        (rx_udp_cm_source_port),
         .s_udp_dest_port          (rx_udp_cm_dest_port),
         .s_udp_length             (rx_udp_cm_length),
