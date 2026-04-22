@@ -701,24 +701,24 @@ This module integrates the IP and ARP modules for a complete IP stack
  */
  generate 
 
-  if (DATA_WIDTH > 32) begin
+  if (DATA_WIDTH != 64) begin
 
-    wire [31:0] icmp_tx_ip_payload_64_axis_tdata;
-    wire [3 :0] icmp_tx_ip_payload_64_axis_tkeep;
+    wire [63:0] icmp_tx_ip_payload_64_axis_tdata;
+    wire [7 :0] icmp_tx_ip_payload_64_axis_tkeep;
     wire        icmp_tx_ip_payload_64_axis_tvalid;
     wire        icmp_tx_ip_payload_64_axis_tready;
     wire        icmp_tx_ip_payload_64_axis_tlast;
     wire        icmp_tx_ip_payload_64_axis_tuser;
 
-    wire [31:0] icmp_rx_ip_payload_64_axis_tdata;
-    wire [3 :0] icmp_rx_ip_payload_64_axis_tkeep;
+    wire [63:0] icmp_rx_ip_payload_64_axis_tdata;
+    wire [7 :0] icmp_rx_ip_payload_64_axis_tkeep;
     wire        icmp_rx_ip_payload_64_axis_tvalid;
     wire        icmp_rx_ip_payload_64_axis_tready;
     wire        icmp_rx_ip_payload_64_axis_tlast;
     wire        icmp_rx_ip_payload_64_axis_tuser;
 
     icmp_echo_reply #(
-      .DATA_WIDTH(32),
+      .DATA_WIDTH(64),
       .KEEP_ENABLE(1),
       .CHECKSUM_PAYLOAD_FIFO_DEPTH(2048),
       .CHECKSUM_HEADER_FIFO_DEPTH(8)
@@ -784,7 +784,7 @@ This module integrates the IP and ARP modules for a complete IP stack
         .DEPTH(512),
         .S_DATA_WIDTH(DATA_WIDTH),
         .S_KEEP_ENABLE(1),
-        .M_DATA_WIDTH(32),
+        .M_DATA_WIDTH(64),
         .M_KEEP_ENABLE(1),
         .ID_ENABLE(0),
         .DEST_ENABLE(0),
@@ -815,7 +815,7 @@ This module integrates the IP and ARP modules for a complete IP stack
     );
 
     axis_adapter #(
-        .S_DATA_WIDTH(32),
+        .S_DATA_WIDTH(64),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(DATA_WIDTH),
         .M_KEEP_ENABLE(1),
