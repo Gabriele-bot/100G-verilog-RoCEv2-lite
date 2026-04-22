@@ -127,6 +127,7 @@ module RoCE_minimal_stack #(
 );
 
     import RoCE_params::*; // Imports RoCE parameters
+    
 
     // UDP frame connections to CM                
     wire                        rx_udp_cm_hdr_valid;
@@ -421,22 +422,36 @@ module RoCE_minimal_stack #(
     reg s_select_none_reg = 1'b0;
 
 
-    wire        qp_init_valid;
+    wire        cm_qp_valid;
 
-    wire [2 :0] qp_init_req_type;
-    wire [31:0] qp_init_dma_transfer_length;
-    wire [23:0] qp_init_rem_qpn;
-    wire [23:0] qp_init_loc_qpn;
-    wire [23:0] qp_init_rem_psn;
-    wire [23:0] qp_init_loc_psn;
-    wire [31:0] qp_init_r_key;
-    wire [63:0] qp_init_rem_addr;
-    wire [31:0] qp_init_rem_ip_addr;
+    wire [2 :0] cm_qp_req_type;
+    wire [31:0] cm_qp_dma_transfer_length;
+    wire [23:0] cm_qp_rem_qpn;
+    wire [23:0] cm_qp_loc_qpn;
+    wire [23:0] cm_qp_rem_psn;
+    wire [23:0] cm_qp_loc_psn;
+    wire [31:0] cm_qp_r_key;
+    wire [63:0] cm_qp_rem_addr;
+    wire [31:0] cm_qp_rem_ip_addr;
     wire        qp_is_immediate;
     wire        qp_tx_type;
 
-    wire qp_init_status_valid;
-    wire [1:0] qp_init_status;
+    wire        cm_qp_status_valid;
+    wire [1 :0] cm_qp_status;
+    wire [2 :0] cm_qp_status_state;
+    wire [31:0] cm_qp_status_r_key;
+    wire [23:0] cm_qp_status_rem_qpn;
+    wire [23:0] cm_qp_status_loc_qpn;
+    wire [23:0] cm_qp_status_rem_psn;
+    wire [23:0] cm_qp_status_loc_psn;
+    wire [31:0] cm_qp_status_rem_ip_addr;
+    wire [63:0] cm_qp_status_rem_addr;
+
+    // CM master requests
+    wire        cm_qp_master_req_valid;
+    wire [2:0]  cm_qp_master_req_type;
+    wire [23:0] cm_qp_master_req_loc_qpn;
+    wire [31:0] cm_qp_master_req_rem_ip_addr;
 
     // QP request
     wire        m_qp_context_req;
@@ -657,7 +672,7 @@ module RoCE_minimal_stack #(
     end
 
     /*
-    WORKAROUND to to have only one qp in RTS at the same time
+    WORKAROUND to to have only one open qp at the same time
     */
     reg        qp_active;
     reg [23:0] curr_open_qpn;
@@ -667,10 +682,10 @@ module RoCE_minimal_stack #(
             curr_open_qpn <= 24'd0;
             qp_active     <= 1'b0;
         end else begin
-            if (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS && !qp_active) begin
-                curr_open_qpn <= qp_init_loc_qpn;
+            if (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP && !qp_active) begin
+                curr_open_qpn <= cm_qp_loc_qpn;
                 qp_active     <= 1'b1;
-            end else if (qp_init_valid && qp_init_req_type == REQ_CLOSE_QP && qp_active) begin
+            end else if (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP && qp_active) begin
                 curr_open_qpn <= 24'd0;
                 qp_active     <= 1'b0;
             end
@@ -685,7 +700,7 @@ module RoCE_minimal_stack #(
     ) axis_data_generator_instance (
         .clk(clk),
         .rst(rst),
-        .rst_word_ctr(qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+        .rst_word_ctr(cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
         .start(s_wr_req_valid && s_wr_req_ready),
         .stop((stop_transfer && en_retrans) || (stop_transfer_nack && ~en_retrans) || wr_error_qp_not_rts),
         .m_axis_tdata (s_payload_axis_tdata),
@@ -799,6 +814,8 @@ module RoCE_minimal_stack #(
         end
     end
 
+    reg [31:0] freq_counter_reg;
+
     always @(posedge clk) begin
 
         if (rst)  begin
@@ -827,10 +844,13 @@ module RoCE_minimal_stack #(
             end
 
             if (txmeta_valid && txmeta_start_transfer && ~transfer_ongoing) begin
-                transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency[4:0]];
+                //transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency[4:0]];
+                transmit_wait_ctnr    <= txmeta_frequency;
+                freq_counter_reg      <= txmeta_frequency;
             end else if (transmit_wait_ctnr == 64'd0) begin
                 if (s_wr_req_ready) begin
-                    transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency_reg[4:0]];
+                    //transmit_wait_ctnr    <= FREQ_CLK_COUNTER_VALUES[txmeta_frequency_reg[4:0]];
+                    transmit_wait_ctnr    <= txmeta_frequency_reg;
                 end else begin
                     transmit_wait_ctnr <= transmit_wait_ctnr;
                 end
@@ -913,9 +933,7 @@ module RoCE_minimal_stack #(
     );
 
     RoCE_simple_work_queue #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS)
-        //.QUEUE_LENGTH(64)
+        .DATA_WIDTH(DATA_WIDTH)
     ) RoCE_simple_work_queue_instance (
         .clk(clk),
         .rst(rst),
@@ -943,7 +961,7 @@ module RoCE_minimal_stack #(
         .s_wr_req_is_immediate  (m_wr_req_is_immediate),
         .s_wr_req_tx_type       (m_wr_req_tx_type),
 
-        .m_qp_context_req       (m_qp_context_req),
+        .m_qp_context_req_valid (m_qp_context_req),
         .m_qp_local_qpn_req     (m_qp_local_qpn_req),
         .s_qp_context_valid     (s_qp_req_context_valid),
         .s_qp_state             (s_qp_req_state),
@@ -1054,12 +1072,12 @@ module RoCE_minimal_stack #(
 
 
             wire [151:0] s_qp_params;
-            assign s_qp_params[31 :0  ] = qp_init_rem_ip_addr;
-            assign s_qp_params[55 :32 ] = qp_init_rem_qpn;
-            assign s_qp_params[79 :56 ] = qp_init_loc_qpn;
-            assign s_qp_params[111:80 ] = qp_init_r_key;
+            assign s_qp_params[31 :0  ] = cm_qp_rem_ip_addr;
+            assign s_qp_params[55 :32 ] = cm_qp_rem_qpn;
+            assign s_qp_params[79 :56 ] = cm_qp_loc_qpn;
+            assign s_qp_params[111:80 ] = cm_qp_r_key;
             assign s_qp_params[127:112] = 16'hffff; // p_key
-            assign s_qp_params[151:128] = qp_init_rem_psn;
+            assign s_qp_params[151:128] = cm_qp_rem_psn;
 
 
             RoCE_retransmission_module #(
@@ -1071,9 +1089,9 @@ module RoCE_minimal_stack #(
             ) RoCE_retransmission_module_instance (
                 .clk(clk),
                 .rst(rst || (wr_error_qp_not_rts && wr_error_loc_qpn == curr_open_qpn && qp_active)),
-                .rst_retry_cntr              (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+                .rst_retry_cntr              (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
                 .flow_ctrl_pause             (flow_ctrl_pause),
-                .s_qp_params_valid           (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+                .s_qp_params_valid           (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
                 .s_qp_params                 (s_qp_params),
                 .s_roce_aeth_valid           (m_roce_aeth_valid),
                 .s_roce_rx_aeth_syndrome     (m_roce_aeth_syndrome),
@@ -1208,7 +1226,7 @@ module RoCE_minimal_stack #(
                 .psn_diff(psn_diff),
                 .used_memory(used_memory),
                 // Config
-                .cfg_valid(qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS & !qp_active),
+                .cfg_valid(cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP & !qp_active),
                 .timeout_period(timeout_period),
                 .retry_count(retry_count),
                 .rnr_retry_count(rnr_retry_count),
@@ -1756,7 +1774,7 @@ module RoCE_minimal_stack #(
 
     udp_RoCE_connection_manager #(
         .DATA_WIDTH(DATA_WIDTH),
-        .LISTEN_UDP_PORT(CM_LISTEN_UDP_PORT)
+        .MODULE_DIRECTION("Slave")
     ) udp_RoCE_connection_manager_instance (
         .clk(clk),
         .rst(rst),
@@ -1789,18 +1807,32 @@ module RoCE_minimal_stack #(
         .m_udp_payload_axis_tlast(tx_udp_cm_payload_axis_tlast),
         .m_udp_payload_axis_tuser(tx_udp_cm_payload_axis_tuser),
 
-        .qp_init_valid(qp_init_valid),
-        .qp_init_req_type(qp_init_req_type),
-        .qp_init_r_key(qp_init_r_key),
-        .qp_init_rem_qpn(qp_init_rem_qpn),
-        .qp_init_loc_qpn(qp_init_loc_qpn),
-        .qp_init_rem_psn(qp_init_rem_psn),
-        .qp_init_loc_psn(qp_init_loc_psn),
-        .qp_init_rem_base_addr(qp_init_rem_addr),
-        .qp_init_rem_ip_addr(qp_init_rem_ip_addr),
-
-        .qp_init_status_valid(qp_init_status_valid),
-        .qp_init_status(qp_init_status),
+        // write to qp state
+        .cm_qp_valid        (cm_qp_valid),
+        .cm_qp_req_type     (cm_qp_req_type),
+        .cm_qp_r_key        (cm_qp_r_key),
+        .cm_qp_rem_qpn      (cm_qp_rem_qpn),
+        .cm_qp_loc_qpn      (cm_qp_loc_qpn),
+        .cm_qp_rem_psn      (cm_qp_rem_psn),
+        .cm_qp_loc_psn      (cm_qp_loc_psn),
+        .cm_qp_rem_base_addr(cm_qp_rem_addr),
+        .cm_qp_rem_ip_addr  (cm_qp_rem_ip_addr),
+        // read from qp state
+        .cm_qp_status_valid      (cm_qp_status_valid),
+        .cm_qp_status            (cm_qp_status),
+        .cm_qp_status_state      (cm_qp_status_state),
+        .cm_qp_status_r_key      (cm_qp_status_r_key),
+        .cm_qp_status_rem_qpn    (cm_qp_status_rem_qpn),
+        .cm_qp_status_loc_qpn    (cm_qp_status_loc_qpn),
+        .cm_qp_status_rem_psn    (cm_qp_status_rem_psn),
+        .cm_qp_status_loc_psn    (cm_qp_status_loc_psn),
+        .cm_qp_status_rem_ip_addr(cm_qp_status_rem_ip_addr),
+        .cm_qp_status_rem_addr   (cm_qp_status_rem_addr),
+        // Request (for master only)
+        .cm_qp_master_req_valid(cm_qp_master_req_valid),
+        .cm_qp_master_req_type(cm_qp_master_req_type),
+        .cm_qp_master_req_loc_qpn(cm_qp_master_req_loc_qpn),
+        .cm_qp_master_req_rem_ip_addr(cm_qp_master_req_rem_ip_addr),
 
         .m_metadata_valid     (txmeta_valid),
         .m_start_transfer     (txmeta_start_transfer),
@@ -1812,9 +1844,7 @@ module RoCE_minimal_stack #(
         .m_txmeta_frequency   (txmeta_frequency),
 
         .cfg_udp_source_port(16'h8765),
-        .cfg_loc_ip_addr(loc_ip_addr),
-
-        .busy()
+        .cfg_loc_ip_addr(loc_ip_addr)
     );
 
     udp_arb_mux #(
@@ -1891,26 +1921,33 @@ module RoCE_minimal_stack #(
 
 
     RoCE_qp_state_module #(
-        .MAX_QUEUE_PAIRS(MAX_QUEUE_PAIRS),
         .REM_ADDR_WIDTH(16)
     ) RoCE_qp_state_module_instance (
         .clk                    (clk),
         .rst                    (rst),
-        .rst_qp                 (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS),
-        // open qp
-        .qp_init_valid          (qp_init_valid),
-        .qp_init_req_type       (qp_init_req_type),
-        .qp_init_r_key          (qp_init_r_key),
-        .qp_init_rem_qpn        (qp_init_rem_qpn),
-        .qp_init_loc_qpn        (qp_init_loc_qpn),
-        .qp_init_rem_psn        (qp_init_rem_psn),
-        .qp_init_loc_psn        (qp_init_loc_psn),
-        .qp_init_rem_ip_addr    (qp_init_rem_ip_addr),
-        .qp_init_rem_addr       (qp_init_rem_addr),
-        //open status
-        .qp_init_status_valid(qp_init_status_valid),
-        .qp_init_status(qp_init_status),
-        // close qp if transfer did not succed
+        .rst_qp                 (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
+        // cm write interface
+        .cm_qp_valid          (cm_qp_valid),
+        .cm_qp_req_type       (cm_qp_req_type),
+        .cm_qp_r_key          (cm_qp_r_key),
+        .cm_qp_rem_qpn        (cm_qp_rem_qpn),
+        .cm_qp_loc_qpn        (cm_qp_loc_qpn),
+        .cm_qp_rem_psn        (cm_qp_rem_psn),
+        .cm_qp_loc_psn        (cm_qp_loc_psn),
+        .cm_qp_rem_ip_addr    (cm_qp_rem_ip_addr),
+        .cm_qp_rem_addr       (cm_qp_rem_addr),
+        //cm read interface
+        .cm_qp_status_valid      (cm_qp_status_valid),
+        .cm_qp_status            (cm_qp_status),
+        .cm_qp_status_state      (cm_qp_status_state),
+        .cm_qp_status_r_key      (cm_qp_status_r_key),
+        .cm_qp_status_rem_qpn    (cm_qp_status_rem_qpn),
+        .cm_qp_status_loc_qpn    (cm_qp_status_loc_qpn),
+        .cm_qp_status_rem_psn    (cm_qp_status_rem_psn),
+        .cm_qp_status_loc_psn    (cm_qp_status_loc_psn),
+        .cm_qp_status_rem_ip_addr(cm_qp_status_rem_ip_addr),
+        .cm_qp_status_rem_addr   (cm_qp_status_rem_addr),
+        // close qp if transfer did not succeed
         .qp_close_valid(qp_close_params_valid),
         .qp_close_loc_qpn(qp_close_params[79 :56 ]), // loc_qpn
         // QP request
@@ -1964,7 +2001,7 @@ module RoCE_minimal_stack #(
     RoCE_latency_eval RoCE_latency_eval_instance (
         .clk(clk),
         .rst(rst),
-        .start_i                 (qp_init_valid && qp_init_req_type == REQ_MODIFY_QP_RTS),
+        .start_i                 (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
         .s_roce_rx_bth_valid     (m_roce_rx_to_dropper_bth_valid),
         .s_roce_rx_bth_op_code   (m_roce_rx_to_dropper_bth_op_code),
         .s_roce_rx_bth_p_key     (m_roce_rx_to_dropper_bth_p_key),

@@ -1,0 +1,10 @@
+[Unit]
+Description=SoftRoCE
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rxe_all.sh
+
+[Install]
+WantedBy=multi-user.target

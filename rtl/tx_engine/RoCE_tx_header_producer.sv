@@ -13,7 +13,7 @@ module RoCE_tx_header_producer #(
      */
     input  wire       s_dma_meta_valid,
     output wire       s_dma_meta_ready,
-    input wire [31:0] s_dma_length, // used on for WRITE operations
+    input wire [31:0] s_dma_length, // used for WRITE operations
     input wire [23:0] s_rem_qpn,
     input wire [23:0] s_loc_qpn,
     input wire [23:0] s_rem_psn,
@@ -33,7 +33,7 @@ module RoCE_tx_header_producer #(
     input  wire                      s_axis_tvalid,
     output wire                      s_axis_tready,
     input  wire                      s_axis_tlast,
-    input  wire [14              :0] s_axis_tuser,// length (13bits), last packet in tranfer, bad frame 
+    input  wire [14              :0] s_axis_tuser, // length (13bits), last packet in tranfer, bad frame 
 
 
     /*
@@ -85,6 +85,9 @@ module RoCE_tx_header_producer #(
     input  wire                      m_roce_payload_axis_tready,
     output wire                      m_roce_payload_axis_tlast,
     output wire                      m_roce_payload_axis_tuser,
+
+    input  wire                      stall,
+
     // config
     input  wire [               2:0] pmtu,
     input  wire [              15:0] RoCE_udp_port,
@@ -115,10 +118,12 @@ module RoCE_tx_header_producer #(
     STATE_MIDDLE_LAST_HEADER  = 3'd3,
     STATE_MIDDLE_LAST_PAYLOAD = 3'd4,
     STATE_ONLY                = 3'd5,
-    STATE_WRITE_PAYLOAD_LAST  = 3'd6,
-    STATE_ERROR               = 3'd7;
+    STATE_SEND_HEADER         = 3'd6,
+    STATE_STALL               = 3'd7;
+
 
     reg [2:0] state_reg, state_next;
+    reg [2:0] state_cached_reg, state_cached_next;
 
     //localparam [31:0] LOC_IP_ADDR = {8'd22, 8'd1, 8'd212, 8'd10};
     localparam [15:0] LOC_UDP_PORT = 16'h2123;
@@ -203,6 +208,8 @@ module RoCE_tx_header_producer #(
     wire                      first_axi_frame;
     wire                      last_axi_frame;
 
+    reg header_sent_reg, header_sent_next;
+
     reg  [  DATA_WIDTH - 1:0] last_word_data_reg = {DATA_WIDTH{1'b0}};
     reg  [DATA_WIDTH/8 - 1:0] last_word_keep_reg = {DATA_WIDTH / 8{1'b0}};
 
@@ -235,6 +242,7 @@ module RoCE_tx_header_producer #(
     always @* begin
 
         state_next                    = STATE_IDLE;
+        state_cached_next             = state_cached_reg;
 
         s_axis_tready_next            = 1'b0;
 
@@ -287,6 +295,8 @@ module RoCE_tx_header_producer #(
 
         s_dma_meta_ready_next         = 1'b0;
 
+        header_sent_next = header_sent_reg;
+
         m_axis_tdata_int              = {DATA_WIDTH{1'b0}};
         m_axis_tkeep_int              = {DATA_WIDTH / 8{1'b0}};
         m_axis_tvalid_int             = 1'b0;
@@ -338,7 +348,7 @@ module RoCE_tx_header_producer #(
                         roce_immdh_valid_next = s_is_immediate_reg;
 
                         ip_source_ip_next     = loc_ip_addr;
-                        ip_dest_ip_next       = s_rem_addr_reg;
+                        ip_dest_ip_next       = s_rem_ip_addr_reg;
 
                         udp_source_port_next  = s_src_udp_port_reg;
                         udp_dest_port_next    = RoCE_udp_port;
@@ -377,10 +387,17 @@ module RoCE_tx_header_producer #(
                         psn_next              = s_rem_psn_reg;
 
                         if (s_axis_tlast) begin
-                            state_next = STATE_IDLE;
-                        end 
+                            if (stall) begin
+                                state_next            = STATE_STALL;
+                                state_cached_next     = STATE_IDLE;
+                                s_axis_tready_next    = 1'b0;
+                            end else begin
+                                state_next            = STATE_IDLE;
+                            end
+                        end
 
                     end else begin // frame length equal to pmtu and not last packet--> FIRST
+
                         state_next            = STATE_FIRST;
 
                         roce_bth_valid_next   = 1'b1;
@@ -420,6 +437,10 @@ module RoCE_tx_header_producer #(
 
                 state_next = state_reg;
 
+                if (m_roce_bth_valid && m_roce_bth_ready) begin
+                    header_sent_next = 1'b1;
+                end
+
                 s_axis_tready_next = m_axis_tready_int_early;
 
                 m_axis_tdata_int  = s_axis_tdata;
@@ -429,18 +450,42 @@ module RoCE_tx_header_producer #(
                 m_axis_tuser_int  = s_axis_tuser[0];
 
                 if (s_axis_tready && s_axis_tvalid) begin
-                    if (s_axis_tuser[0]) begin
+                    if (s_axis_tuser[0]) begin // error
                         s_axis_tready_next    = 1'b0;
-                        s_dma_meta_ready_next = !roce_bth_valid_next;
-                        state_next = STATE_IDLE;
+                        if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                            header_sent_next = 1'b0;
+                            s_dma_meta_ready_next = !roce_bth_valid_next;
+                            state_next = STATE_IDLE;
+                        end else begin // header not yet sent, need to wait
+                            s_axis_tready_next    = 1'b0;
+                            s_dma_meta_ready_next = 1'b0;
+                            state_next = STATE_SEND_HEADER;
+                            state_cached_next = STATE_IDLE;
+                        end
                     end else begin
                         //remaining_length_next = remaining_length_reg - DATA_WIDTH / 8;
                         packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
                         total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
                         if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val) begin
-                            // transition to middle/last when packet instal length reach PMTU
+                            // transition to middle/last when packet instantaneus length reaches PMTU
                             packet_inst_length_next = 14'd0;
-                            state_next = STATE_MIDDLE_LAST_HEADER;
+
+                            if (stall) begin
+                                state_next            = STATE_STALL;
+                                state_cached_next     = STATE_MIDDLE_LAST_HEADER;
+                                header_sent_next      = 1'b0;
+                                s_axis_tready_next    = 1'b0;
+                                s_dma_meta_ready_next = 1'b0;
+                            end else begin
+                                if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                    header_sent_next = 1'b0;
+                                    state_next = STATE_MIDDLE_LAST_HEADER;
+                                end else begin // header not yet sent, need to wait
+                                    s_axis_tready_next    = 1'b0;
+                                    state_next = STATE_SEND_HEADER;
+                                    state_cached_next = STATE_MIDDLE_LAST_HEADER;
+                                end
+                            end
                         end else begin
                             state_next = STATE_FIRST;
                         end
@@ -451,7 +496,18 @@ module RoCE_tx_header_producer #(
 
                 state_next = state_reg;
 
-                s_axis_tready_next = m_axis_tready_int_early;
+                //s_axis_tready_next = m_axis_tready_int_early;
+                s_axis_tready_next = m_axis_tready_int_early && !stall;
+
+
+                if (stall) begin
+                    state_next            = STATE_STALL;
+                    state_cached_next     = state_reg;
+                end
+
+                if (m_roce_bth_ready) begin // header can be sent out
+                    header_sent_next = 1'b1;
+                end
 
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
@@ -501,15 +557,43 @@ module RoCE_tx_header_producer #(
 
                     packet_inst_length_next = packet_inst_length_reg + DATA_WIDTH / 8;
                     total_packet_inst_length_next = total_packet_inst_length_reg + DATA_WIDTH / 8;
-                    if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val || s_axis_tlast) begin
+                    if (packet_inst_length_reg + DATA_WIDTH / 8 >= pmtu_val || s_axis_tlast) begin // got the entire packet
                         if (s_axis_tuser[1]) begin // last packet
                             packet_inst_length_next = 14'd0;
                             s_axis_tready_next    = 1'b0;
                             s_dma_meta_ready_next = !roce_bth_valid_next;
-                            state_next = STATE_IDLE;
-                        end else begin
+                            if (stall) begin
+                                state_next            = STATE_STALL;
+                                state_cached_next     = STATE_IDLE;
+                                s_axis_tready_next    = 1'b0;
+                                s_dma_meta_ready_next = 1'b0;
+                            end else begin
+                                if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                    header_sent_next = 1'b0;
+                                    state_next = STATE_IDLE;
+                                end else begin // header not yet sent, need to wait
+                                    s_axis_tready_next    = 1'b0;
+                                    s_dma_meta_ready_next = 1'b0;
+                                    state_next = STATE_SEND_HEADER;
+                                    state_cached_next = STATE_IDLE;
+                                end
+                            end
+                        end else begin // not last packet, need to send another
                             packet_inst_length_next = 14'd0;
-                            state_next = STATE_MIDDLE_LAST_HEADER;
+                            if (stall) begin
+                                state_next            = STATE_STALL;
+                                state_cached_next     = STATE_MIDDLE_LAST_HEADER;
+                                s_axis_tready_next    = 1'b0;
+                            end else begin
+                                if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                    header_sent_next = 1'b0;
+                                    state_next = STATE_MIDDLE_LAST_HEADER;
+                                end else begin // header not yet sent, need to wait
+                                    s_axis_tready_next    = 1'b0;
+                                    state_next = STATE_SEND_HEADER;
+                                    state_cached_next = STATE_MIDDLE_LAST_HEADER;
+                                end
+                            end
                         end
                     end else begin
                         state_next = STATE_MIDDLE_LAST_PAYLOAD;
@@ -519,6 +603,10 @@ module RoCE_tx_header_producer #(
             STATE_MIDDLE_LAST_PAYLOAD: begin
 
                 state_next = state_reg;
+
+                if (m_roce_bth_valid && m_roce_bth_ready) begin
+                    header_sent_next = 1'b1;
+                end
 
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
@@ -541,10 +629,38 @@ module RoCE_tx_header_producer #(
                                 packet_inst_length_next = 14'd0;
                                 s_axis_tready_next    = 1'b0;
                                 s_dma_meta_ready_next = !roce_bth_valid_next;
-                                state_next = STATE_IDLE;
+                                if (stall) begin
+                                    state_next            = STATE_STALL;
+                                    state_cached_next     = STATE_IDLE;
+                                    s_axis_tready_next    = 1'b0;
+                                    s_dma_meta_ready_next = 1'b0;
+                                end else begin
+                                    if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                        header_sent_next = 1'b0;
+                                        state_next = STATE_IDLE;
+                                    end else begin // header not yet sent, need to wait
+                                        s_axis_tready_next    = 1'b0;
+                                        s_dma_meta_ready_next = 1'b0;
+                                        state_next = STATE_SEND_HEADER;
+                                        state_cached_next = STATE_IDLE;
+                                    end
+                                end
                             end else begin
                                 packet_inst_length_next = 14'd0;
-                                state_next = STATE_MIDDLE_LAST_HEADER;
+                                if (stall) begin
+                                    state_next            = STATE_STALL;
+                                    state_cached_next     = STATE_MIDDLE_LAST_HEADER;
+                                    s_axis_tready_next    = 1'b0;
+                                end else begin
+                                    if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                        header_sent_next = 1'b0;
+                                        state_next = STATE_MIDDLE_LAST_HEADER;
+                                    end else begin // header not yet sent, need to wait
+                                        s_axis_tready_next    = 1'b0;
+                                        state_next = STATE_SEND_HEADER;
+                                        state_cached_next = STATE_MIDDLE_LAST_HEADER;
+                                    end
+                                end
                             end
                         end else begin
                             state_next = STATE_MIDDLE_LAST_PAYLOAD;
@@ -556,6 +672,10 @@ module RoCE_tx_header_producer #(
             STATE_ONLY: begin
 
                 state_next = state_reg;
+
+                if (m_roce_bth_valid && m_roce_bth_ready) begin
+                    header_sent_next = 1'b1;
+                end
 
                 m_axis_tdata_int  = s_axis_tdata;
                 m_axis_tkeep_int  = s_axis_tkeep;
@@ -578,21 +698,41 @@ module RoCE_tx_header_producer #(
                         if (s_axis_tlast) begin
                             s_dma_meta_ready_next = !roce_bth_valid_next;
                             s_axis_tready_next    = 1'b0;
-                            state_next = STATE_IDLE;
+                            if (stall) begin
+                                state_next            = STATE_STALL;
+                                state_cached_next     = STATE_IDLE;
+                                s_axis_tready_next    = 1'b0;
+                                s_dma_meta_ready_next = 1'b0;
+                            end else begin
+                                if (header_sent_reg || m_roce_bth_ready) begin // header sent or ready to be sent
+                                    header_sent_next = 1'b0;
+                                    state_next = STATE_IDLE;
+                                end else begin // header not yet sent, need to wait
+                                    s_axis_tready_next    = 1'b0;
+                                    state_next = STATE_SEND_HEADER;
+                                    state_cached_next = STATE_IDLE;
+                                end
+                            end
                         end
                     end
                 end
             end
-            STATE_ERROR: begin
-                state_next = state_reg;
-                m_axis_tdata_int = {DATA_WIDTH{1'b0}};
-                m_axis_tkeep_int = {DATA_WIDTH / 8{1'b0}};
-                m_axis_tvalid_int = 1'b0;
-                m_axis_tlast_int = 1'b0;
-                s_axis_tready_next = 1'b0;
-                if (rst) begin
-                    s_dma_meta_ready_next = !roce_bth_valid_next;
-                    state_next = STATE_IDLE;
+            STATE_STALL: begin
+                if (stall) begin
+                    state_next            = STATE_STALL;
+                    s_axis_tready_next    = 1'b0;
+                    s_dma_meta_ready_next = 1'b0;
+                end else begin
+                    state_next            = state_cached_reg;
+                    s_dma_meta_ready_next = 1'b0;
+                end
+            end
+            STATE_SEND_HEADER: begin
+                header_sent_next = 1'b0;
+                if (m_roce_bth_valid && m_roce_bth_ready) begin
+                    state_next            = state_cached_reg;
+                end else begin
+                    state_next = STATE_SEND_HEADER;
                 end
             end
         endcase
@@ -604,7 +744,12 @@ module RoCE_tx_header_producer #(
     always @(posedge clk) begin
 
         if (rst) begin
-            state_reg   <= STATE_IDLE;
+            state_reg          <= STATE_IDLE;
+            state_cached_reg   <= STATE_IDLE;
+
+            header_sent_reg <= 1'b0;
+
+            s_dma_meta_ready_reg <= 1'b0;
 
             s_immediate_data_reg <= 32'd0;
 
@@ -612,6 +757,11 @@ module RoCE_tx_header_producer #(
             total_packet_inst_length_reg <= 32'd0;
 
             psn_reg                      <= 24'd0;
+
+            roce_bth_valid_reg   <= 1'b0;
+            roce_reth_valid_reg  <= 1'b0;
+            roce_immdh_valid_reg <= 1'b0;
+
 
             eth_dest_mac_reg             <= 48'h0;
             eth_src_mac_reg              <= 48'h0;
@@ -645,6 +795,9 @@ module RoCE_tx_header_producer #(
 
         end else begin
             state_reg <= state_next;
+            state_cached_reg <= state_cached_next;
+
+            header_sent_reg <= header_sent_next;
 
             s_axis_tready_reg <= s_axis_tready_next;
 
@@ -735,7 +888,7 @@ module RoCE_tx_header_producer #(
 
     end
 
-    assign s_dma_meta_ready = s_dma_meta_ready_reg;
+    //assign s_dma_meta_ready = s_dma_meta_ready_reg;
 
     assign m_roce_bth_valid     = roce_bth_valid_reg;
     assign m_roce_reth_valid    = roce_reth_valid_reg;

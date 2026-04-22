@@ -4,7 +4,8 @@
 
 module qpn_fifo_init #
     (
-    parameter MAX_QUEUE_PAIRS = 4
+    parameter MAX_QUEUE_PAIRS_FIFO = 4,
+    parameter BASE_QPN_FIFO        = 2**8
 )
 (
     input  wire                  clk,
@@ -25,10 +26,10 @@ module qpn_fifo_init #
 );
 
     /*
-  Local QP number starts from 2**8 and goes up to 2**8 + 2**(MAX_QUEUE_PAIRS)
+  Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
   */
 
-    localparam MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
+    localparam MAX_QUEUE_PAIRS_FIFO_WIDTH = $clog2(MAX_QUEUE_PAIRS_FIFO);
 
     localparam [0:0]
     STATE_IDLE = 1'd0,
@@ -44,17 +45,17 @@ module qpn_fifo_init #
 
     reg s_qpn_ready_reg = 1'b0, s_qpn_ready_next;
 
-    reg [MAX_QUEUE_PAIRS_WIDTH:0] fifo_wr_ptr_reg = {MAX_QUEUE_PAIRS_WIDTH+1{1'b0}}, fifo_wr_ptr_next;
-    reg [MAX_QUEUE_PAIRS_WIDTH:0] fifo_rd_ptr_reg = {MAX_QUEUE_PAIRS_WIDTH+1{1'b0}}, fifo_rd_ptr_next;
+    reg [MAX_QUEUE_PAIRS_FIFO_WIDTH:0] fifo_wr_ptr_reg = {MAX_QUEUE_PAIRS_FIFO_WIDTH+1{1'b0}}, fifo_wr_ptr_next;
+    reg [MAX_QUEUE_PAIRS_FIFO_WIDTH:0] fifo_rd_ptr_reg = {MAX_QUEUE_PAIRS_FIFO_WIDTH+1{1'b0}}, fifo_rd_ptr_next;
 
-    reg [23:0] qpn_mem[(2**MAX_QUEUE_PAIRS_WIDTH)-1:0];
+    reg [23:0] qpn_mem[(2**MAX_QUEUE_PAIRS_FIFO_WIDTH)-1:0];
 
     reg [23:0] m_qpn_reg = 24'd0;
     reg m_qpn_valid_reg = 1'b0, m_qpn_valid_next;
 
     // full when first MSB different but rest same
-    wire fifo_full = ((fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_WIDTH] != fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_WIDTH]) &&
-    (fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_WIDTH-1:0] == fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_WIDTH-1:0]));
+    wire fifo_full = ((fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH] != fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH]) &&
+    (fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH-1:0] == fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH-1:0]));
     // empty when pointers match exactly
     wire fifo_empty = fifo_wr_ptr_reg == fifo_rd_ptr_reg;
 
@@ -89,16 +90,16 @@ module qpn_fifo_init #
 
     always @(posedge clk) begin
         if (rst) begin
-            for (i = 0; i < MAX_QUEUE_PAIRS; i = i + 1) begin
-                qpn_mem[i] <= 24'd256 + i;
+            for (i = 0; i < MAX_QUEUE_PAIRS_FIFO; i = i + 1) begin
+                qpn_mem[i] <= BASE_QPN_FIFO + i;
             end
-            fifo_wr_ptr_reg <= {1'b1, {MAX_QUEUE_PAIRS_WIDTH{1'b0}}}; // initialize fifo full
+            fifo_wr_ptr_reg <= {1'b1, {MAX_QUEUE_PAIRS_FIFO_WIDTH{1'b0}}}; // initialize fifo full
         end else begin
             fifo_wr_ptr_reg <= fifo_wr_ptr_next;
         end
 
         if (fifo_write) begin
-            qpn_mem[fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_WIDTH-1:0]] <= qpn_reg;
+            qpn_mem[fifo_wr_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH-1:0]] <= qpn_reg;
         end
     end
 
@@ -127,7 +128,7 @@ module qpn_fifo_init #
 
     always @(posedge clk) begin
         if (rst) begin
-            fifo_rd_ptr_reg <= {MAX_QUEUE_PAIRS_WIDTH+1{1'b0}};
+            fifo_rd_ptr_reg <= {MAX_QUEUE_PAIRS_FIFO_WIDTH+1{1'b0}};
             m_qpn_valid_reg <= 1'b0;
         end else begin
             fifo_rd_ptr_reg <= fifo_rd_ptr_next;
@@ -135,7 +136,7 @@ module qpn_fifo_init #
         end
 
         if (fifo_read) begin
-            m_qpn_reg <= qpn_mem[fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+            m_qpn_reg <= qpn_mem[fifo_rd_ptr_reg[MAX_QUEUE_PAIRS_FIFO_WIDTH-1:0]];
         end
     end
 

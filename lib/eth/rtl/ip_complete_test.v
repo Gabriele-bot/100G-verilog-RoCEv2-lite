@@ -321,12 +321,12 @@ This module integrates the IP and ARP modules for a complete IP stack
   wire icmp_tx_ip_payload_axis_tlast;
   wire icmp_tx_ip_payload_axis_tuser;
   /*
-  * Input classifier (eth_type)
+  Input classifier (eth_type)
+  Drop traffic that doesn't have dest_mac == local_mac or broadcast mac
   */
   
-  
-  wire s_select_ip = (s_eth_type == 16'h0800);
-  wire s_select_arp = (s_eth_type == 16'h0806);
+  wire s_select_ip = (s_eth_type == 16'h0800 && (s_eth_dest_mac == local_mac || s_eth_dest_mac == 48'hFFFF_FFFF_FFFF));
+  wire s_select_arp = (s_eth_type == 16'h0806 && (s_eth_dest_mac == local_mac || s_eth_dest_mac == 48'hFFFF_FFFF_FFFF));
   wire s_select_none = !(s_select_ip || s_select_arp);
 
   reg s_select_ip_reg = 1'b0;
@@ -336,12 +336,13 @@ This module integrates the IP and ARP modules for a complete IP stack
   
   
   /*
-  * Input classifier (ip_protocol)
+  Input classifier (ip_protocol)
+  Drop traffic that doesn't match the local ip addr or the broadcast ip add
   */
   
-  
-  wire s_ip_select_icmp = (m_ip_rx_protocol == 8'h01);
-  wire s_ip_select_udp =  (m_ip_rx_protocol == 8'h11);
+  wire s_broadcast_ip_addr = ~(m_ip_rx_dest_ip | subnet_mask) == 0;
+  wire s_ip_select_icmp = (m_ip_rx_protocol == 8'h01 && (m_ip_rx_dest_ip == local_ip || s_broadcast_ip_addr));
+  wire s_ip_select_udp =  (m_ip_rx_protocol == 8'h11 && (m_ip_rx_dest_ip == local_ip || s_broadcast_ip_addr));
   wire s_ip_select_none =  !(s_ip_select_icmp || s_ip_select_udp);
 
   reg s_ip_select_icmp_reg = 1'b0;
@@ -477,189 +478,6 @@ This module integrates the IP and ARP modules for a complete IP stack
 		                       (s_ip_select_icmp_reg && icmp_rx_ip_payload_axis_tready) ||
 		                       (s_ip_select_none_reg);
 
-  
-  
-  
-  /*
-  reg [1:0] s_eth_demux_sel;
-  always @(*) begin
-    if (s_eth_hdr_valid) begin
-      if ( s_eth_type == 16'h0806) begin
-        s_eth_demux_sel = 2'd0; //arp
-      end else if (s_eth_type == 16'h0800) begin
-        s_eth_demux_sel = 2'd1; // ip
-      end else begin
-        s_eth_demux_sel = 2'd2; //drop
-      end 
-    end
-  end
-  
-  eth_demux #(
-    .M_COUNT(2),
-    .DATA_WIDTH(DATA_WIDTH),
-    .KEEP_ENABLE(KEEP_ENABLE),
-    .KEEP_WIDTH(KEEP_WIDTH),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1)
-  ) eth_demux_instance (
-    .clk(clk),
-    .rst(rst),
-    .s_eth_hdr_valid(s_eth_hdr_valid),
-    .s_eth_hdr_ready(s_eth_hdr_ready),
-    .s_eth_dest_mac (s_eth_dest_mac),
-    .s_eth_src_mac  (s_eth_src_mac),
-    .s_eth_type     (s_eth_type),
-
-    .s_eth_payload_axis_tdata (s_eth_payload_axis_tdata),
-    .s_eth_payload_axis_tkeep (s_eth_payload_axis_tkeep),
-    .s_eth_payload_axis_tvalid(s_eth_payload_axis_tvalid),
-    .s_eth_payload_axis_tready(s_eth_payload_axis_tready),
-    .s_eth_payload_axis_tlast (s_eth_payload_axis_tlast),
-    .s_eth_payload_axis_tuser (s_eth_payload_axis_tuser),
-    .s_eth_payload_axis_tid   (0),
-    .s_eth_payload_axis_tdest (0),
-
-    .m_eth_hdr_valid({ip_rx_eth_hdr_valid, arp_rx_eth_hdr_valid}),
-    .m_eth_hdr_ready({ip_rx_eth_hdr_ready, arp_rx_eth_hdr_ready}),
-    .m_eth_dest_mac ({ip_rx_eth_dest_mac , arp_rx_eth_dest_mac}),
-    .m_eth_src_mac  ({ip_rx_eth_src_mac  , arp_rx_eth_src_mac }),
-    .m_eth_type     ({ip_rx_eth_type     , arp_rx_eth_type    }),
-
-    .m_eth_payload_axis_tdata ({ip_rx_eth_payload_axis_tdata  , arp_rx_eth_payload_axis_tdata }),
-    .m_eth_payload_axis_tkeep ({ip_rx_eth_payload_axis_tkeep  , arp_rx_eth_payload_axis_tkeep }),
-    .m_eth_payload_axis_tvalid({ip_rx_eth_payload_axis_tvalid , arp_rx_eth_payload_axis_tvalid}),
-    .m_eth_payload_axis_tready({ip_rx_eth_payload_axis_tready , arp_rx_eth_payload_axis_tready}),
-    .m_eth_payload_axis_tlast ({ip_rx_eth_payload_axis_tlast  , arp_rx_eth_payload_axis_tlast }),
-    .m_eth_payload_axis_tuser ({ip_rx_eth_payload_axis_tuser  , arp_rx_eth_payload_axis_tuser }),
-    .enable(1'b1),
-    .drop(s_eth_demux_sel[1]),
-    .select(s_eth_demux_sel[0])
-  );
-
-  
-
-  
-  
-  reg [1:0] s_ip_demux_sel;
-  always @(*) begin
-    if (m_ip_rx_hdr_valid) begin
-      if (m_ip_rx_protocol == 8'h11) begin
-        s_ip_demux_sel = 2'd0; //udp
-      end else if (m_ip_rx_protocol == 8'h01) begin
-        s_ip_demux_sel = 2'd1; // icmp
-      end else begin
-        s_ip_demux_sel = 2'd2; //drop
-      end
-    end 
-  end
-
-  ip_demux #(
-    .M_COUNT(2),
-    .DATA_WIDTH(DATA_WIDTH),
-    .KEEP_ENABLE(KEEP_ENABLE),
-    .KEEP_WIDTH(KEEP_WIDTH),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1)
-  ) ip_demux_rx_instance (
-    .clk(clk),
-    .rst(rst),
-    .s_ip_hdr_valid      (m_ip_rx_hdr_valid      ),
-    .s_ip_hdr_ready      (m_ip_rx_hdr_ready      ),
-    .s_eth_dest_mac      (m_ip_rx_eth_dest_mac   ),
-    .s_eth_src_mac       (m_ip_rx_eth_src_mac    ),
-    .s_eth_type          (ip_rx_eth_type         ),
-    .s_ip_version        (m_ip_rx_version        ),
-    .s_ip_ihl            (m_ip_rx_ihl            ),
-    .s_ip_dscp           (m_ip_rx_dscp           ),
-    .s_ip_ecn            (m_ip_rx_ecn            ),
-    .s_ip_length         (m_ip_rx_length         ),
-    .s_ip_identification (m_ip_rx_identification ),
-    .s_ip_flags          (m_ip_rx_flags          ),
-    .s_ip_fragment_offset(m_ip_rx_fragment_offset),
-    .s_ip_ttl            (m_ip_rx_ttl            ),
-    .s_ip_protocol       (m_ip_rx_protocol       ),
-    .s_ip_header_checksum(m_ip_rx_header_checksum),
-    .s_ip_source_ip      (m_ip_rx_source_ip      ),
-    .s_ip_dest_ip        (m_ip_rx_dest_ip        ),
-
-    .s_ip_payload_axis_tdata (m_ip_rx_payload_axis_tdata ),
-    .s_ip_payload_axis_tkeep (m_ip_rx_payload_axis_tkeep ),
-    .s_ip_payload_axis_tvalid(m_ip_rx_payload_axis_tvalid),
-    .s_ip_payload_axis_tready(m_ip_rx_payload_axis_tready),
-    .s_ip_payload_axis_tlast (m_ip_rx_payload_axis_tlast ),
-    .s_ip_payload_axis_tuser (m_ip_rx_payload_axis_tuser ),
-    .s_ip_payload_axis_tid   (0),
-    .s_ip_payload_axis_tdest (0),
-    
-    .m_ip_hdr_valid      ({icmp_rx_ip_hdr_valid      , m_ip_hdr_valid      }),
-    .m_ip_hdr_ready      ({icmp_rx_ip_hdr_ready      , m_ip_hdr_ready      }),
-    .m_eth_dest_mac      ({icmp_rx_ip_eth_dest_mac   , m_ip_eth_dest_mac   }),
-    .m_eth_src_mac       ({icmp_rx_ip_eth_src_mac    , m_ip_eth_src_mac    }),
-    .m_eth_type          ({icmp_rx_ip_eth_type       , m_ip_eth_type       }),
-    .m_ip_version        ({icmp_rx_ip_version        , m_ip_version        }),
-    .m_ip_ihl            ({icmp_rx_ip_ihl            , m_ip_ihl            }),
-    .m_ip_dscp           ({icmp_rx_ip_dscp           , m_ip_dscp           }),
-    .m_ip_ecn            ({icmp_rx_ip_ecn            , m_ip_ecn            }),
-    .m_ip_length         ({icmp_rx_ip_length         , m_ip_length         }),
-    .m_ip_identification ({icmp_rx_ip_identification , m_ip_identification }),
-    .m_ip_flags          ({icmp_rx_ip_flags          , m_ip_flags          }),
-    .m_ip_fragment_offset({icmp_rx_ip_fragment_offset, m_ip_fragment_offset}),
-    .m_ip_ttl            ({icmp_rx_ip_ttl            , m_ip_ttl            }),
-    .m_ip_protocol       ({icmp_rx_ip_protocol       , m_ip_protocol       }),
-    .m_ip_header_checksum({icmp_rx_ip_header_checksum, m_ip_header_checksum}),
-    .m_ip_source_ip      ({icmp_rx_ip_source_ip      , m_ip_source_ip      }),
-    .m_ip_dest_ip        ({icmp_rx_ip_dest_ip        , m_ip_dest_ip        }),
-    
-    .m_ip_payload_axis_tdata ({icmp_rx_ip_payload_axis_tdata  ,m_ip_payload_axis_tdata }),
-    .m_ip_payload_axis_tkeep ({icmp_rx_ip_payload_axis_tkeep  ,m_ip_payload_axis_tkeep }),
-    .m_ip_payload_axis_tvalid({icmp_rx_ip_payload_axis_tvalid ,m_ip_payload_axis_tvalid}),
-    .m_ip_payload_axis_tready({icmp_rx_ip_payload_axis_tready ,m_ip_payload_axis_tready}),
-    .m_ip_payload_axis_tlast ({icmp_rx_ip_payload_axis_tlast  ,m_ip_payload_axis_tlast }),
-    .m_ip_payload_axis_tuser ({icmp_rx_ip_payload_axis_tuser  ,m_ip_payload_axis_tuser }),
-    .enable(1'b1),
-    .drop(s_ip_demux_sel[1]),
-    .select(s_ip_demux_sel[0])
-  );
-
-  */
-
-
-  /*
- * Output arbiter
- 
- 
-  axis_pipeline_register #(
-    .DATA_WIDTH(DATA_WIDTH),
-    .KEEP_ENABLE(1),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .REG_TYPE(2),
-    .LENGTH(1)
-  ) eth_tx_pipeline_inst (
-    .clk(clk),
-    .rst(rst),
-
-    .s_axis_tdata (arp_tx_eth_payload_axis_tdata),
-    .s_axis_tkeep (arp_tx_eth_payload_axis_tkeep),
-    .s_axis_tvalid(arp_tx_eth_payload_axis_tvalid),
-    .s_axis_tready(arp_tx_eth_payload_axis_tready),
-    .s_axis_tlast (arp_tx_eth_payload_axis_tlast),
-    .s_axis_tuser (arp_tx_eth_payload_axis_tuser),
-
-    .m_axis_tdata (arp_tx_eth_payload_pipeline_axis_tdata),
-    .m_axis_tkeep (arp_tx_eth_payload_pipeline_axis_tkeep),
-    .m_axis_tvalid(arp_tx_eth_payload_pipeline_axis_tvalid),
-    .m_axis_tready(arp_tx_eth_payload_pipeline_axis_tready),
-    .m_axis_tlast (arp_tx_eth_payload_pipeline_axis_tlast),
-    .m_axis_tuser (arp_tx_eth_payload_pipeline_axis_tuser)
-  );
-  */
   
   eth_arb_mux #(
       .S_COUNT(2),
@@ -883,7 +701,7 @@ This module integrates the IP and ARP modules for a complete IP stack
  */
  generate 
 
-  if (DATA_WIDTH > 64) begin
+  if (DATA_WIDTH != 64) begin
 
     wire [63:0] icmp_tx_ip_payload_64_axis_tdata;
     wire [7 :0] icmp_tx_ip_payload_64_axis_tkeep;
@@ -902,7 +720,7 @@ This module integrates the IP and ARP modules for a complete IP stack
     icmp_echo_reply #(
       .DATA_WIDTH(64),
       .KEEP_ENABLE(1),
-      .CHECKSUM_PAYLOAD_FIFO_DEPTH(512),
+      .CHECKSUM_PAYLOAD_FIFO_DEPTH(2048),
       .CHECKSUM_HEADER_FIFO_DEPTH(8)
     ) icmp_echo_reply_inst (
       .clk(clk),
@@ -963,7 +781,7 @@ This module integrates the IP and ARP modules for a complete IP stack
     );
 
     axis_fifo_adapter #(
-        .DEPTH(2048),
+        .DEPTH(512),
         .S_DATA_WIDTH(DATA_WIDTH),
         .S_KEEP_ENABLE(1),
         .M_DATA_WIDTH(64),

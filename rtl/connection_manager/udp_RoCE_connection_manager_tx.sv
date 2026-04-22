@@ -2,7 +2,8 @@
 
 /*
  * Connection manager over UDP, TX path
- * L_key, loc base addr and loc psn not really used, as the qp is not receiveing anithing other then ACKs
+ * L_key, loc base addr and loc psn not really used, as the qp is not receiveing anything other than ACKs
+ * BIG ENDIANESS
  */
 
 /*
@@ -14,17 +15,17 @@
  * |   0     |  [3  :1  ]  |  QP_req_type             |
  * |   0     |  [4  :4  ]  |  QP_ack_valid            |
  * |   0     |  [7  :5  ]  |  QP_ack_type             |
- * | [3:1]   |  [32 :8  ]  |  QP_info_loc_qpn         |
- * |   4     |  [39 :33 ]  |  ZERO_PADD               |
- * | [7:5]   |  [63 :40 ]  |  QP_info_loc_psn         |
- * |   8     |  [71 :64 ]  |  ZERO_PADD               |
+ * |   1     |  [15 :8  ]  |  ZERO_PADD               |
+ * | [4:2]   |  [39 :16 ]  |  QP_info_loc_qpn         |
+ * |   5     |  [47 :40 ]  |  ZERO_PADD               |
+ * | [8:6]   |  [71 :48 ]  |  QP_info_loc_psn         |
  * | [12:9]  |  [103 :72]  |  QP_info_loc_r_key       |
  * | [20:13] |  [167:104]  |  QP_info_loc_base_addr   |
  * | [24:21] |  [199:168]  |  QP_info_loc_ip_addr     |
- * | [27:25] |  [223:200]  |  QP_info_rem_qpn         |
- * |   28    |  [231:224]  |  ZERO_PADD               |
- * | [31:29] |  [255:232]  |  QP_info_rem_psn         |
- * |   32    |  [263:256]  |  ZERO_PADD               |
+ * |   25    |  [207:200]  |  ZERO_PADD               |
+ * | [28:26] |  [231:208]  |  QP_info_rem_qpn         |
+ * |   29    |  [239:232]  |  ZERO_PADD               |
+ * | [32:30] |  [263:240]  |  QP_info_rem_psn         |
  * | [36:33] |  [295:264]  |  QP_info_rem_r_key       |
  * | [44:37] |  [359:296]  |  QP_info_rem_base_addr   |
  * | [48:45] |  [391:360]  |  QP_info_rem_ip_addr     |
@@ -37,13 +38,16 @@
  * |   51    |  [415:412]  |  txmeta_reserved         |
  * | [55:52] |  [447:416]  |  txmeta_dma_length       |
  * | [59:56] |  [479:448]  |  txmeta_n_transfers      |
- * | [63:60] |  [511:480]  |  reserved                |
+ * | [63:60] |  [511:480]  |  txmeta_frequency        |
  * +---------+-------------+--------------------------+
  * TOTAL length 512 bits, 64 bytes
  */
 
 module udp_RoCE_connection_manager_tx #(
-    parameter DATA_WIDTH      = 256
+    parameter DATA_WIDTH      = 256,
+    parameter DEST_UDP_PORT   = 16'h4322,
+    parameter LISTEN_UDP_PORT = 16'h4321
+
 ) (
     input wire clk,
     input wire rst,
@@ -70,23 +74,26 @@ module udp_RoCE_connection_manager_tx #(
 
     input wire [15:0] s_qp_info_udp_dest_port,
 
+    input wire [15:0] s_udp_dest_port,
+
     /*
      * UDP frame output
      */
-    output wire         m_udp_hdr_valid,
-    input  wire         m_udp_hdr_ready,
-    output wire [ 31:0] m_ip_source_ip,
-    output wire [ 31:0] m_ip_dest_ip,
-    output wire [ 15:0] m_udp_source_port,
-    output wire [ 15:0] m_udp_dest_port,
-    output wire [ 15:0] m_udp_length,
-    output wire [ 15:0] m_udp_checksum,
+    output wire                     m_udp_hdr_valid,
+    input  wire                     m_udp_hdr_ready,
+    output wire [ 31:0]             m_ip_source_ip,
+    output wire [ 31:0]             m_ip_dest_ip,
+    output wire [ 15:0]             m_udp_source_port,
+    output wire [ 15:0]             m_udp_dest_port,
+    output wire [ 15:0]             m_udp_length,
+    output wire [ 15:0]             m_udp_checksum,
+
     output wire [DATA_WIDTH-1   : 0] m_udp_payload_axis_tdata,
     output wire [DATA_WIDTH/8-1 : 0] m_udp_payload_axis_tkeep,
-    output wire         m_udp_payload_axis_tvalid,
-    input  wire         m_udp_payload_axis_tready,
-    output wire         m_udp_payload_axis_tlast,
-    output wire         m_udp_payload_axis_tuser,
+    output wire                      m_udp_payload_axis_tvalid,
+    input  wire                      m_udp_payload_axis_tready,
+    output wire                      m_udp_payload_axis_tlast,
+    output wire                      m_udp_payload_axis_tuser,
     /*
      * Status signals
      */
@@ -136,7 +143,9 @@ module udp_RoCE_connection_manager_tx #(
     reg [63:0] qp_info_rem_base_addr_reg;
     reg [31:0] qp_info_rem_ip_addr_reg;
 
-    reg [15:0] s_qp_info_udp_dest_port_reg;
+    reg [15:0] qp_info_udp_dest_port_reg;
+
+    reg [15:0] udp_dest_port_reg;
 
     reg s_qp_info_ready_reg = 1'b0, s_qp_info_ready_next;
 
@@ -216,56 +225,57 @@ module udp_RoCE_connection_manager_tx #(
                     m_udp_payload_axis_tkeep_int[offset%BYTE_LANES] = 1'b1; \
                 end
                 `_HEADER_FIELD_(0 ,  {qp_info_ack_type_reg, qp_info_ack_valid_reg, qp_info_req_type_reg, qp_info_valid_reg})
-                `_HEADER_FIELD_(1 ,  qp_info_loc_qpn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_reg[2*8 +: 8])
-                `_HEADER_FIELD_(4 ,  8'h00)
-                `_HEADER_FIELD_(5 ,  qp_info_loc_psn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(6 ,  qp_info_loc_psn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(7 ,  qp_info_loc_psn_reg[2*8 +: 8])
-                `_HEADER_FIELD_(8 ,  8'h00)
-                `_HEADER_FIELD_(9 ,  qp_info_loc_r_key_reg[0*8 +: 8])
-                `_HEADER_FIELD_(10,  qp_info_loc_r_key_reg[1*8 +: 8])
-                `_HEADER_FIELD_(11,  qp_info_loc_r_key_reg[2*8 +: 8])
-                `_HEADER_FIELD_(12,  qp_info_loc_r_key_reg[3*8 +: 8])
-                `_HEADER_FIELD_(13,  qp_info_loc_base_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(14,  qp_info_loc_base_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(15,  qp_info_loc_base_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(16,  qp_info_loc_base_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(17,  qp_info_loc_base_addr_reg[4*8 +: 8])
-                `_HEADER_FIELD_(18,  qp_info_loc_base_addr_reg[5*8 +: 8])
-                `_HEADER_FIELD_(19,  qp_info_loc_base_addr_reg[6*8 +: 8])
-                `_HEADER_FIELD_(20,  qp_info_loc_base_addr_reg[7*8 +: 8])
-                `_HEADER_FIELD_(21,  qp_info_loc_ip_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(22,  qp_info_loc_ip_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(23,  qp_info_loc_ip_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(24,  qp_info_loc_ip_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(25,  qp_info_rem_qpn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(26,  qp_info_rem_qpn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(27,  qp_info_rem_qpn_reg[2*8 +: 8])
-                `_HEADER_FIELD_(28 ,  8'h00)
-                `_HEADER_FIELD_(29,  qp_info_rem_psn_reg[0*8 +: 8])
-                `_HEADER_FIELD_(30,  qp_info_rem_psn_reg[1*8 +: 8])
-                `_HEADER_FIELD_(31,  qp_info_rem_psn_reg[2*8 +: 8])
-                `_HEADER_FIELD_(32 ,  8'h00)
-                `_HEADER_FIELD_(33,  qp_info_rem_r_key_reg[0*8 +: 8])
-                `_HEADER_FIELD_(34,  qp_info_rem_r_key_reg[1*8 +: 8])
-                `_HEADER_FIELD_(35,  qp_info_rem_r_key_reg[2*8 +: 8])
-                `_HEADER_FIELD_(36,  qp_info_rem_r_key_reg[3*8 +: 8])
-                `_HEADER_FIELD_(37,  qp_info_rem_base_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(38,  qp_info_rem_base_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(39,  qp_info_rem_base_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(40,  qp_info_rem_base_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(41,  qp_info_rem_base_addr_reg[4*8 +: 8])
-                `_HEADER_FIELD_(42,  qp_info_rem_base_addr_reg[5*8 +: 8])
-                `_HEADER_FIELD_(43,  qp_info_rem_base_addr_reg[6*8 +: 8])
-                `_HEADER_FIELD_(44,  qp_info_rem_base_addr_reg[7*8 +: 8])
-                `_HEADER_FIELD_(45,  qp_info_rem_ip_addr_reg[0*8 +: 8])
-                `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_reg[1*8 +: 8])
-                `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_reg[2*8 +: 8])
-                `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_reg[3*8 +: 8])
-                `_HEADER_FIELD_(49,  m_udp_source_port_reg[0*8 +: 8])
-                `_HEADER_FIELD_(50,  m_udp_source_port_reg[1*8 +: 8])
+                `_HEADER_FIELD_(1 ,  8'h00)
+                `_HEADER_FIELD_(2 ,  qp_info_loc_qpn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(3 ,  qp_info_loc_qpn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(4 ,  qp_info_loc_qpn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(5 ,  8'h00)
+                `_HEADER_FIELD_(6 ,  qp_info_loc_psn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(7 ,  qp_info_loc_psn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(8 ,  qp_info_loc_psn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(9 ,  qp_info_loc_r_key_reg[3*8 +: 8])
+                `_HEADER_FIELD_(10,  qp_info_loc_r_key_reg[2*8 +: 8])
+                `_HEADER_FIELD_(11,  qp_info_loc_r_key_reg[1*8 +: 8])
+                `_HEADER_FIELD_(12,  qp_info_loc_r_key_reg[0*8 +: 8])
+                `_HEADER_FIELD_(13,  qp_info_loc_base_addr_reg[7*8 +: 8])
+                `_HEADER_FIELD_(14,  qp_info_loc_base_addr_reg[6*8 +: 8])
+                `_HEADER_FIELD_(15,  qp_info_loc_base_addr_reg[5*8 +: 8])
+                `_HEADER_FIELD_(16,  qp_info_loc_base_addr_reg[4*8 +: 8])
+                `_HEADER_FIELD_(17,  qp_info_loc_base_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(18,  qp_info_loc_base_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(19,  qp_info_loc_base_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(20,  qp_info_loc_base_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(21,  qp_info_loc_ip_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(22,  qp_info_loc_ip_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(23,  qp_info_loc_ip_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(24,  qp_info_loc_ip_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(25 ,  8'h00)
+                `_HEADER_FIELD_(26,  qp_info_rem_qpn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(27,  qp_info_rem_qpn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(28,  qp_info_rem_qpn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(29 ,  8'h00)
+                `_HEADER_FIELD_(30,  qp_info_rem_psn_reg[2*8 +: 8])
+                `_HEADER_FIELD_(31,  qp_info_rem_psn_reg[1*8 +: 8])
+                `_HEADER_FIELD_(32,  qp_info_rem_psn_reg[0*8 +: 8])
+                `_HEADER_FIELD_(33,  qp_info_rem_r_key_reg[3*8 +: 8])
+                `_HEADER_FIELD_(34,  qp_info_rem_r_key_reg[2*8 +: 8])
+                `_HEADER_FIELD_(35,  qp_info_rem_r_key_reg[1*8 +: 8])
+                `_HEADER_FIELD_(36,  qp_info_rem_r_key_reg[0*8 +: 8])
+                `_HEADER_FIELD_(37,  qp_info_rem_base_addr_reg[7*8 +: 8])
+                `_HEADER_FIELD_(38,  qp_info_rem_base_addr_reg[6*8 +: 8])
+                `_HEADER_FIELD_(39,  qp_info_rem_base_addr_reg[5*8 +: 8])
+                `_HEADER_FIELD_(40,  qp_info_rem_base_addr_reg[4*8 +: 8])
+                `_HEADER_FIELD_(41,  qp_info_rem_base_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(42,  qp_info_rem_base_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(43,  qp_info_rem_base_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(44,  qp_info_rem_base_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(45,  qp_info_rem_ip_addr_reg[3*8 +: 8])
+                `_HEADER_FIELD_(46,  qp_info_rem_ip_addr_reg[2*8 +: 8])
+                `_HEADER_FIELD_(47,  qp_info_rem_ip_addr_reg[1*8 +: 8])
+                `_HEADER_FIELD_(48,  qp_info_rem_ip_addr_reg[0*8 +: 8])
+                `_HEADER_FIELD_(49,  qp_info_udp_dest_port_reg[1*8 +: 8])
+                `_HEADER_FIELD_(50,  qp_info_udp_dest_port_reg[0*8 +: 8])
+                // not used
                 `_HEADER_FIELD_(51,  8'h00)
                 `_HEADER_FIELD_(52,  8'h00)
                 `_HEADER_FIELD_(53,  8'h00)
@@ -321,12 +331,14 @@ module udp_RoCE_connection_manager_tx #(
             qp_info_rem_base_addr_reg <= s_qp_info_rem_base_addr;
             qp_info_rem_ip_addr_reg   <= s_qp_info_rem_ip_addr;
 
-            s_qp_info_udp_dest_port_reg <= s_qp_info_udp_dest_port;
+            qp_info_udp_dest_port_reg <= LISTEN_UDP_PORT;
+
+            udp_dest_port_reg         <= s_udp_dest_port;
 
             m_ip_source_ip_reg    <= s_qp_info_loc_ip_addr;
             m_ip_dest_ip_reg      <= s_qp_info_rem_ip_addr;
             m_udp_source_port_reg <= cfg_udp_source_port;
-            m_udp_dest_port_reg   <= s_qp_info_udp_dest_port;
+            m_udp_dest_port_reg   <= s_udp_dest_port;
             m_udp_length_reg      <= QP_INFO_SIZE+16'd8;
             m_udp_checksum_reg    <= 16'd0;
         end

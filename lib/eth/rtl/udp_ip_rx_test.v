@@ -132,8 +132,6 @@ initial begin
 end
 
 /*
-/*
-
 UDP Frame
 
  Field                       Length

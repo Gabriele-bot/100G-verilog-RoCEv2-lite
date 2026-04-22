@@ -6,7 +6,7 @@ FPGA_ARCH = virtexuplus
 
 # Files for synthesis
 SYN_FILES = rtl/fpga.v
-SYN_FILES += rtl/fpga_core.v
+SYN_FILES += rtl/fpga_core.sv
 SYN_FILES += rtl/eth_xcvr_phy_wrapper.v
 SYN_FILES += rtl/eth_xcvr_phy_quad_wrapper.v
 SYN_FILES += rtl/debounce_switch.v
@@ -69,13 +69,16 @@ SYN_FILES += ip/cmac_pad.v
 # RoCE Files
 SYN_FILES +=  lib/RoCE/rtl/header_files/Board_parameters.sv
 SYN_FILES +=  lib/RoCE/rtl/header_files/RoCE_parameters.sv
+SYN_FILES +=  lib/RoCE/rtl/utils/generic_arb_mux.v
 SYN_FILES +=  lib/RoCE/rtl/icrc_insert/axis_mask_fields_icrc.v
 SYN_FILES +=  lib/RoCE/rtl/icrc_insert/axis_RoCE_icrc_insert.v
 SYN_FILES +=  lib/RoCE/rtl/data_gen/axis_data_generator.sv
+SYN_FILES +=  lib/RoCE/rtl/data_gen/RoCE_data_generator.sv
 SYN_FILES +=  lib/RoCE/rtl/tx_engine/axis_packet_framer.sv
 SYN_FILES +=  lib/RoCE/rtl/tx_engine/RoCE_udp_tx.sv
 SYN_FILES +=  lib/RoCE/rtl/tx_engine/RoCE_tx_header_producer.sv
 SYN_FILES +=  lib/RoCE/rtl/tx_engine/RoCE_retransmission_module.sv
+SYN_FILES +=  lib/RoCE/rtl/tx_engine/RoCE_tx_engine.sv
 SYN_FILES +=  lib/RoCE/rtl/rx_engine/RoCE_udp_rx_acks.sv
 SYN_FILES +=  lib/RoCE/rtl/connection_manager/udp_RoCE_connection_manager_rx.sv
 SYN_FILES +=  lib/RoCE/rtl/connection_manager/udp_RoCE_connection_manager_tx.sv
@@ -88,7 +91,7 @@ SYN_FILES +=  lib/RoCE/rtl/utils/axi_ram_mod.v
 SYN_FILES +=  lib/RoCE/rtl/utils/simple_dpram.v
 SYN_FILES +=  lib/RoCE/rtl/RoCE_simple_work_queue.sv
 SYN_FILES +=  lib/RoCE/rtl/RoCE_minimal_stack.sv
-
+SYN_FILES +=  lib/RoCE/rtl/RoCE_stack_wrapper.sv
 
 #CRC FILES
 
@@ -119,6 +122,7 @@ IP_TCL_FILES += ip/vio_roce_cfg.tcl
 IP_TCL_FILES += ip/vio_throughput.tcl
 IP_TCL_FILES += ip/vio_qp_state_spy.tcl
 IP_TCL_FILES += ip/vio_retrans_debug.tcl
+IP_TCL_FILES += ip/vio_wqe_debug.tcl
 IP_TCL_FILES += ip/vio_axis_monitor.tcl
 IP_TCL_FILES += ip/vio_perf_monitor.tcl
 IP_TCL_FILES += ip/ila_axis.tcl

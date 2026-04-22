@@ -762,6 +762,7 @@ module network_wrapper_roce_generic #(
     );
 
 
+    /* 
     RoCE_minimal_stack #(
         .DATA_WIDTH(STACK_DATA_WIDTH),
         .CLOCK_PERIOD(RoCE_CLOCK_PERIOD),
@@ -854,6 +855,112 @@ module network_wrapper_roce_generic #(
         .cfg_latency_avg_po2     (cfg_latency_avg_po2),
         .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
         .monitor_loc_qpn         (monitor_loc_qpn)
+        
+    );
+    */
+
+    RoCE_stack_wrapper #(
+        .QP_CH_DATA_WIDTH                (STACK_DATA_WIDTH/2),                 
+        .QP_CH_KEEP_ENABLE               (1),                
+        .QP_CH_KEEP_WIDTH                (STACK_DATA_WIDTH/2/8),                 
+        .OUT_DATA_WIDTH                  (STACK_DATA_WIDTH),                   
+        .OUT_KEEP_ENABLE                 (1),                  
+        .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),                   
+        .CLOCK_PERIOD                    (RoCE_CLOCK_PERIOD),                     
+        .DEBUG                           (DEBUG), 
+        .REFRESH_CACHE_TICKS             (32767),                           
+        .RETRANSMISSION                  (1),                   
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
+        .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)                    
+    ) RoCE_stack_wrapper_instance (
+        .clk(clk_stack),
+        .rst(rst_stack),
+        .flow_ctrl_pause          (flow_ctrl_pause),
+
+        //.s_wr_req_valid           ('{default:0}),          
+        //.s_wr_req_ready           (),          
+        //.s_wr_req_tx_type         ('{default:0}),        
+        //.s_wr_req_is_immediate    ('{default:0}),   
+        //.s_wr_req_immediate_data  ('{default:0}), 
+        //.s_wr_req_loc_qp          ('{default:0}),         
+        //.s_wr_req_addr_offset     ('{default:0}),    
+        //.s_wr_req_dma_length      ('{default:0}), 
+        //.s_axis_tdata             ('{default:0}),
+        //.s_axis_tkeep             ('{default:0}),
+        //.s_axis_tvalid            ('{default:0}),
+        //.s_axis_tready            (),
+        //.s_axis_tlast             ('{default:0}),
+        //.s_axis_tuser             ('{default:0}),  
+
+        .s_udp_hdr_valid          (s_rx_udp_hdr_valid),
+        .s_udp_hdr_ready          (s_rx_udp_hdr_ready),
+        .s_eth_dest_mac           (0),
+        .s_eth_src_mac            (0),
+        .s_eth_type               (0),
+        .s_ip_version             (0),
+        .s_ip_ihl                 (0),
+        .s_ip_dscp                (s_rx_udp_ip_dscp),
+        .s_ip_ecn                 (s_rx_udp_ip_ecn),
+        .s_ip_length              (s_rx_udp_ip_length),
+        .s_ip_identification      (0),
+        .s_ip_flags               (0),
+        .s_ip_fragment_offset     (0),
+        .s_ip_ttl                 (s_rx_udp_ip_ttl),
+        .s_ip_protocol            (16'h11),
+        .s_ip_header_checksum     (0),
+        .s_ip_source_ip           (s_rx_udp_ip_source_ip),
+        .s_ip_dest_ip             (s_rx_udp_ip_dest_ip),
+        .s_udp_source_port        (s_rx_udp_source_port),
+        .s_udp_dest_port          (s_rx_udp_dest_port),
+        .s_udp_length             (s_rx_udp_length),
+        .s_udp_checksum           (s_rx_udp_checksum),
+        .s_udp_payload_axis_tdata (s_rx_udp_payload_axis_tdata),
+        .s_udp_payload_axis_tkeep (s_rx_udp_payload_axis_tkeep),
+        .s_udp_payload_axis_tvalid(s_rx_udp_payload_axis_tvalid),
+        .s_udp_payload_axis_tready(s_rx_udp_payload_axis_tready),
+        .s_udp_payload_axis_tlast (s_rx_udp_payload_axis_tlast),
+        .s_udp_payload_axis_tuser (s_rx_udp_payload_axis_tuser),
+
+        // UDP frame output (TX)
+        .m_udp_hdr_valid          (m_tx_udp_hdr_valid),
+        .m_udp_hdr_ready          (m_tx_udp_hdr_ready),
+        .m_ip_dscp                (m_tx_udp_ip_dscp),
+        .m_ip_ecn                 (m_tx_udp_ip_ecn),
+        .m_ip_ttl                 (m_tx_udp_ip_ttl),
+        .m_ip_source_ip           (m_tx_udp_ip_source_ip),
+        .m_ip_dest_ip             (m_tx_udp_ip_dest_ip),
+        .m_udp_source_port        (m_tx_udp_source_port),
+        .m_udp_dest_port          (m_tx_udp_dest_port),
+        .m_udp_length             (m_tx_udp_length),
+        .m_udp_checksum           (m_tx_udp_checksum),
+        .m_udp_payload_axis_tdata (m_tx_udp_payload_axis_tdata),
+        .m_udp_payload_axis_tkeep (m_tx_udp_payload_axis_tkeep),
+        .m_udp_payload_axis_tvalid(m_tx_udp_payload_axis_tvalid),
+        .m_udp_payload_axis_tready(m_tx_udp_payload_axis_tready),
+        .m_udp_payload_axis_tlast (m_tx_udp_payload_axis_tlast),
+        .m_udp_payload_axis_tuser (m_tx_udp_payload_axis_tuser),
+
+        // QP spy output
+        .m_qp_context_spy         (m_qp_context_spy),
+        .m_qp_local_qpn_spy       (m_qp_local_qpn_spy),
+        .s_qp_spy_context_valid   (s_qp_spy_context_valid),
+        .s_qp_spy_state           (s_qp_spy_state),
+        .s_qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
+        .s_qp_spy_loc_qpn         (s_qp_spy_loc_qpn),
+        .s_qp_spy_rem_psn         (s_qp_spy_rem_psn),
+        .s_qp_spy_rem_acked_psn   (s_qp_spy_rem_acked_psn),
+        .s_qp_spy_loc_psn         (s_qp_spy_loc_psn),
+        .s_qp_spy_r_key           (s_qp_spy_r_key),
+        .s_qp_spy_rem_addr        (s_qp_spy_rem_addr),
+        .s_qp_spy_rem_ip_addr     (s_qp_spy_rem_ip_addr),
+        .s_qp_spy_syndrome        (s_qp_spy_syndrome),
+        
+        .pmtu           (ctrl_pmtu),
+        .RoCE_udp_port  (ctrl_RoCE_udp_port),
+        .loc_ip_addr    (ctrl_local_ip),
+        .timeout_period (64'd10000), //4.3 ns * 15000 = 64 us
+        .retry_count    (3'd7),
+        .rnr_retry_count(3'd7)
         
     );
 

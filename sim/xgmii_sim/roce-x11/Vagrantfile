@@ -1,0 +1,49 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.define "softroce1" do |softroce1|
+    softroce1.vm.box = "bento/ubuntu-22.04"
+    softroce1.vm.network "public_network", ip: "22.1.212.16"
+    softroce1.vm.provision "file" do |fp|
+      fp.source = "rxe.service"
+      fp.destination = "/tmp/rxe.service"
+    end
+    softroce1.vm.provision "file" do |fp|
+      fp.source = "rxe_all.sh"
+      fp.destination = "/tmp/rxe_all.sh"
+    end
+    softroce1.vm.provision "shell", path: "./setup-vm.sh"
+    softroce1.vm.provider "virtualbox" do |v|
+      v.memory = 4096
+      v.cpus   = 2  
+    end
+    softroce1.ssh.forward_agent = true
+    softroce1.ssh.forward_x11 = true
+    softroce1.ssh.username = "vagrant"
+    softroce1.ssh.password = "vagrant"    
+  end 
+
+  config.vm.define "softroce2" do |softroce2|
+    softroce2.vm.box = "bento/ubuntu-22.04"
+    softroce2.vm.network "public_network", ip: "22.1.212.17"
+    softroce2.vm.provision "file" do |fp|
+      fp.source = "rxe.service"
+      fp.destination = "/tmp/rxe.service"
+    end
+    softroce2.vm.provision "file" do |fp|
+      fp.source = "rxe_all.sh"
+      fp.destination = "/tmp/rxe_all.sh"
+    end
+    softroce2.vm.provision "shell", path: "./setup-vm.sh"
+    softroce2.vm.provider "virtualbox" do |v|
+      v.memory = 4096
+      v.cpus   = 2
+    end
+    softroce2.ssh.forward_agent = true
+    softroce2.ssh.forward_x11 = true
+    softroce2.ssh.username = "vagrant"
+    softroce2.ssh.password = "vagrant"
+  end
+
+end

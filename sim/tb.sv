@@ -2,210 +2,197 @@
 `timescale 1ns / 1ps
 
 module tb #(
-	parameter max_recvpkt = 100000,
-	parameter nPreamble = 8,
-	parameter nIFG = 12
+    parameter max_recvpkt = 100000,
+    parameter nPreamble = 8,
+    parameter nIFG = 12
 )();
 
-import "DPI-C" context function int shared_mem_init();
-import "DPI-C" context task tap2xgmii(output int ret);
-import "DPI-C" context function int xgmii_read(longint xgmiiTxd, byte xgmiiTxc);
-export "DPI-C" task xgmii_write;
-export "DPI-C" task xgmii_idle;
+    import "DPI-C" context function int shared_mem_init();
+    import "DPI-C" context task tap2xgmii(output int ret);
+    import "DPI-C" context function int xgmii_read(longint xgmiiTxd, byte xgmiiTxc);
+    export "DPI-C" task xgmii_write;
+    export "DPI-C" task xgmii_idle;
 
-parameter MAC_DATA_WIDTH = 1024;
-parameter RoCE_DATA_WIDTH = 2048;
+    // Simulation MAC speed
+    // 64b Simulation MAC datapath width
+    // either 25G or 10G (390.625MHz or 156.25MHz)
+    parameter SIM_MAC_SPEED = 10; // in Gbps
+    parameter SIM_MAC_DATAPATH_WIDTH = 64; //dont change! 
+    parameter SIM_MAC_FREQ = SIM_MAC_SPEED*1000.0/SIM_MAC_DATAPATH_WIDTH; //in MHz 
 
-localparam SCALE_UP_FACT       = MAC_DATA_WIDTH/64;
+    // MAC to simulate
+    parameter MAC_SPEED = 100;
+    parameter MAC_DATAPATH_WIDTH = 512;
+    parameter MAC_FREQ = MAC_SPEED*1000.0/MAC_DATAPATH_WIDTH; //in MHz 
 
-parameter MAC_FREQ      = 390.625_000;
-parameter UDP_IP_FREQ   = 276/SCALE_UP_FACT;
-parameter ROCE_FREQ     = 276/SCALE_UP_FACT;
-parameter AXI_SEG_FREQ  = 398.66/SCALE_UP_FACT;
-parameter AXI_SEG_FREQ_09 = 390.625_000/SCALE_UP_FACT;
+    // stack to simulate, with effective throughput, 
+    parameter STACK_DATAPATH_WIDTH = 512;
+    parameter STACK_FREQ  = 322.622;
+    parameter STACK_SPEED = STACK_DATAPATH_WIDTH*STACK_FREQ/1000.0;
 
-parameter MAC_PERIOD      = 1000/MAC_FREQ;
-parameter UDP_IP_PERIOD   = 1000/UDP_IP_FREQ;
-parameter ROCE_PERIOD     = 1000/ROCE_FREQ;
-parameter AXI_SEG_PERIOD  = 1000/AXI_SEG_FREQ;
-parameter AXI_SEG_PERIOD_09 = 1000/AXI_SEG_FREQ_09;
+    // now we need do reduce/increase the mac frequency to match the speed of the simulation MAC
+    // eg for a 100G MAC it has to go 10 times slower than the sim MAC
+    localparam SCALE_UP_FACT       = MAC_SPEED/SIM_MAC_SPEED;
 
-logic clk_mac, clk_udp, clk_roce, clk_axi_seg, clk_axi_seg_09;
-logic extRst;
-logic clk25;
-logic rst25;
-logic c0_sys_clk_p;
-logic c0_sys_clk_n;
-logic c1_sys_clk_p;
-logic c1_sys_clk_n;
-logic [7:0] xgmiiTxc;
-logic [63:0] xgmiiTxd;
-logic [7:0] xgmiiRxc;
-logic [63:0] xgmiiRxd;
+    parameter MAC_FREQ_REAL   = MAC_FREQ/SCALE_UP_FACT;
+    parameter STACK_FREQ_REAL = STACK_FREQ/SCALE_UP_FACT;
 
-// generazione clocks
-initial begin
-    clk_mac <= 0;
-    clk_udp  <= 0;
-    clk_roce  <= 0;
-    clk_axi_seg  <= 0;
-    clk_axi_seg_09 <= 0;
-    c0_sys_clk_p <= 0;
-    c0_sys_clk_n <= 0;
-    c1_sys_clk_p <= 0;
-    c1_sys_clk_n <= 0;
+    // in ns
+    parameter SIM_MAC_PERIOD      = 1000/SIM_MAC_FREQ;
+    parameter MAC_PERIOD      = 1000/MAC_FREQ_REAL;
+    parameter STACK_PERIOD    = 1000/STACK_FREQ_REAL;
+
+    logic clk_mac_sim, clk_mac, clk_stack;
+    logic extRst;
+    logic clk25;
+    logic rst25;
+    logic c0_sys_clk_p;
+    logic c0_sys_clk_n;
+    logic c1_sys_clk_p;
+    logic c1_sys_clk_n;
+    logic [7:0] xgmiiTxc;
+    logic [63:0] xgmiiTxd;
+    logic [7:0] xgmiiRxc;
+    logic [63:0] xgmiiRxd;
+
+    // generazione clocks
+    initial begin
+        clk_mac_sim <= 0;
+        clk_mac <= 0;
+        clk_stack  <= 0;
+        c0_sys_clk_p <= 0;
+        c0_sys_clk_n <= 0;
+        c1_sys_clk_p <= 0;
+        c1_sys_clk_n <= 0;
     end
-    
-// Clock generator
-  always
-  begin
-    #(MAC_PERIOD/2) clk_mac <= 1;
-    #(MAC_PERIOD/2) clk_mac <= 0;
-  end
-  
-  always
-  begin
-    #(UDP_IP_PERIOD/2) clk_udp <= 1;
-    #(UDP_IP_PERIOD/2) clk_udp <= 0;
-  end
-  
-  always
-  begin
-    #(ROCE_PERIOD/2) clk_roce <= 1;
-    #(ROCE_PERIOD/2) clk_roce <= 0;
-  end
-  
-  always
-  begin
-    #(AXI_SEG_PERIOD/2) clk_axi_seg <= 1;
-    #(AXI_SEG_PERIOD/2) clk_axi_seg <= 0;
-  end
-  
-  always
-  begin
-    #(AXI_SEG_PERIOD_09/2) clk_axi_seg_09 <= 1;
-    #(AXI_SEG_PERIOD_09/2) clk_axi_seg_09 <= 0;
-  end
-  
-  always
-  begin
-    #2;
-    c0_sys_clk_p <= 1;
-    c0_sys_clk_n <= 0;
-    #2;
-    c0_sys_clk_p <= 0;
-    c0_sys_clk_n <= 1;
- end;
- 
-  always
-  begin
-    #2;
-    c1_sys_clk_p <= 1;
-    c1_sys_clk_n <= 0;
-    #2;
-    c1_sys_clk_p <= 0;
-    c1_sys_clk_n <= 1;
-  end
 
-default clocking clk @(posedge clk_mac);
-endclocking
+    // Clock generator
+    always
+    begin
+        #(SIM_MAC_PERIOD/2) clk_mac_sim <= 1;
+        #(SIM_MAC_PERIOD/2) clk_mac_sim <= 0;
+    end
+
+    always
+    begin
+        #(MAC_PERIOD/2) clk_mac <= 1;
+        #(MAC_PERIOD/2) clk_mac <= 0 ;
+    end
+
+    always
+    begin
+        #(STACK_PERIOD/2) clk_stack <= 1;
+        #(STACK_PERIOD/2) clk_stack <= 0;
+    end
+
+    always
+    begin
+        #2;
+        c0_sys_clk_p <= 1;
+        c0_sys_clk_n <= 0;
+        #2;
+        c0_sys_clk_p <= 0;
+        c0_sys_clk_n <= 1;
+    end;
+
+    always
+    begin
+        #2;
+        c1_sys_clk_p <= 1;
+        c1_sys_clk_n <= 0;
+        #2;
+        c1_sys_clk_p <= 0;
+        c1_sys_clk_n <= 1;
+    end
+    default clocking clk @(posedge clk_mac);
+    endclocking
 
 
-top #(
-	.MAC_DATA_WIDTH(MAC_DATA_WIDTH),
-	.RoCE_DATA_WIDTH(RoCE_DATA_WIDTH)
-) top0 (
+    top #(
+        .MAC_DATA_WIDTH(MAC_DATAPATH_WIDTH),
+        .STACK_DATA_WIDTH(STACK_DATAPATH_WIDTH)
+    ) top0 (
+        .clk_mac_sim(clk_mac_sim),
         .clk_mac(clk_mac),
-        .clk_udp(clk_udp),
-        .clk_roce(clk_roce),
-        .clk_axi_seg(clk_axi_seg),
-        .clk_axi_seg_09(clk_axi_seg_09),
-	.rst(extRst),
-	
-	.clk_mem(clk_mac),
-	.rst_mem(clk_mac),
+        .clk_stack(clk_stack),
+        .rst(extRst),
 
-        .btnu(1'b0),
-        .btnl(1'b0),
-        .btnd(1'b0),
-        .btnr(1'b0),
-        .btnc(1'b0),
-        .sw(4'd0),
-	.led(),
-	
-	.xgmii_tx_clk(clk_mac),
+        .clk_mem(clk_mac),
+        .rst_mem(clk_mac),
+
+        .xgmii_tx_clk(clk_mac_sim),
         .xgmii_tx_rst(extRst),
         .xgmii_txd(xgmiiTxd),
         .xgmii_txc(xgmiiTxc),
-        .xgmii_rx_clk(clk_mac),
+        .xgmii_rx_clk(clk_mac_sim),
         .xgmii_rx_rst(extRst),
         .xgmii_rxd(xgmiiRxd),
         .xgmii_rxc(xgmiiRxc)
-);
+    );
 
-int ret, pkt_count;
-initial begin
-	//$dumpfile("wave.vcd");
-	//$dumpvars(0, top0);
+    int ret, pkt_count;
+    initial begin
+        //$dumpfile("wave.vcd");
+        //$dumpvars(0, top0);
         extRst = 1'b1;
         rst25 = 1'b1;
 
-	ret <= shared_mem_init();
-	if (ret < 0) begin
-		$display("pipe_init: open: ret < 0");
-	end
+        ret <= shared_mem_init();
+        if (ret < 0) begin
+            $display("pipe_init: open: ret < 0");
+        end
 
-	#5000;
+        #5000;
         extRst = 1'b0;
         rst25 = 1'b0;
-	pkt_count = max_recvpkt;
-	while(1) begin
-		tap2xgmii(ret);
-		if (ret == 1) begin
-			if (!(--pkt_count)) begin
-				break;
-			end
-		end
-	        #5;
-	end
+        pkt_count = max_recvpkt;
+        while(1) begin
+            tap2xgmii(ret);
+            if (ret == 1) begin
+                if (!(--pkt_count)) begin
+                    break;
+                end
+            end
+            #5;
+        end
 
-	#10;
-	$finish;
-end
+        #10;
+        $finish;
+    end
 
-/*
- * xgmii_read
- */
-reg ret_reg;
-always @(posedge clk_mac) begin
-	if (extRst) begin
-		ret_reg <= 0;
-	end else begin
-		ret_reg <= xgmii_read(xgmiiTxd,xgmiiTxc);
-	end
-end
+    /*
+     * xgmii_read
+     */
+    reg ret_reg;
+    always @(posedge clk_mac_sim) begin
+        if (extRst) begin
+            ret_reg <= 0;
+        end else begin
+            ret_reg <= xgmii_read(xgmiiTxd,xgmiiTxc);
+        end
+    end
 
 
-/*
- * xgmii_write
- * @data
- */
-task xgmii_write(input longint data, input byte control);
-	@(posedge clk_mac) begin
-		xgmiiRxc <= control;
-		xgmiiRxd <= data;
-	end
-endtask
+    /*
+     * xgmii_write
+     * @data
+     */
+    task xgmii_write(input longint data, input byte control);
+        @(posedge clk_mac_sim) begin
+            xgmiiRxc <= control;
+            xgmiiRxd <= data;
+        end
+    endtask
 
-/*
- * xgmii_idle
- */
-task xgmii_idle;
-	@(posedge clk_mac) begin
-		xgmiiRxc <= 8'b11111111;
-		xgmiiRxd <= 64'h0707070707070707;
-	end
-endtask
+    /*
+     * xgmii_idle
+     */
+    task xgmii_idle;
+        @(posedge clk_mac_sim) begin
+            xgmiiRxc <= 8'b11111111;
+            xgmiiRxd <= 64'h0707070707070707;
+        end
+    endtask
 
 endmodule
 

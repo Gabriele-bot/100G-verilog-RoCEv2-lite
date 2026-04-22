@@ -367,7 +367,7 @@ separate AXI stream.
                     // wrong ICRC
                     error_wrong_icrc_next = 1'b1;
                 end if (m_roce_bth_op_code_next != RC_RDMA_ACK) begin
-                    error_not_roce_ack_next <= 1'b1;
+                    error_not_roce_ack_next = 1'b1;
                 end else begin
                     // otherwise, transfer tuser
                     m_roce_bth_valid_next = !s_udp_payload_axis_tuser;

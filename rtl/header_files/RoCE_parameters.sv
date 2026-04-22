@@ -10,7 +10,14 @@ package RoCE_params;
         time2clk = time_value*1e6/clock_period;
     endfunction
 
-    parameter [15:0] CM_LISTEN_UDP_PORT = 16'h4321;
+    function [31:0] freq2clk;
+        input [31:0] msg_freq; // in hz (integer)
+        input [31:0] clock_freq; // in hz (integer)
+        freq2clk = clock_freq/msg_freq;
+    endfunction
+
+    parameter [15:0] CM_LISTEN_UDP_PORT = 16'h4321; // 17185
+    parameter [15:0] CM_DEST_UDP_PORT   = 16'h4322; // 17186
 
     /*
     RoCE OP CODES
@@ -71,10 +78,10 @@ package RoCE_params;
 
     parameter [0:15][31:0] FREQ_CLK_COUNTER_VALUES = {
     64'd0,
-    time2clk(1e3/1,   RoCE_CLOCK_PERIOD),   // 1 Hz
-    time2clk(1e3/5,   RoCE_CLOCK_PERIOD),   // 5 Hz
-    time2clk(1e3/10,  RoCE_CLOCK_PERIOD),  // 10 Hz
-    time2clk(1e3/50,  RoCE_CLOCK_PERIOD),  // 50 Hz
+    time2clk(1e3/1,   RoCE_CLOCK_PERIOD), // 1 Hz
+    time2clk(1e3/5,   RoCE_CLOCK_PERIOD), // 5 Hz
+    time2clk(1e3/10,  RoCE_CLOCK_PERIOD), // 10 Hz
+    time2clk(1e3/50,  RoCE_CLOCK_PERIOD), // 50 Hz
     time2clk(1e3/100, RoCE_CLOCK_PERIOD), // 100 Hz
     time2clk(1e3/500, RoCE_CLOCK_PERIOD), // 500 Hz
     time2clk(1e3/1e3, RoCE_CLOCK_PERIOD), // 1 kHz
@@ -93,9 +100,9 @@ package RoCE_params;
     Connection manager parameters
     */
     /*
-    Local QP number starts from 2**8 and goes up to 2**8 + 2**(MAX_QUEUE_PAIRS)
+    Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
     */
-    parameter MAX_QUEUE_PAIRS = 4;
+    parameter MAX_QUEUE_PAIRS = 2**2;
 
     parameter MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
     //REQUESTS types
@@ -105,6 +112,7 @@ package RoCE_params;
     REQ_SEND_QP_INFO  = 3'h2,
     REQ_MODIFY_QP_RTS = 3'h3,
     REQ_CLOSE_QP      = 3'h4,
+    REQ_FETCH_QP_INFO = 3'h5, // used only internally
     REQ_ERROR         = 3'h7;
 
     //ACK types
@@ -114,6 +122,14 @@ package RoCE_params;
     ACK_NO_QP         = 3'h2, //No QP available
     ACK_NAK           = 3'h3,
     ACK_ERROR         = 3'h7;
+
+    parameter
+    CM_STATUS_OK       = 3'd0,
+    CM_ERROR_NO_LOC_QP = 3'd1,
+    CM_ERROR_FAILED_OP = 3'd2,
+    CM_ERROR_FETCH_QP  = 3'd3,
+    CM_ERROR_MOD_QP    = 3'd4,
+    CM_ERROR_TIMEOUT   = 3'd5;
 
 
     parameter [15:0] ROCE_UDP_TX_SOURCE_PORT = 16'hf8f7;
@@ -154,7 +170,9 @@ package RoCE_params;
         logic        ack_request;
         logic [6:0]  reserved_1;
         logic [23:0] qp_number;
-        logic [7 :0] reserved_0;
+        logic [5 :0] reserved_0;
+        logic        becn;
+        logic        fecn;
         logic [15:0] p_key;
         logic        sol_event;
         logic        mig_request;
