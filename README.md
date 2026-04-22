@@ -53,7 +53,7 @@ A QP state table is implemented in LUTRAM (few QPs..). Request are sent via the 
 TODO: transition to error state if qp is in the INIT state, but it failed dto move to RTS state.
 
 <center>
-    <img src="img/QP_state.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/QP_State.png" alt="Drawing" style="width: 500px"/>
 </center>
 
 ## This will be modified ..
