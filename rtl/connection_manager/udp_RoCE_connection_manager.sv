@@ -406,7 +406,7 @@ module udp_RoCE_connection_manager #(
 
                 case (state_reg)
                     STATE_IDLE: begin
-                        if (m_qp_info_valid && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // check if is targetting the local ip
+                        if (m_qp_info_valid && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // check if it is targeting the local ip
                             case(m_qp_info_req_type)
                                 REQ_OPEN_QP: begin
 
