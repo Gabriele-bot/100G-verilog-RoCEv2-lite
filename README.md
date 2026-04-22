@@ -33,19 +33,19 @@ RoCE_stack_wrapper #(
 ### TX Queue
 Each queue data stream is split in PMTU smaller packets, then the qp infos are fetched strarting from the local qp and finally the RoCE headers are produced.
 <center>
-    <img src="img/TX_queue.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/TX_queue.png" alt="Drawing" style="width: 600px"/>
 </center>
 
 ## Retransmission diagram
 <center>
-    <img src="img/Retransmission.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/Retransmission.png" alt="Drawing" style="width: 600px"/>
 </center>
 
 ## Connection manager via UDP
 A Connection Manager (CM) is implemented via UDP packets. The structure of the UDP packet can be found [here](https://github.com/Gabriele-bot/100G-verilog-RoCEv2-lite/blob/main/rtl/connection_manager/udp_RoCE_connection_manager_rx.sv#L10-L39).
 
 <center>
-    <img src="img/Connection_manager_FSM.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/Connection_manager_FSM.png" alt="Drawing" style="width: 400px"/>
 </center>
 
 ## QP state 
@@ -53,7 +53,7 @@ A QP state table is implemented in LUTRAM (few QPs..). Request are sent via the 
 TODO: transition to error state if qp is in the INIT state, but it failed dto move to RTS state.
 
 <center>
-    <img src="img/QP_State.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/QP_State.png" alt="Drawing" style="width: 250px"/>
 </center>
 
 ## This will be modified ..
