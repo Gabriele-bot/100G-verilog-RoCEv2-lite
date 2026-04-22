@@ -140,6 +140,9 @@ IP_TCL_FILES += ip/vio_wqe_debug.tcl
 IP_TCL_FILES += ip/vio_axis_monitor.tcl
 IP_TCL_FILES += ip/vio_perf_monitor.tcl
 IP_TCL_FILES += ip/ila_axis.tcl
+IP_TCL_FILES += ip/ila_eth.tcl
+IP_TCL_FILES += ip/ila_ip.tcl
+IP_TCL_FILES += ip/ila_udp.tcl
 IP_TCL_FILES += ip/ila_latency_distrib.tcl
 
 

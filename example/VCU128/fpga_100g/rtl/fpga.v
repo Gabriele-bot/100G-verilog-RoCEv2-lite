@@ -513,9 +513,11 @@ ila_axis ila_eth_tx(
       .m_status_good_frame()
   );
 
-  fpga_core core_inst (
+  fpga_core #(
+    .DEBUG(1)
+  ) core_inst (
       /*
-     * Clock: 322.625 MHz
+     * Clock: 322.266 MHz
      * Synchronous reset
      */
       .clk                 (clk_net_int),
