@@ -406,7 +406,7 @@ module udp_RoCE_connection_manager #(
 
                 case (state_reg)
                     STATE_IDLE: begin
-                        if (m_qp_info_valid) begin
+                        if (m_qp_info_valid && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // check if is targetting the local ip
                             case(m_qp_info_req_type)
                                 REQ_OPEN_QP: begin
 
@@ -758,7 +758,7 @@ module udp_RoCE_connection_manager #(
                     end
                     STATE_WAIT_REM_RPY: begin
                         if (cm_timout_counter > 0) begin
-                            if (m_qp_info_valid && m_qp_info_loc_ip_addr == qp_info_rem_ip_addr_reg) begin // got a reply from the server
+                            if (m_qp_info_valid && m_qp_info_loc_ip_addr == qp_info_rem_ip_addr_reg && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // got a reply from the server
                                 if (m_qp_info_ack_valid && (m_qp_info_ack_type == ACK_ACK || m_qp_info_ack_type == ACK_NO_QP)) begin // server ack'ed the request or close qp request, but no qp is present on the receiver (server) side
                                     
                                     cm_qp_valid_next = 1'b1;
