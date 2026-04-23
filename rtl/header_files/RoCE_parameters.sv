@@ -42,38 +42,38 @@ package RoCE_params;
 
     // Infiniband specification Vol 1 realeas 1.4 page 354
     parameter [0:31][31:0] RNR_TIMER_VALUES = {
-    time2clk(655.36, RoCE_CLOCK_PERIOD),
-    time2clk(0.01,   RoCE_CLOCK_PERIOD),
-    time2clk(0.02,   RoCE_CLOCK_PERIOD),
-    time2clk(0.03,   RoCE_CLOCK_PERIOD),
-    time2clk(0.04,   RoCE_CLOCK_PERIOD),
-    time2clk(0.06,   RoCE_CLOCK_PERIOD),
-    time2clk(0.08,   RoCE_CLOCK_PERIOD),
-    time2clk(0.12,   RoCE_CLOCK_PERIOD),
-    time2clk(0.16,   RoCE_CLOCK_PERIOD),
-    time2clk(0.24,   RoCE_CLOCK_PERIOD),
-    time2clk(0.32,   RoCE_CLOCK_PERIOD),
-    time2clk(0.48,   RoCE_CLOCK_PERIOD),
-    time2clk(0.64,   RoCE_CLOCK_PERIOD),
-    time2clk(0.96,   RoCE_CLOCK_PERIOD),
-    time2clk(1.28,   RoCE_CLOCK_PERIOD),
-    time2clk(1.92,   RoCE_CLOCK_PERIOD),
-    time2clk(2.56,   RoCE_CLOCK_PERIOD),
-    time2clk(3.84,   RoCE_CLOCK_PERIOD),
-    time2clk(5.12,   RoCE_CLOCK_PERIOD),
-    time2clk(7.68,   RoCE_CLOCK_PERIOD),
-    time2clk(10.24,  RoCE_CLOCK_PERIOD),
-    time2clk(15.36,  RoCE_CLOCK_PERIOD),
-    time2clk(20.48,  RoCE_CLOCK_PERIOD),
-    time2clk(30.72,  RoCE_CLOCK_PERIOD),
-    time2clk(40.98,  RoCE_CLOCK_PERIOD),
-    time2clk(61.44,  RoCE_CLOCK_PERIOD),
-    time2clk(81.92,  RoCE_CLOCK_PERIOD),
-    time2clk(122.88, RoCE_CLOCK_PERIOD),
-    time2clk(163.84, RoCE_CLOCK_PERIOD),
-    time2clk(245.76, RoCE_CLOCK_PERIOD),
-    time2clk(327.68, RoCE_CLOCK_PERIOD),
-    time2clk(491.52, RoCE_CLOCK_PERIOD)
+    time2clk(655.36, RoCE_CLOCK_PERIOD), // 0
+    time2clk(0.01,   RoCE_CLOCK_PERIOD), // 1
+    time2clk(0.02,   RoCE_CLOCK_PERIOD), // 2
+    time2clk(0.03,   RoCE_CLOCK_PERIOD), // 3
+    time2clk(0.04,   RoCE_CLOCK_PERIOD), // 4
+    time2clk(0.06,   RoCE_CLOCK_PERIOD), // 5
+    time2clk(0.08,   RoCE_CLOCK_PERIOD), // 6
+    time2clk(0.12,   RoCE_CLOCK_PERIOD), // 7
+    time2clk(0.16,   RoCE_CLOCK_PERIOD), // 8
+    time2clk(0.24,   RoCE_CLOCK_PERIOD), // 9
+    time2clk(0.32,   RoCE_CLOCK_PERIOD), // 10
+    time2clk(0.48,   RoCE_CLOCK_PERIOD), // 11
+    time2clk(0.64,   RoCE_CLOCK_PERIOD), // 12
+    time2clk(0.96,   RoCE_CLOCK_PERIOD), // 13
+    time2clk(1.28,   RoCE_CLOCK_PERIOD), // 14
+    time2clk(1.92,   RoCE_CLOCK_PERIOD), // 15
+    time2clk(2.56,   RoCE_CLOCK_PERIOD), // 16
+    time2clk(3.84,   RoCE_CLOCK_PERIOD), // 17
+    time2clk(5.12,   RoCE_CLOCK_PERIOD), // 18
+    time2clk(7.68,   RoCE_CLOCK_PERIOD), // 19
+    time2clk(10.24,  RoCE_CLOCK_PERIOD), // 20
+    time2clk(15.36,  RoCE_CLOCK_PERIOD), // 21
+    time2clk(20.48,  RoCE_CLOCK_PERIOD), // 22
+    time2clk(30.72,  RoCE_CLOCK_PERIOD), // 23
+    time2clk(40.98,  RoCE_CLOCK_PERIOD), // 24
+    time2clk(61.44,  RoCE_CLOCK_PERIOD), // 25
+    time2clk(81.92,  RoCE_CLOCK_PERIOD), // 26
+    time2clk(122.88, RoCE_CLOCK_PERIOD), // 27
+    time2clk(163.84, RoCE_CLOCK_PERIOD), // 28
+    time2clk(245.76, RoCE_CLOCK_PERIOD), // 29
+    time2clk(327.68, RoCE_CLOCK_PERIOD), // 30
+    time2clk(491.52, RoCE_CLOCK_PERIOD)  // 31
     };
 
     parameter [0:15][31:0] FREQ_CLK_COUNTER_VALUES = {

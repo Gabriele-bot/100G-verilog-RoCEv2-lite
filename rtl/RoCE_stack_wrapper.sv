@@ -1297,7 +1297,8 @@ module RoCE_stack_wrapper #(
                 .s_qp_req_rem_addr     (s_qp_context_req_rem_addr),
                 .s_qp_req_rem_ip_addr  (s_qp_context_req_rem_ip_addr),
 
-                .stall(stall_qp[i]),
+                //.stall(stall_qp[i]),
+                .stall(1'b0),
 
                 .pmtu(pmtu),
                 .RoCE_udp_port(RoCE_udp_port),
@@ -1396,7 +1397,9 @@ module RoCE_stack_wrapper #(
                 .m_roce_payload_axis_tvalid(s_roce_qp_arb_payload_axis_tvalid[i]),
                 .m_roce_payload_axis_tready(s_roce_qp_arb_payload_axis_tready[i]),
                 .m_roce_payload_axis_tlast (s_roce_qp_arb_payload_axis_tlast[i]),
-                .m_roce_payload_axis_tuser (s_roce_qp_arb_payload_axis_tuser[i])
+                .m_roce_payload_axis_tuser (s_roce_qp_arb_payload_axis_tuser[i]),
+
+                .stall(stall_qp[i])
             );
 
             assign roce_arb_bth_temp.op_code        = roce_tx_eng_post_align_bth_op_code;
