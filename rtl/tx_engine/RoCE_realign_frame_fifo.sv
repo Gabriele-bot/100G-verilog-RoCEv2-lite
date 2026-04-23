@@ -107,7 +107,9 @@ module RoCE_realign_frame_fifo #(
     output  wire                         m_roce_payload_axis_tvalid,
     input   wire                         m_roce_payload_axis_tready,
     output  wire                         m_roce_payload_axis_tlast,
-    output  wire                         m_roce_payload_axis_tuser
+    output  wire                         m_roce_payload_axis_tuser,
+
+    input   wire     stall
 
 );
 
@@ -233,7 +235,9 @@ module RoCE_realign_frame_fifo #(
                 .DEST_ENABLE(0),
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
-                .FRAME_FIFO(1)
+                .FRAME_FIFO(1),
+                .PAUSE_ENABLE(1),
+                .FRAME_PAUSE(1)
             ) roce_payload_fifo (
                 .clk(clk),
                 .rst(rst),
@@ -256,7 +260,10 @@ module RoCE_realign_frame_fifo #(
                 .m_axis_tlast (m_roce_payload_axis_fifo_tlast),
                 .m_axis_tuser (m_roce_payload_axis_fifo_tuser),
                 .m_axis_tid   (),
-                .m_axis_tdest ()
+                .m_axis_tdest (),
+                // pause 
+                .pause_req(stall),
+                .pause_ack()
             );
         end else begin
             axis_fifo_adapter #(
@@ -272,7 +279,9 @@ module RoCE_realign_frame_fifo #(
                 .DEST_ENABLE(0),
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
-                .FRAME_FIFO(1)
+                .FRAME_FIFO(1),
+                .PAUSE_ENABLE(1),
+                .FRAME_PAUSE(1)
             ) roce_payload_fifo_adapter (
                 .clk(clk),
                 .rst(rst),
@@ -295,7 +304,10 @@ module RoCE_realign_frame_fifo #(
                 .m_axis_tlast (m_roce_payload_axis_fifo_tlast),
                 .m_axis_tuser (m_roce_payload_axis_fifo_tuser),
                 .m_axis_tid   (),
-                .m_axis_tdest ()
+                .m_axis_tdest (),
+                // pause 
+                .pause_req(stall),
+                .pause_ack()
             );
         end
     endgenerate
