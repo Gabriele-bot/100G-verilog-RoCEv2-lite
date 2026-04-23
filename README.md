@@ -24,7 +24,7 @@ RoCE_stack_wrapper #(
     .REFRESH_CACHE_TICKS             (32767),              // TX queue qp info cache refresh timer (in clk cycles)                         
     .RETRANSMISSION                  (1),                   
     .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
-    .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)     // total number of parellel QPs                
+    .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)     // total number of parallel QPs                
 ) RoCE_stack_wrapper_instance (
 // connections
 );
