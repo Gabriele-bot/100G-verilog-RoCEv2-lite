@@ -105,6 +105,11 @@ module axi_ram_xpm #
             $error("Error: AXI word width must be even power of two (instance %m)");
             $finish;
         end
+
+        if (READ_LATENCY < 1) begin
+            $error("Error: Memory READ_LATENCY must be greater than 0 (instance %m)");
+            $finish;
+        end
     end
 
     localparam [0:0]
@@ -194,7 +199,7 @@ module axi_ram_xpm #
                 .WRITE_MODE_B("read_first"), // String
                 .WRITE_PROTECT(1) // DECIMAL
             )
-            hdr_ram_instance (
+            xpm_ram_instance (
                 .dbiterrb(),
                 .doutb(ramout),
                 .sbiterrb(),

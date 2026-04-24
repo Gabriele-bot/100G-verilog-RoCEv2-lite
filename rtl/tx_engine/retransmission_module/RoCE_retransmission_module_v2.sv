@@ -7,6 +7,7 @@ module RoCE_retransmission_module_v2 #(
     parameter MAX_QPS = 4,
     parameter CLOCK_PERIOD = 6.4,
     parameter AXI_FIFO_DEPTH = 4,
+    parameter HEADER_RAM_READ_LATENCY = 4,
     parameter USE_XILINX_XPM_SDPRAM = 1
 ) (
     input wire clk,
@@ -590,7 +591,7 @@ module RoCE_retransmission_module_v2 #(
                 .ADDR_WIDTH_B(BUFFER_ADDR_WIDTH-8), // DECIMAL
                 .AUTO_SLEEP_TIME(0), // DECIMAL
                 .BYTE_WRITE_WIDTH_A(HDR_DATA_WIDTH), // DECIMAL
-                .CASCADE_HEIGHT(4), // DECIMAL
+                .CASCADE_HEIGHT(HEADER_RAM_READ_LATENCY), // DECIMAL
                 .CLOCKING_MODE("common_clock"), // String
                 .ECC_BIT_RANGE("7:0"), // String
                 .ECC_MODE("no_ecc"), // String
@@ -603,7 +604,7 @@ module RoCE_retransmission_module_v2 #(
                 .MEMORY_SIZE(2**(BUFFER_ADDR_WIDTH-8)*HDR_DATA_WIDTH), // DECIMAL
                 .MESSAGE_CONTROL(0), // DECIMAL
                 .READ_DATA_WIDTH_B(HDR_DATA_WIDTH), // DECIMAL
-                .READ_LATENCY_B(4), // DECIMAL
+                .READ_LATENCY_B(HEADER_RAM_READ_LATENCY), // DECIMAL
                 .READ_RESET_VALUE_B("0"), // String
                 .RST_MODE_A("SYNC"), // String
                 .RST_MODE_B("SYNC"), // String
@@ -640,7 +641,7 @@ module RoCE_retransmission_module_v2 #(
                 .ADDR_WIDTH(BUFFER_ADDR_WIDTH-8),
                 .DATA_WIDTH(HDR_DATA_WIDTH),
                 .STRB_WIDTH(1),
-                .NPIPES(2),
+                .NPIPES(HEADER_RAM_READ_LATENCY-2),
                 .STYLE("ultra")
             ) hdr_ram_instance (
                 .clk(clk),

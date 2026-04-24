@@ -1487,11 +1487,12 @@ module RoCE_stack_wrapper #(
     );
 
     RoCE_retransmission_module_v2 #(
-        .DATA_WIDTH       (OUT_DATA_WIDTH),
-        .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH), // total buffer, all QPs
-        .MAX_QPS          (N_QUEUE_PAIRS),
-        .CLOCK_PERIOD     (CLOCK_PERIOD),
-        .AXI_FIFO_DEPTH   (4)
+        .DATA_WIDTH             (OUT_DATA_WIDTH),
+        .BUFFER_ADDR_WIDTH      (RETRANSMISSION_ADDR_BUFFER_WIDTH), // total buffer, all QPs
+        .MAX_QPS                (N_QUEUE_PAIRS),
+        .CLOCK_PERIOD           (CLOCK_PERIOD),
+        .AXI_FIFO_DEPTH         (4),
+        .HEADER_RAM_READ_LATENCY(4)
     ) RoCE_retransmission_module_v2_instance (
         .clk(clk),
         .rst(rst),
