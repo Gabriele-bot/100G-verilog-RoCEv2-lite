@@ -870,7 +870,7 @@ module network_wrapper_roce_generic #(
         .DEBUG                           (DEBUG), 
         .REFRESH_CACHE_TICKS             (32767),                           
         .RETRANSMISSION                  (1),                   
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(23), 
         .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)                    
     ) RoCE_stack_wrapper_instance (
         .clk(clk_stack),

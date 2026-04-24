@@ -6,6 +6,7 @@ module RoCE_retransmission_module_v2 #(
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter MAX_QPS = 4,
     parameter CLOCK_PERIOD = 6.4,
+    parameter AXI_FIFO_DEPTH = 4,
     parameter USE_XILINX_XPM_SDPRAM = 1
 ) (
     input wire clk,
@@ -878,8 +879,8 @@ module RoCE_retransmission_module_v2 #(
         .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .STRB_WIDTH(DATA_WIDTH/8),
         .ID_WIDTH(1),
-        .WRITE_FIFO_DEPTH(16),
-        .READ_FIFO_DEPTH(16)
+        .WRITE_FIFO_DEPTH(AXI_FIFO_DEPTH),
+        .READ_FIFO_DEPTH(AXI_FIFO_DEPTH)
     ) axi_fifo_instance (
         .clk(clk),
         .rst(rst),

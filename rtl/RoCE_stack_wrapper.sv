@@ -10,7 +10,7 @@ module RoCE_stack_wrapper #(
     parameter OUT_KEEP_WIDTH                   = (OUT_DATA_WIDTH/8),
     parameter CLOCK_PERIOD                     = 6.4, // in ns
     parameter DEBUG                            = 0,
-    parameter REFRESH_CACHE_TICKS              = 32768,
+    parameter REFRESH_CACHE_TICKS              = 32767,
     parameter RETRANSMISSION                   = 1,
     parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 24,
     parameter N_QUEUE_PAIRS                    = 2
@@ -1490,7 +1490,8 @@ module RoCE_stack_wrapper #(
         .DATA_WIDTH       (OUT_DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH), // total buffer, all QPs
         .MAX_QPS          (N_QUEUE_PAIRS),
-        .CLOCK_PERIOD     (CLOCK_PERIOD)
+        .CLOCK_PERIOD     (CLOCK_PERIOD),
+        .AXI_FIFO_DEPTH   (4)
     ) RoCE_retransmission_module_v2_instance (
         .clk(clk),
         .rst(rst),
@@ -1870,7 +1871,6 @@ module RoCE_stack_wrapper #(
                 .m_axi_rready (m_axi_ram_rready)
             );
 
-            // TODO try with Xilinx IP to produce a AXI BRAM Controller
             axi_ram_xpm #(
                 .DATA_WIDTH(OUT_DATA_WIDTH),
                 .ADDR_WIDTH(INTERCONNECT_ADDR_WIDTH),
