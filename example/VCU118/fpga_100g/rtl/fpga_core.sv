@@ -31,8 +31,9 @@ THE SOFTWARE.
  */
 module fpga_core #(
     parameter TARGET = "XILINX",
-    parameter LOCAL_MAC_ADDRESS = 48'h02_00_00_00_00_00,
-    parameter FIFO_REGS = 4
+    parameter LOCAL_MAC_ADDRESS = 48'h000A_35DE_AD00,
+    parameter FIFO_REGS = 4,
+    parameter DEBUG = 0 
 ) (
     /*
      * Clock: TX cmac
@@ -661,114 +662,31 @@ module fpga_core #(
 
     // ROCE TX inst
     // 10G  64b@156MHz   --> 2**18 * 8 bits / 10Gbps  = 210 us of buffering (best case scenario, every frame is full)
-    // 25G  642b@390MHz  --> 2**20 * 8 bits / 25Gbps  = 168 us of buffering (best case scenario, every frame is full)
+    // 25G  64b@390MHz   --> 2**19 * 8 bits / 25Gbps  = 168 us of buffering (best case scenario, every frame is full)
     // 100G 512b@322MHz  --> 2**21 * 8 bits / 100Gbps = 168 us of buffering (best case scenario, every frame is full)
     // 200G 512b@400MHz  --> 2**22 * 8 bits / 200Gbps = 168 us of buffering (best case scenario, every frame is full)
-    // 400G 1024b@400MHz --> 2**24 * 8 bits / 400Gbps = 168 us of buffering (best case scenario, every frame is full)
-    
-    /*
-    RoCE_minimal_stack #(
-        .DATA_WIDTH(512),
-        .DEBUG(1),
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(20) // 2**20 * 8 bits / 100Gbps = 83 us of buffering (best case scenario, every frame is full)
-    ) RoCE_minimal_stack_512_instance (
-        .clk(clk),
-        .rst(rst),
-        .flow_ctrl_pause(tx_pause_req[prio_tag_debug] || tx_pause_req[8]), // priority 0 or global pause
-        .s_udp_hdr_valid(rx_udp_hdr_valid),
-        .s_udp_hdr_ready(rx_udp_hdr_ready),
-        .s_eth_dest_mac(rx_udp_eth_dest_mac),
-        .s_eth_src_mac(rx_udp_eth_src_mac),
-        .s_eth_type(rx_udp_eth_type),
-        .s_ip_version(rx_udp_ip_version),
-        .s_ip_ihl(rx_udp_ip_ihl),
-        .s_ip_dscp(rx_udp_ip_dscp),
-        .s_ip_ecn(rx_udp_ip_ecn),
-        .s_ip_length(rx_udp_ip_length),
-        .s_ip_identification(rx_udp_ip_identification),
-        .s_ip_flags(rx_udp_ip_flags),
-        .s_ip_fragment_offset(rx_udp_ip_fragment_offset),
-        .s_ip_ttl(rx_udp_ip_ttl),
-        .s_ip_protocol(rx_udp_ip_protocol),
-        .s_ip_header_checksum(rx_udp_ip_header_checksum),
-        .s_ip_source_ip(rx_udp_ip_source_ip),
-        .s_ip_dest_ip(rx_udp_ip_dest_ip),
-        .s_udp_source_port(rx_udp_source_port),
-        .s_udp_dest_port(rx_udp_dest_port),
-        .s_udp_length(rx_udp_length),
-        .s_udp_checksum(rx_udp_checksum),
-        .s_udp_payload_axis_tdata(rx_udp_payload_axis_tdata),
-        .s_udp_payload_axis_tkeep(rx_udp_payload_axis_tkeep),
-        .s_udp_payload_axis_tvalid(rx_udp_payload_axis_tvalid),
-        .s_udp_payload_axis_tready(rx_udp_payload_axis_tready),
-        .s_udp_payload_axis_tlast(rx_udp_payload_axis_tlast),
-        .s_udp_payload_axis_tuser(rx_udp_payload_axis_tuser),
-        .m_udp_hdr_valid(tx_udp_hdr_valid),
-        .m_udp_hdr_ready(tx_udp_hdr_ready),
-        .m_eth_dest_mac(),
-        .m_eth_src_mac(),
-        .m_eth_type(),
-        .m_ip_version(),
-        .m_ip_ihl(),
-        .m_ip_dscp(tx_udp_ip_dscp),
-        .m_ip_ecn(tx_udp_ip_ecn),
-        .m_ip_length(),
-        .m_ip_identification(),
-        .m_ip_flags(),
-        .m_ip_fragment_offset(),
-        .m_ip_ttl(tx_udp_ip_ttl),
-        .m_ip_protocol(),
-        .m_ip_header_checksum(),
-        .m_ip_source_ip(tx_udp_ip_source_ip),
-        .m_ip_dest_ip(tx_udp_ip_dest_ip),
-        .m_udp_source_port(tx_udp_source_port),
-        .m_udp_dest_port(tx_udp_dest_port),
-        .m_udp_length(tx_udp_length),
-        .m_udp_checksum(tx_udp_checksum),
-        .m_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
-        .m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
-        .m_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
-        .m_udp_payload_axis_tready(tx_udp_payload_axis_tready),
-        .m_udp_payload_axis_tlast(tx_udp_payload_axis_tlast),
-        .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
-        .busy(),
-        .error_payload_early_termination(),
-        .pmtu(pmtu),
-        .RoCE_udp_port(RoCE_udp_port),
-        .loc_ip_addr(local_ip),
-        .timeout_period(64'd20000), //3.1 ns * 20000 = 62 ns
-        .retry_count(3'd7),
-        .rnr_retry_count(3'd7),
-        // perf monitor
-        .transfer_time_avg       (transfer_time_avg),
-        .transfer_time_moving_avg(transfer_time_moving_avg),
-        .transfer_time_inst      (transfer_time_inst),
-        .latency_avg             (latency_avg),
-        .latency_moving_avg      (latency_moving_avg),
-        .latency_inst            (latency_inst),
-        .cfg_latency_avg_po2     (cfg_latency_avg_po2),
-        .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
-        .monitor_loc_qpn         (monitor_loc_qpn)
-    );
-    */
+    // 400G 1024b@400MHz --> 2**23 * 8 bits / 400Gbps = 168 us of buffering (best case scenario, every frame is full)
    RoCE_stack_wrapper #(
-        .QP_CH_DATA_WIDTH                (128),
+        .QP_CH_DATA_WIDTH                (256), // this correspond to a maximun of ~82 Gbps for each QP
         .QP_CH_KEEP_ENABLE               (1),
-        .QP_CH_KEEP_WIDTH                (16),
+        .QP_CH_KEEP_WIDTH                (32),
         .OUT_DATA_WIDTH                  (512),
         .OUT_KEEP_ENABLE                 (1),
         .OUT_KEEP_WIDTH                  (64),
-        .CLOCK_PERIOD                    (1000/322),
-        .DEBUG                           (0),
+        .CLOCK_PERIOD                    (1000/322.266),
+        .DEBUG                           (1),
         .REFRESH_CACHE_TICKS             (32767),
         .RETRANSMISSION                  (1),
-        .RETRANSMISSION_ADDR_BUFFER_WIDTH(18),
-        .N_QUEUE_PAIRS                   (4)
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(23),
+        .N_QUEUE_PAIRS                   (8)
+        // Addr buffer 23 bits and 4 QP --> 2**23=8MB, 8MB/4QP = 2MB/QP --> 168 us/qp buffering time (all PMTU packets)
+        // Addr buffer 23 bits and 8 QP --> 2**23=8MB, 8MB/8QP = 1MB/QP --> 83 us/qp buffering time (all PMTU packets)
+	// remeber that you could cap each QP to a lower throughput, e.g. reducing the datapath width ( with the cmac the freq is 322MHz, 128b*322MHz=40Gbps)
     ) RoCE_stack_wrapper_instance (
         .clk(clk),
         .rst(rst),
         .flow_ctrl_pause(tx_pause_req[prio_tag_debug] || tx_pause_req[8]), // priority 0 or global pause
-
+	// N_QP inputs
         .s_wr_req_valid           ('{default:0}),
         .s_wr_req_ready           (),
         .s_wr_req_tx_type         ('{default:0}),
@@ -783,7 +701,7 @@ module fpga_core #(
         .s_axis_tready            (),
         .s_axis_tlast             ('{default:0}),
         .s_axis_tuser             ('{default:0}),
-
+	// UDP frame input (CM and ACK logic)
         .s_udp_hdr_valid(rx_udp_hdr_valid),
         .s_udp_hdr_ready(rx_udp_hdr_ready),
         .s_eth_dest_mac(rx_udp_eth_dest_mac),
@@ -814,15 +732,28 @@ module fpga_core #(
         .s_udp_payload_axis_tuser(rx_udp_payload_axis_tuser),
 
         // UDP frame output (TX)
-        
         .m_udp_hdr_valid(tx_udp_hdr_valid),
         .m_udp_hdr_ready(tx_udp_hdr_ready),
-        .m_ip_source_ip(tx_udp_ip_source_ip),
-        .m_ip_dest_ip(tx_udp_ip_dest_ip),
-        .m_udp_source_port(tx_udp_source_port),
-        .m_udp_dest_port(tx_udp_dest_port),
-        .m_udp_length(tx_udp_length),
-        .m_udp_checksum(tx_udp_checksum),
+        .m_eth_dest_mac      (),
+        .m_eth_src_mac       (),
+        .m_eth_type          (),
+        .m_ip_version        (),
+        .m_ip_ihl            (),
+        .m_ip_dscp           (tx_udp_ip_dscp),
+        .m_ip_ecn            (tx_udp_ip_ecn),
+        .m_ip_length         (),
+        .m_ip_identification (),
+        .m_ip_flags          (),
+        .m_ip_fragment_offset(),
+        .m_ip_ttl            (tx_udp_ip_ttl),
+        .m_ip_protocol       (),
+        .m_ip_header_checksum(),
+        .m_ip_source_ip      (tx_udp_ip_source_ip),
+        .m_ip_dest_ip        (tx_udp_ip_dest_ip),
+        .m_udp_source_port   (tx_udp_source_port),
+        .m_udp_dest_port     (tx_udp_dest_port),
+        .m_udp_length        (tx_udp_length),
+        .m_udp_checksum      (tx_udp_checksum),
         .m_udp_payload_axis_tdata(tx_udp_payload_axis_tdata),
         .m_udp_payload_axis_tkeep(tx_udp_payload_axis_tkeep),
         .m_udp_payload_axis_tvalid(tx_udp_payload_axis_tvalid),
@@ -831,9 +762,10 @@ module fpga_core #(
         .m_udp_payload_axis_tuser(tx_udp_payload_axis_tuser),
 
         // QP spy output
-        
+        // request
         .m_qp_context_spy         (m_qp_context_spy),
         .m_qp_local_qpn_spy       (m_qp_local_qpn_spy),
+        // reply
         .s_qp_spy_context_valid   (s_qp_spy_context_valid),
         .s_qp_spy_state           (s_qp_spy_state),
         .s_qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
@@ -856,11 +788,16 @@ module fpga_core #(
         .cfg_throughput_avg_po2  (cfg_throughput_avg_po2),
         .monitor_loc_qpn         (monitor_loc_qpn),
         
+        // status
+        .psn_diff                 (psn_diff),
+        .n_retransmit_triggers    (n_retransmit_triggers),
+        .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
         
-        .pmtu           (3'd4),
-        .RoCE_udp_port  (16'h12B7),
-        .loc_ip_addr    ({8'd22, 8'd1, 8'd212, 8'd10}),
-        .timeout_period (64'd10000), //3.1 ns * 10000 = 31 us
+        
+        .pmtu(pmtu),
+        .RoCE_udp_port(RoCE_udp_port),
+        .loc_ip_addr(local_ip),
+        .timeout_period (64'd15000), //3.1 ns * 15000 = 46 us
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7)
 
@@ -874,7 +811,13 @@ module fpga_core #(
         .probe_in0(transfer_time_avg),
         .probe_in1(transfer_time_moving_avg),
         .probe_in2(latency_avg),
-        .probe_in3(latency_moving_avg)
+        .probe_in3(latency_moving_avg),
+        .probe_in4(0),
+        .probe_in5(0),
+        .probe_in6(psn_diff),
+        .probe_in7(0),
+        .probe_in8(n_retransmit_triggers),
+        .probe_in9(n_rnr_retransmit_triggers)
     );
     
     
@@ -884,31 +827,39 @@ module fpga_core #(
     
     assign cfg_throughput_avg_po2 = cfg_throughput_avg_po2_reg;
 
-
-  /*
-    
-  ila_axis ila_eth_payload_tx(
-    .clk(clk),
-    .probe0(tx_eth_payload_axis_tdata),
-    .probe1(tx_eth_payload_axis_tkeep),
-    .probe2(tx_eth_payload_axis_tvalid),
-    .probe3(tx_eth_payload_axis_tready),
-    .probe4(tx_eth_payload_axis_tlast),
-    .probe5(tx_eth_payload_axis_tuser)
-  );
-  
-  
-  
-  ila_axis ila_eth_payload_rx(
-    .clk(clk),
-    .probe0(rx_eth_payload_axis_tdata),
-    .probe1(rx_eth_payload_axis_tkeep),
-    .probe2(rx_eth_payload_axis_tvalid),
-    .probe3(rx_eth_payload_axis_tready),
-    .probe4(rx_eth_payload_axis_tlast),
-    .probe5(rx_eth_payload_axis_tuser)
-  );
-  */
+  generate
+    if (DEBUG) begin
+  	ila_eth ila_eth_payload_rx(
+          .clk(clk),
+          .probe0(rx_eth_payload_axis_tdata),
+          .probe1(rx_eth_payload_axis_tkeep),
+          .probe2(rx_eth_payload_axis_tvalid),
+          .probe3(rx_eth_payload_axis_tready),
+          .probe4(rx_eth_payload_axis_tlast),
+          .probe5(rx_eth_payload_axis_tuser),
+          .probe6(rx_eth_hdr_valid),
+          .probe7(rx_eth_hdr_ready),
+          .probe8(rx_eth_dest_mac),
+          .probe9(rx_eth_src_mac),
+          .probe10(rx_eth_type)
+        );
+        
+        ila_eth ila_eth_payload_tx(
+          .clk(clk),
+          .probe0(tx_eth_payload_axis_tdata),
+          .probe1(tx_eth_payload_axis_tkeep),
+          .probe2(tx_eth_payload_axis_tvalid),
+          .probe3(tx_eth_payload_axis_tready),
+          .probe4(tx_eth_payload_axis_tlast),
+          .probe5(tx_eth_payload_axis_tuser),
+          .probe6(tx_eth_hdr_valid),
+          .probe7(tx_eth_hdr_ready),
+          .probe8(tx_eth_dest_mac),
+          .probe9(tx_eth_src_mac),
+          .probe10(tx_eth_type)
+        );
+    end
+  endgenerate
 endmodule
 
 `resetall
