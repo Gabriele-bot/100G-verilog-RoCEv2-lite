@@ -56,50 +56,6 @@ TODO: transition to error state if qp is in the INIT state, but it failed dto mo
     <img src="img/QP_State.png" alt="Drawing" style="width: 250px"/>
 </center>
 
-## This will be modified ..
-To open a connection use the following command:
-```
-python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -r 1
-```
-Where
-* `il` is the local IP address
-* `ir` is the remote IP address
-* `lr` is the local R_KEY
-* `lq` is the local QP number
-* `la` is the local Virtual Address
-* `lp` is the local starting PSN
-* `r` is the request code in this case is `REQ_OPEN_QP`
-
-The FPGA will reply with its own local parameters, the only relevant one is its QP number and should be starting from 256.
-The the QP needs to be modified to RTS to do so run the command:
-```
-python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 3
-```
-* `rq` is the remote QP number given by the FPGA
-* `r` in this case in `REQ_MODIFY_QP_RTS`
-
-Once the QP is in RTS state it is possible to start sending data, as a debug it you can run this command that will instruct the FPGA to send dummy data on that QP (if it is in RTS state):
-```
-python3 send_connection_info.py -ir '22.1.212.10' -rq 256 -r 0 -s -l 16000 -n 100 -rt 0
-```
-* `rq` is the remote QP number given by the FPGA
-* `r` in this case in `REQ_NULL`
-* `s` start transfer
-* `l` is the length of a single transfer (must be multiple of 4)
-* `n` is the number of transfers
-
-Eventually the QP must be closed and its QP number must be made availabel again, to do so run the command:
-```
-python3 send_connection_info.py -il '22.1.212.11' -ir '22.1.212.10' -lr 537 -lq 17 -la 139795697803264 -lp 0 -rq 256 -r 4
-```
-* `rq` is the remote QP number given by the FPGA
-* `r` in this case in `REQ_CLOSE_QP`
-
-Every command that act on the QP's state will produce an ACK or an error:
-* ACK will reply with the code `REQ_SEND_QP_INFO`
-* Error will reply with the code `REQ_ERROR`
-* The ACK contains the local and remote information stored in the FPGA QP memory, E.G. Local adn Remote QPN, R_KEY, ADDR, IP ADDR 
-
 ## AXI-Stream transaction example
 <center>
     <img src="img/Stack_axis.png" alt="Drawing" style="width: 500px"/>
@@ -109,6 +65,45 @@ Every command that act on the QP's state will produce an ACK or an error:
 <center>
     <img src="img/Tx_example.png" alt="Drawing" style="width: 500px"/>
 </center>
+
+## Receiving data
+
+A reference receiver application is available at [feroce-rs](https://github.com/Mmiglio/feroce-rs). It implements the CM protocol (`feroce` crate) along with a simple receiver to test this FW (`feroce-cli` crate). Full documentation, instructions to build the application, options, and advanced features (GPUDirect, TUI dashboard, etc.) are described in the repository's README.
+
+Below is the minimal setup to bring up a receiver and trigger a transfer from the firmware data generator. 
+
+### Start a transfer
+Start a receiver (active mode, 1 QP), which initiates the connection to the FPGA CM:
+```bash
+./target/release/feroce-cli recv \
+    --rdma-device mlx5_2 --gid-index 3 \
+    --buf-size 16384 --num-buf 128 \
+    --active --remote-addr <FPGA_IP> --remote-port 0x4321 \
+    --num-streams 1
+```
+
+Replace `mlx5_2` / `--gid-index 3` with the local RDMA device and GID index, and `<FPGA_IP>` with the FPGA's IP address. The receiver will establish the QP connection with the FPGA and wait for data.
+
+In a separate shell, trigger the firmware generator to produce traffic using RDMA SEND:
+```bash
+./target/release/feroce-cli ctrl \
+    --remote-addr <FPGA_IP> --remote-port 0x4321 \
+    tx-meta --rem-qpn <QP_NUM> --length 16384 --n-transfers 10000
+```
+
+where `--rem-qpn` is the QP number on the FPGA side that should send. `--length` is the payload size in bytes, `--n-transfers` the number of messages. For the full list of available options (e.g. the rate limiter etc) type `./target/release/feroce-cli ctrl tx-meta --help`. Note that the payload size must not exceed the receiver's buffer size (`--buf-size`).
+
+### Close a QP manually
+
+Generally the receiver closes its QPs cleanly on exit. Use `close-qp` only when a stale QP needs to be removed from the FPGA after an unclean exit:
+
+```bash
+./target/release/feroce-cli ctrl \
+    --remote-addr <FPGA_IP> --remote-port 0x4321 \
+    close-qp --rem-qpn 256
+```
+
+On success the log shows `CloseQP acknowledged`.
 
 ## TODO list
 
