@@ -102,7 +102,7 @@ package RoCE_params;
     /*
     Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
     */
-    parameter MAX_QUEUE_PAIRS = 2**2;
+    parameter MAX_QUEUE_PAIRS = 2**3;
 
     parameter MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
     //REQUESTS types

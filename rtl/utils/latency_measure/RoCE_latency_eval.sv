@@ -1,6 +1,8 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
-module RoCE_latency_eval (
+module RoCE_latency_eval #(
+  N_PIPES = 4
+) (
   input wire clk,
   input wire rst,
 
@@ -8,15 +10,9 @@ module RoCE_latency_eval (
   //input wire [31:0] message_length,
   // RX 
   input wire        s_roce_rx_bth_valid,
-  input wire [ 7:0] s_roce_rx_bth_op_code,
-  input wire [15:0] s_roce_rx_bth_p_key,
   input wire [23:0] s_roce_rx_bth_psn,
   input wire [23:0] s_roce_rx_bth_dest_qp,
-  input wire        s_roce_rx_bth_ack_req,
-  // AETH
-  input wire        s_roce_rx_aeth_valid,
   input wire [ 7:0] s_roce_rx_aeth_syndrome,
-  input wire [23:0] s_roce_rx_aeth_msn,
   // RETH
   /*
    * TODO ADD 
@@ -26,11 +22,8 @@ module RoCE_latency_eval (
   // BTH
   input  wire        s_roce_tx_bth_valid,
   input  wire [ 7:0] s_roce_tx_bth_op_code,
-  input  wire [15:0] s_roce_tx_bth_p_key,
   input  wire [23:0] s_roce_tx_bth_psn,
-  input  wire [23:0] s_roce_tx_bth_dest_qp,
   input  wire [23:0] s_roce_tx_bth_src_qp,
-  input  wire        s_roce_tx_bth_ack_req,
   // AXIS
   input  wire        s_axis_tx_payload_valid,
   input  wire        s_axis_tx_payload_last,
@@ -55,6 +48,18 @@ module RoCE_latency_eval (
   import RoCE_params::*; // Imports RoCE parameters
 
   localparam RAM_ADD_WIDTH = 12; // 4096 points
+
+  reg [N_PIPES-1:0] s_roce_rx_bth_valid_pipe;
+  reg [23:0] s_roce_rx_bth_psn_pipe       [N_PIPES-1:0];
+  reg [23:0] s_roce_rx_bth_dest_qp_pipe   [N_PIPES-1:0];
+  reg [23:0] s_roce_rx_aeth_syndrome_pipe [N_PIPES-1:0];
+
+  reg [N_PIPES-1:0] s_roce_tx_bth_valid_pipe;
+  reg [ 7:0] s_roce_tx_bth_op_code_pipe [N_PIPES-1:0];
+  reg [23:0] s_roce_tx_bth_psn_pipe     [N_PIPES-1:0];
+  reg [23:0] s_roce_tx_bth_src_qp_pipe  [N_PIPES-1:0];
+  reg [N_PIPES-1:0] s_axis_tx_payload_valid_pipe;
+  reg [N_PIPES-1:0] s_axis_tx_payload_last_pipe;
 
 
   reg start_d;
@@ -93,12 +98,32 @@ module RoCE_latency_eval (
   always @(posedge clk) begin
     if (rst) begin // reset counter when start of packet is detected at the transmitter side
       free_running_ctr <= 32'd0;
+      s_roce_rx_bth_valid_pipe     <= 0;
+      s_roce_rx_bth_psn_pipe       <= '{default:0};
+      s_roce_rx_bth_dest_qp_pipe   <= '{default:0};
+      s_roce_rx_aeth_syndrome_pipe <= '{default:0};
+      s_roce_tx_bth_valid_pipe     <= 0;   
+      s_roce_tx_bth_op_code_pipe   <= '{default:0}; 
+      s_roce_tx_bth_psn_pipe       <= '{default:0};     
+      s_roce_tx_bth_src_qp_pipe    <= '{default:0};  
+      s_axis_tx_payload_valid_pipe <= 0;
+      s_axis_tx_payload_last_pipe  <= 0;
     end else begin
       if (start_i & ~start_d) begin
         free_running_ctr <= 32'd0;
       end else begin
         free_running_ctr <= free_running_ctr + 32'd1;
       end
+      s_roce_rx_bth_valid_pipe[N_PIPES-1:0]     <= {s_roce_rx_bth_valid_pipe[N_PIPES-2:0],     s_roce_rx_bth_valid};
+      s_roce_rx_bth_psn_pipe[N_PIPES-1:0]       <= {s_roce_rx_bth_psn_pipe[N_PIPES-2:0],       s_roce_rx_bth_psn};
+      s_roce_rx_bth_dest_qp_pipe[N_PIPES-1:0]   <= {s_roce_rx_bth_dest_qp_pipe[N_PIPES-2:0],   s_roce_rx_bth_dest_qp};
+      s_roce_rx_aeth_syndrome_pipe[N_PIPES-1:0] <= {s_roce_rx_aeth_syndrome_pipe[N_PIPES-2:0], s_roce_rx_aeth_syndrome};
+      s_roce_tx_bth_valid_pipe[N_PIPES-1:0]     <= {s_roce_tx_bth_valid_pipe[N_PIPES-2:0],     s_roce_tx_bth_valid};   
+      s_roce_tx_bth_op_code_pipe[N_PIPES-1:0]   <= {s_roce_tx_bth_op_code_pipe[N_PIPES-2:0],   s_roce_tx_bth_op_code}; 
+      s_roce_tx_bth_psn_pipe[N_PIPES-1:0]       <= {s_roce_tx_bth_psn_pipe[N_PIPES-2:0],       s_roce_tx_bth_psn};     
+      s_roce_tx_bth_src_qp_pipe[N_PIPES-1:0]    <= {s_roce_tx_bth_src_qp_pipe[N_PIPES-2:0],    s_roce_tx_bth_src_qp};  
+      s_axis_tx_payload_valid_pipe[N_PIPES-1:0] <= {s_axis_tx_payload_valid_pipe[N_PIPES-2:0], s_axis_tx_payload_valid};
+      s_axis_tx_payload_last_pipe[N_PIPES-1:0]  <= {s_axis_tx_payload_last_pipe[N_PIPES-2:0],  s_axis_tx_payload_last};
     end
   end
 
@@ -110,14 +135,14 @@ module RoCE_latency_eval (
   ) simple_dpram_instance (
     .clk(clk),
     .rst(rst),
-    .waddr(s_roce_tx_bth_psn[RAM_ADD_WIDTH-1:0]),
-    .raddr(s_roce_rx_bth_psn[RAM_ADD_WIDTH-1:0]),
+    .waddr(s_roce_tx_bth_psn_pipe[N_PIPES-1][RAM_ADD_WIDTH-1:0]),
+    .raddr(s_roce_rx_bth_psn_pipe[N_PIPES-1][RAM_ADD_WIDTH-1:0]),
     .din(free_running_ctr),
     .dout(ram_dout),
     .strb(1'b1),
     .ena(1),
-    .ren(s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn && (s_roce_rx_aeth_syndrome[6:5] == 2'b00)),
-    .wen(s_roce_tx_bth_valid && s_roce_tx_bth_src_qp == monitor_loc_qpn)
+    .ren(s_roce_rx_bth_valid_pipe[N_PIPES-1] && s_roce_rx_bth_dest_qp_pipe[N_PIPES-1] == monitor_loc_qpn && (s_roce_rx_aeth_syndrome_pipe[N_PIPES-1][6:5] == 2'b00)),
+    .wen(s_roce_tx_bth_valid_pipe[N_PIPES-1] && s_roce_tx_bth_src_qp_pipe[N_PIPES-1] == monitor_loc_qpn)
   );
 
 
@@ -131,19 +156,19 @@ module RoCE_latency_eval (
     end else begin
       latency_avg_valid <= 1'b0;
       latency_out_inst_valid <= 1'b0;
-      ren_del_1 <= s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == monitor_loc_qpn;
+      ren_del_1 <= s_roce_rx_bth_valid_pipe[N_PIPES-1] && s_roce_rx_bth_dest_qp_pipe[N_PIPES-1] == monitor_loc_qpn;
       ren_del_2 <= ren_del_1;
       if (ren_del_2) begin
         if (measure_ctr < n_transfer_latency_avg-1) begin
           measure_ctr <= measure_ctr + 1;
-          latency_out_sum <= latency_out_sum + free_running_ctr - ram_dout;
+          latency_out_sum <= latency_out_sum + free_running_ctr - ram_dout - 2*N_PIPES;;
         end else begin
           measure_ctr <= 0;
           latency_out_sum <= 32'd0;
-          latency_out_sum_reg <= latency_out_sum + free_running_ctr - ram_dout;
+          latency_out_sum_reg <= latency_out_sum + free_running_ctr - ram_dout - 2*N_PIPES;;
           latency_avg_valid <= 1'b1;
         end
-        latency_out_inst <= free_running_ctr - ram_dout;
+        latency_out_inst <= free_running_ctr - ram_dout - 2*N_PIPES;
         latency_out_inst_valid <= 1'b1;
       end
     end
@@ -162,23 +187,23 @@ module RoCE_latency_eval (
     end else begin
       throughput_avg_valid      <= 1'b0;
       throughput_out_inst_valid <= 1'b0;
-      if (s_roce_tx_bth_valid && s_roce_tx_bth_src_qp == monitor_loc_qpn) begin
-        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code == RC_SEND_FIRST    ||
-        s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD ||
-        s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD) begin
+      if (s_roce_tx_bth_valid_pipe[N_PIPES-1] && s_roce_tx_bth_src_qp_pipe[N_PIPES-1] == monitor_loc_qpn) begin
+        if (s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_FIRST || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_FIRST    ||
+        s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_ONLY_IMD ||
+        s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_ONLY       || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_ONLY_IMD) begin
           if (throughput_ctr == 0) begin
             throughput_starting_point <= free_running_ctr;
             throughput_starting_point_inst <= free_running_ctr;
           end
         end
-        if (s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code == RC_RDMA_WRITE_LAST_IMD ||
-        s_roce_tx_bth_op_code == RC_SEND_LAST       || s_roce_tx_bth_op_code == RC_SEND_LAST_IMD       ||
-        s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code == RC_RDMA_WRITE_ONLY_IMD ||
-        s_roce_tx_bth_op_code == RC_SEND_ONLY       || s_roce_tx_bth_op_code == RC_SEND_ONLY_IMD) begin
+        if (s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_LAST || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_LAST_IMD ||
+        s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_LAST       || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_LAST_IMD       ||
+        s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_ONLY || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_RDMA_WRITE_ONLY_IMD ||
+        s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_ONLY       || s_roce_tx_bth_op_code_pipe[N_PIPES-1] == RC_SEND_ONLY_IMD) begin
           last_frame <= 1'b1;
         end
       end
-      if (last_frame && s_axis_tx_payload_valid && s_axis_tx_payload_last) begin
+      if (last_frame && s_axis_tx_payload_valid_pipe[N_PIPES-1] && s_axis_tx_payload_last_pipe[N_PIPES-1]) begin
         last_frame <= 1'b0;
         if (throughput_ctr < n_transfer_throughput_avg-1) begin
           throughput_ctr <= throughput_ctr + 1;
@@ -215,9 +240,9 @@ module RoCE_latency_eval (
       srl_lat_ctr_moving_avg_next = srl_lat_ctr_moving_avg_next + srl_lat_ctr[i];
       srl_trpt_ctr_moving_avg_next = srl_trpt_ctr_moving_avg_next + srl_trpt_ctr[i];
     end
-    
+
   end
-  
+
 
   always @(posedge clk) begin
     if (rst) begin

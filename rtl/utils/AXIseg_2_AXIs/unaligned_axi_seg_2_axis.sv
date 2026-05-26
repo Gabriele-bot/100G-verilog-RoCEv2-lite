@@ -43,6 +43,8 @@ module unaligned_axi_seg_2_axis #(
     reg           m_axis_tlast_reg;
     reg           m_axis_tuser_reg;
 
+    wire          m_axis_fifo_tready;
+
     reg [2:0] current_align_reg, current_align_next;
 
     reg [128*8-1:0] prev_tdata_reg, prev_tdata_next;
@@ -92,6 +94,11 @@ module unaligned_axi_seg_2_axis #(
     reg wait_1_cycle;
 
     reg enable_read_reg, enable_read_next;
+
+
+    //reg shift_axi_seg_input_tready;
+    //wire s_axis_seg_tready_next;
+    //wire m_axis_tready_int_early;
 
     always @(*) begin
 
@@ -298,8 +305,6 @@ module unaligned_axi_seg_2_axis #(
                 enable_read_next  = 1'b1;
             end
 
-
-
             if (|(shift_axi_seg_eop & shift_axi_seg_ena) & shift_axi_seg_tvalid) begin
                 flush_save = 1'b1;
                 enable_read_next = 1'b0;
@@ -321,7 +326,7 @@ module unaligned_axi_seg_2_axis #(
     generate
         for (k = 0; k < 8; k = k + 1) begin
             mapmty2tkeep #(
-            .REGISTER(1'b0)
+                .REGISTER(1'b0)
             ) mapmty2tkeep_instance (
                 .clk(s_clk),
                 .rst(s_rst),
@@ -413,7 +418,7 @@ module unaligned_axi_seg_2_axis #(
                 .RAM_PIPELINE(1),
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
-                .DROP_WHEN_FULL(1), 
+                .DROP_WHEN_FULL(1),
                 .FRAME_FIFO(1)
             ) axis_fifo_instance (
                 .s_clk(s_clk),
@@ -421,7 +426,7 @@ module unaligned_axi_seg_2_axis #(
                 .s_axis_tdata(m_axis_tdata_reg),
                 .s_axis_tkeep(m_axis_tkeep_reg),
                 .s_axis_tvalid(m_axis_tvalid_reg),
-                .s_axis_tready(),
+                .s_axis_tready(m_axis_fifo_tready),
                 .s_axis_tlast(m_axis_tlast_reg),
                 .s_axis_tid(0),
                 .s_axis_tdest(0),
@@ -454,7 +459,7 @@ module unaligned_axi_seg_2_axis #(
                 .s_axis_tdata(m_axis_tdata_reg),
                 .s_axis_tkeep(m_axis_tkeep_reg),
                 .s_axis_tvalid(m_axis_tvalid_reg),
-                .s_axis_tready(),
+                .s_axis_tready(m_axis_fifo_tready),
                 .s_axis_tlast(m_axis_tlast_reg),
                 .s_axis_tid(0),
                 .s_axis_tdest(0),

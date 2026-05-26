@@ -5,6 +5,7 @@ module RoCE_rtr_write_module #(
     parameter DATA_WIDTH = 64,
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter HEADER_ADDR_WIDTH = BUFFER_ADDR_WIDTH - 8,
+    parameter BASE_LOC_QPN = 256,
     parameter MAX_QPS = 4
 ) (
     input wire clk,
@@ -310,12 +311,12 @@ module RoCE_rtr_write_module #(
 
             // check if there was a close qp signal
             if (s_qp_close_valid) begin
-                if (s_qp_close_loc_qpn - 256 < MAX_QPS) begin
+                if (s_qp_close_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
                     qp_close_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b1;
                     qp_flush_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b1;
                 end
             end else if (s_qp_open_valid) begin
-                if (s_qp_open_loc_qpn - 256 < MAX_QPS) begin
+                if (s_qp_open_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
                     qp_close_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b0;
                     qp_flush_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b0;
                 end

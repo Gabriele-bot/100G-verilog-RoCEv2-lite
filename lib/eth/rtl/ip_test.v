@@ -296,7 +296,7 @@ module ip_test #(
   );
 
   axis_fifo #(
-    .DEPTH(1024),
+    .DEPTH(KEEP_WIDTH*16),
     .DATA_WIDTH(DATA_WIDTH),
     .KEEP_ENABLE(1),
     .KEEP_WIDTH(KEEP_WIDTH),

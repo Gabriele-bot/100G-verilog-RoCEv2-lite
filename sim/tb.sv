@@ -21,13 +21,13 @@ module tb #(
     parameter SIM_MAC_FREQ = SIM_MAC_SPEED*1000.0/SIM_MAC_DATAPATH_WIDTH; //in MHz 
 
     // MAC to simulate
-    parameter MAC_SPEED = 100;
-    parameter MAC_DATAPATH_WIDTH = 512;
+    parameter MAC_SPEED = 400;
+    parameter MAC_DATAPATH_WIDTH = 1024;
     parameter MAC_FREQ = MAC_SPEED*1000.0/MAC_DATAPATH_WIDTH; //in MHz 
 
     // stack to simulate, with effective throughput, 
-    parameter STACK_DATAPATH_WIDTH = 512;
-    parameter STACK_FREQ  = 322.622;
+    parameter STACK_DATAPATH_WIDTH = 1024;
+    parameter STACK_FREQ  = 400.000;
     parameter STACK_SPEED = STACK_DATAPATH_WIDTH*STACK_FREQ/1000.0;
 
     // now we need do reduce/increase the mac frequency to match the speed of the simulation MAC

@@ -15,7 +15,7 @@ utils/AXIseg_2_AXIs/unaligned_axi_seg_2_axis.sv
 utils/sync_bit_array.v
 icrc_insert/axis_mask_fields_icrc.v
 icrc_insert/axis_RoCE_icrc_insert.v
-data_gen/axis_data_generator.sv
+data_gen/axis_data_generator_mod.sv
 data_gen/RoCE_data_generator.sv
 tx_engine/axis_packet_framer.sv
 tx_engine/RoCE_udp_tx.sv

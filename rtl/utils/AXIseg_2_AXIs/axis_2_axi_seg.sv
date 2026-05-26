@@ -404,28 +404,28 @@ module axis_2_axi_seg #(
 
         // datapath
         if (store_axis_input_to_output) begin
-            m_axis_seg_tdata_reg[0] <= fifo_tdata_out[0];
-            m_axis_seg_tdata_reg[1] <= fifo_tdata_out[1];
-            m_axis_seg_tdata_reg[2] <= fifo_tdata_out[2];
-            m_axis_seg_tdata_reg[3] <= fifo_tdata_out[3];
-            m_axis_seg_tdata_reg[4] <= fifo_tdata_out[4];
-            m_axis_seg_tdata_reg[5] <= fifo_tdata_out[5];
-            m_axis_seg_tdata_reg[6] <= fifo_tdata_out[6];
-            m_axis_seg_tdata_reg[7] <= fifo_tdata_out[7];
+            m_axis_seg_tdata_reg[0] <= fifo_tvalid_out[0] ? fifo_tdata_out[0] : 128'd0;
+            m_axis_seg_tdata_reg[1] <= fifo_tvalid_out[1] ? fifo_tdata_out[1] : 128'd0;
+            m_axis_seg_tdata_reg[2] <= fifo_tvalid_out[2] ? fifo_tdata_out[2] : 128'd0;
+            m_axis_seg_tdata_reg[3] <= fifo_tvalid_out[3] ? fifo_tdata_out[3] : 128'd0;
+            m_axis_seg_tdata_reg[4] <= fifo_tvalid_out[4] ? fifo_tdata_out[4] : 128'd0;
+            m_axis_seg_tdata_reg[5] <= fifo_tvalid_out[5] ? fifo_tdata_out[5] : 128'd0;
+            m_axis_seg_tdata_reg[6] <= fifo_tvalid_out[6] ? fifo_tdata_out[6] : 128'd0;
+            m_axis_seg_tdata_reg[7] <= fifo_tvalid_out[7] ? fifo_tdata_out[7] : 128'd0;
 
             m_ena_reg <= ena_fifo_out & fifo_tvalid_out;
             m_sop_reg <= sop_fifo_out & fifo_tvalid_out;
             m_eop_reg <= eop_fifo_out & fifo_tvalid_out;
             m_err_reg <= err_fifo_out & fifo_tvalid_out;
 
-            m_mty_reg[0] <= mty_fifo_out[0];
-            m_mty_reg[1] <= mty_fifo_out[1];
-            m_mty_reg[2] <= mty_fifo_out[2];
-            m_mty_reg[3] <= mty_fifo_out[3];
-            m_mty_reg[4] <= mty_fifo_out[4];
-            m_mty_reg[5] <= mty_fifo_out[5];
-            m_mty_reg[6] <= mty_fifo_out[6];
-            m_mty_reg[7] <= mty_fifo_out[7];
+            m_mty_reg[0] <= fifo_tvalid_out[0] ? mty_fifo_out[0] : 4'd0;
+            m_mty_reg[1] <= fifo_tvalid_out[1] ? mty_fifo_out[1] : 4'd0;
+            m_mty_reg[2] <= fifo_tvalid_out[2] ? mty_fifo_out[2] : 4'd0;
+            m_mty_reg[3] <= fifo_tvalid_out[3] ? mty_fifo_out[3] : 4'd0;
+            m_mty_reg[4] <= fifo_tvalid_out[4] ? mty_fifo_out[4] : 4'd0;
+            m_mty_reg[5] <= fifo_tvalid_out[5] ? mty_fifo_out[5] : 4'd0;
+            m_mty_reg[6] <= fifo_tvalid_out[6] ? mty_fifo_out[6] : 4'd0;
+            m_mty_reg[7] <= fifo_tvalid_out[7] ? mty_fifo_out[7] : 4'd0;
 
             out_index_reg <= out_index_before_reg;
         end else if (store_axis_temp_to_output) begin
@@ -449,19 +449,19 @@ module axis_2_axi_seg #(
             temp_m_axis_seg_tdata_reg[6] <= fifo_tdata_out[6];
             temp_m_axis_seg_tdata_reg[7] <= fifo_tdata_out[7];
 
-            temp_m_ena_reg <= ena_fifo_out;
-            temp_m_sop_reg <= sop_fifo_out;
-            temp_m_eop_reg <= eop_fifo_out;
-            temp_m_err_reg <= err_fifo_out;
+            temp_m_ena_reg <= ena_fifo_out & fifo_tvalid_out;
+            temp_m_sop_reg <= sop_fifo_out & fifo_tvalid_out;
+            temp_m_eop_reg <= eop_fifo_out & fifo_tvalid_out;
+            temp_m_err_reg <= err_fifo_out & fifo_tvalid_out;
 
-            temp_m_mty_reg[0] <= mty_fifo_out[0];
-            temp_m_mty_reg[1] <= mty_fifo_out[1];
-            temp_m_mty_reg[2] <= mty_fifo_out[2];
-            temp_m_mty_reg[3] <= mty_fifo_out[3];
-            temp_m_mty_reg[4] <= mty_fifo_out[4];
-            temp_m_mty_reg[5] <= mty_fifo_out[5];
-            temp_m_mty_reg[6] <= mty_fifo_out[6];
-            temp_m_mty_reg[7] <= mty_fifo_out[7];
+            temp_m_mty_reg[0] <= fifo_tvalid_out[0] ? mty_fifo_out[0] : 4'd0;
+            temp_m_mty_reg[1] <= fifo_tvalid_out[1] ? mty_fifo_out[1] : 4'd0;
+            temp_m_mty_reg[2] <= fifo_tvalid_out[2] ? mty_fifo_out[2] : 4'd0;
+            temp_m_mty_reg[3] <= fifo_tvalid_out[3] ? mty_fifo_out[3] : 4'd0;
+            temp_m_mty_reg[4] <= fifo_tvalid_out[4] ? mty_fifo_out[4] : 4'd0;
+            temp_m_mty_reg[5] <= fifo_tvalid_out[5] ? mty_fifo_out[5] : 4'd0;
+            temp_m_mty_reg[6] <= fifo_tvalid_out[6] ? mty_fifo_out[6] : 4'd0;
+            temp_m_mty_reg[7] <= fifo_tvalid_out[7] ? mty_fifo_out[7] : 4'd0;
 
             temp_out_index_reg <= out_index_before_reg;
         end

@@ -6,7 +6,7 @@
 module axis_RoCE_icrc_insert #
   (
     parameter DATA_WIDTH   = 256,
-    parameter CRC_COMP_TYPE = 1, // 0 My implementation, 1 SV implementation
+    parameter CRC_COMP_TYPE = 1, // 0 VHDL implementation, 1 SV implementation
     parameter N_PIPE        = 3 // pipeline reg within SV CRC module 
 ) (
     input wire clk,
@@ -17,20 +17,20 @@ module axis_RoCE_icrc_insert #
      */
     input  wire [DATA_WIDTH   - 1 : 0] s_eth_payload_axis_tdata,
     input  wire [DATA_WIDTH/8 - 1 : 0] s_eth_payload_axis_tkeep,
-    input  wire         s_eth_payload_axis_tvalid,
-    output wire         s_eth_payload_axis_tready,
-    input  wire         s_eth_payload_axis_tlast,
-    input  wire [1:0]   s_eth_payload_axis_tuser, // bit 0 malformed packet, bit 1 RoCE id
+    input  wire                        s_eth_payload_axis_tvalid,
+    output wire                        s_eth_payload_axis_tready,
+    input  wire                        s_eth_payload_axis_tlast,
+    input  wire [1:0]                  s_eth_payload_axis_tuser, // bit 0 malformed packet, bit 1 RoCE id
 
     /*
      * AXI frame output with ICRC at the end
      */
     output wire [DATA_WIDTH   - 1 : 0] m_eth_payload_axis_tdata,
     output wire [DATA_WIDTH/8 - 1 : 0] m_eth_payload_axis_tkeep,
-    output wire         m_eth_payload_axis_tvalid,
-    input  wire         m_eth_payload_axis_tready,
-    output wire         m_eth_payload_axis_tlast,
-    output wire         m_eth_payload_axis_tuser,
+    output wire                        m_eth_payload_axis_tvalid,
+    input  wire                        m_eth_payload_axis_tready,
+    output wire                        m_eth_payload_axis_tlast,
+    output wire                        m_eth_payload_axis_tuser,
 
     /*
      * Status
@@ -325,7 +325,7 @@ module axis_RoCE_icrc_insert #
     wire        crc_out_fifo_re;
 
     axis_fifo #(
-        .DEPTH(32), // store up to 8 values
+        .DEPTH(8), // store up to 8 values
         .DATA_WIDTH(32),
         .KEEP_ENABLE(0),
         .ID_ENABLE(0),

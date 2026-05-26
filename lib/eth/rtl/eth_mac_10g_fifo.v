@@ -64,7 +64,6 @@ module eth_mac_10g_fifo #
     parameter TX_USER_WIDTH = (PTP_TS_ENABLE ? (TX_PTP_TAG_ENABLE ? PTP_TAG_WIDTH : 0) + (TX_PTP_TS_CTRL_IN_TUSER ? 1 : 0) : 0) + 1,
     parameter RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1,
     parameter PFC_ENABLE = 0,
-    parameter PFC_FIFO_ENABLE = 3'd0,
     parameter PAUSE_ENABLE = PFC_ENABLE
 )
 (
@@ -312,111 +311,22 @@ module eth_mac_10g_fifo #
     // PFC fifos
     generate
 
-        if (PFC_ENABLE && PFC_FIFO_ENABLE != 8'h00) begin
-
-            wire [8*DATA_WIDTH-1:0]  m_tx_axis_pfc_priorities_tdata;
-            wire [8*KEEP_WIDTH-1:0]  m_tx_axis_pfc_priorities_tkeep;
-            wire [7:0]               m_tx_axis_pfc_priorities_tvalid;
-            wire [7:0]               m_tx_axis_pfc_priorities_tready;
-            wire [7:0]               m_tx_axis_pfc_priorities_tlast;
-            wire [7:0]               m_tx_axis_pfc_priorities_tuser;
-
-            axis_demux #(
-                .M_COUNT(8),
-                .DATA_WIDTH(DATA_WIDTH),
-                .KEEP_WIDTH(KEEP_WIDTH),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(1),
-                .USER_WIDTH(1)
-            ) axis_demux_instance (
-                .clk(logic_clk),
-                .rst(logic_rst),
-
-                .s_axis_tdata (tx_axis_tdata),
-                .s_axis_tkeep (tx_axis_tkeep),
-                .s_axis_tvalid(tx_axis_tvalid),
-                .s_axis_tready(tx_axis_tready),
-                .s_axis_tlast (tx_axis_tlast),
-                .s_axis_tuser (tx_axis_tuser),
-                .s_axis_tid   (0),
-                .s_axis_tdest (0),
-
-                .m_axis_tdata (m_tx_axis_pfc_priorities_tdata),
-                .m_axis_tkeep (m_tx_axis_pfc_priorities_tkeep),
-                .m_axis_tvalid(m_tx_axis_pfc_priorities_tvalid),
-                .m_axis_tready(m_tx_axis_pfc_priorities_tready),
-                .m_axis_tlast (m_tx_axis_pfc_priorities_tlast),
-                .m_axis_tuser (m_tx_axis_pfc_priorities_tuser),
-
-                .enable(1'b1),
-                .drop(1'b0),
-                .select(ctrl_priority_tag)
-            );
+        if (PFC_ENABLE) begin
 
             eth_pfc_fifo_tx #(
                 .DATA_WIDTH(DATA_WIDTH),
                 .KEEP_WIDTH(KEEP_WIDTH),
-                .FIFO_DEPTH(TX_FIFO_DEPTH),
-                .ENABLE_PRIORITY_MASK(PFC_FIFO_ENABLE)
+                .FIFO_DEPTH(TX_FIFO_DEPTH)
             ) eth_pfc_fifo_tx_instance (
                 .clk(logic_clk),
                 .rst(logic_rst),
-                .s_priority_0_axis_tdata (m_tx_axis_pfc_priorities_tdata [0*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_0_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [0*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_0_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[0]),
-                .s_priority_0_axis_tready(m_tx_axis_pfc_priorities_tready[0]),
-                .s_priority_0_axis_tlast (m_tx_axis_pfc_priorities_tlast [0]),
-                .s_priority_0_axis_tuser (m_tx_axis_pfc_priorities_tuser [0]),
+                .s_priority_axis_tdata (tx_axis_tdata),
+                .s_priority_axis_tkeep (tx_axis_tkeep),
+                .s_priority_axis_tvalid(tx_axis_tvalid),
+                .s_priority_axis_tready(tx_axis_tready),
+                .s_priority_axis_tlast (tx_axis_tlast ),
+                .s_priority_axis_tuser (tx_axis_tuser ),
 
-                .s_priority_1_axis_tdata (m_tx_axis_pfc_priorities_tdata [1*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_1_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [1*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_1_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[1]),
-                .s_priority_1_axis_tready(m_tx_axis_pfc_priorities_tready[1]),
-                .s_priority_1_axis_tlast (m_tx_axis_pfc_priorities_tlast [1]),
-                .s_priority_1_axis_tuser (m_tx_axis_pfc_priorities_tuser [1]),
-
-                .s_priority_2_axis_tdata (m_tx_axis_pfc_priorities_tdata [2*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_2_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [2*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_2_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[2]),
-                .s_priority_2_axis_tready(m_tx_axis_pfc_priorities_tready[2]),
-                .s_priority_2_axis_tlast (m_tx_axis_pfc_priorities_tlast [2]),
-                .s_priority_2_axis_tuser (m_tx_axis_pfc_priorities_tuser [2]),
-
-                .s_priority_3_axis_tdata (m_tx_axis_pfc_priorities_tdata [3*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_3_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [3*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_3_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[3]),
-                .s_priority_3_axis_tready(m_tx_axis_pfc_priorities_tready[3]),
-                .s_priority_3_axis_tlast (m_tx_axis_pfc_priorities_tlast [3]),
-                .s_priority_3_axis_tuser (m_tx_axis_pfc_priorities_tuser [3]),
-
-                .s_priority_4_axis_tdata (m_tx_axis_pfc_priorities_tdata [4*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_4_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [4*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_4_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[4]),
-                .s_priority_4_axis_tready(m_tx_axis_pfc_priorities_tready[4]),
-                .s_priority_4_axis_tlast (m_tx_axis_pfc_priorities_tlast [4]),
-                .s_priority_4_axis_tuser (m_tx_axis_pfc_priorities_tuser [4]),
-
-                .s_priority_5_axis_tdata (m_tx_axis_pfc_priorities_tdata [5*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_5_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [5*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_5_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[5]),
-                .s_priority_5_axis_tready(m_tx_axis_pfc_priorities_tready[5]),
-                .s_priority_5_axis_tlast (m_tx_axis_pfc_priorities_tlast [5]),
-                .s_priority_5_axis_tuser (m_tx_axis_pfc_priorities_tuser [5]),
-
-                .s_priority_6_axis_tdata (m_tx_axis_pfc_priorities_tdata [6*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_6_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [6*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_6_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[6]),
-                .s_priority_6_axis_tready(m_tx_axis_pfc_priorities_tready[6]),
-                .s_priority_6_axis_tlast (m_tx_axis_pfc_priorities_tlast [6]),
-                .s_priority_6_axis_tuser (m_tx_axis_pfc_priorities_tuser [6]),
-
-                .s_priority_7_axis_tdata (m_tx_axis_pfc_priorities_tdata [7*DATA_WIDTH+:DATA_WIDTH]),
-                .s_priority_7_axis_tkeep (m_tx_axis_pfc_priorities_tkeep [7*KEEP_WIDTH+:KEEP_WIDTH]),
-                .s_priority_7_axis_tvalid(m_tx_axis_pfc_priorities_tvalid[7]),
-                .s_priority_7_axis_tready(m_tx_axis_pfc_priorities_tready[7]),
-                .s_priority_7_axis_tlast (m_tx_axis_pfc_priorities_tlast [7]),
-                .s_priority_7_axis_tuser (m_tx_axis_pfc_priorities_tuser [7]),
 
                 .m_axis_tdata (tx_mac_fifo_axis_tdata),
                 .m_axis_tkeep (tx_mac_fifo_axis_tkeep),
@@ -424,6 +334,8 @@ module eth_mac_10g_fifo #
                 .m_axis_tready(tx_mac_fifo_axis_tready),
                 .m_axis_tlast (tx_mac_fifo_axis_tlast),
                 .m_axis_tuser (tx_mac_fifo_axis_tuser),
+
+                .priority_tag(ctrl_priority_tag),
 
                 .pause_req(eth_tx_pause_req[7:0]),
                 .pause_ack(eth_tx_pause_ack[7:0])

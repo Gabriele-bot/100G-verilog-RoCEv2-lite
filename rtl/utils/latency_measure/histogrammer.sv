@@ -123,7 +123,7 @@ module histogrammer #(
             end else begin
                 reset_done_reg <= 1'b1;
                 if (raddr_counter >= BRAM_SIZE) begin // if not reading the mem, continously updating the histo
-                    input_valid_pipe   <= {input_valid_pipe[1:0], valid};
+                    input_valid_pipe   <= |data_in[INPUT_DATA_WIDTH-1:INPUT_VALUE_LSB+INDEX_WIDTH] ? {input_valid_pipe[1:0], valid} : {input_valid_pipe[1:0], 1'b0}; // update only if not oveflow
                     histo_wr_idx_pipes <= {histo_wr_idx_pipes[1:0], data_in[INPUT_VALUE_LSB+:INDEX_WIDTH]};
                     if (input_valid_pipe[1]) begin
                         histo_new_val <= douta + 1;

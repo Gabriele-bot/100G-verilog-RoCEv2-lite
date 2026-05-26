@@ -15,12 +15,13 @@ module axi_seg_2_axis #(
     input  wire s_rst,
 
     input  wire [128*8-1:0] s_axis_seg_tdata,
+    output wire             s_axis_seg_tready,
     input  wire             s_axis_seg_tvalid,
-    input  wire [7:0]       s_ena,
-    input  wire [7:0]       s_sop,
-    input  wire [7:0]       s_eop,
-    input  wire [7:0]       s_err,
-    input  wire [4*8-1:0]   s_mty,
+    input  wire [7:0]       s_axis_seg_tuser_ena,
+    input  wire [7:0]       s_axis_seg_tuser_sop,
+    input  wire [7:0]       s_axis_seg_tuser_eop,
+    input  wire [7:0]       s_axis_seg_tuser_err,
+    input  wire [4*8-1:0]   s_axis_seg_tuser_mty,
 
     input  wire m_clk,
     input  wire m_rst,
@@ -135,11 +136,11 @@ module axi_seg_2_axis #(
                 .s_axis_tdata (s_axis_seg_tdata),
                 .s_axis_tkeep (0),
                 .s_axis_tvalid(s_axis_seg_tvalid),
-                .s_axis_tready(),
+                .s_axis_tready(s_axis_seg_tready),
                 .s_axis_tlast (0),
                 .s_axis_tid   (0),
                 .s_axis_tdest (0),
-                .s_axis_tuser({s_ena, s_sop, s_eop, s_err, s_mty}),
+                .s_axis_tuser({s_axis_seg_tuser_ena, s_axis_seg_tuser_sop, s_axis_seg_tuser_eop, s_axis_seg_tuser_err, s_axis_seg_tuser_mty}),
 
                 .m_axis_tdata (s_axis_seg_reg_tdata),
                 .m_axis_tvalid(s_axis_seg_reg_tvalid),
@@ -150,11 +151,12 @@ module axi_seg_2_axis #(
 
             assign s_axis_seg_reg_tdata  = s_axis_seg_tdata;
             assign s_axis_seg_reg_tvalid = s_axis_seg_tvalid;
-            assign s_ena_reg             = s_ena;
-            assign s_sop_reg             = s_sop;
-            assign s_eop_reg             = s_eop;
-            assign s_err_reg             = s_err;
-            assign s_mty_reg             = s_mty;
+            assign s_axis_seg_tready     = 1'b1;
+            assign s_ena_reg             = s_axis_seg_tuser_ena;
+            assign s_sop_reg             = s_axis_seg_tuser_sop;
+            assign s_eop_reg             = s_axis_seg_tuser_eop;
+            assign s_err_reg             = s_axis_seg_tuser_err;
+            assign s_mty_reg             = s_axis_seg_tuser_mty;
 
         end
 

@@ -296,7 +296,7 @@ module RoCE_simple_work_queue #
                     s_axis_tready_next = m_axis_tready_int_early;
                     m_axis_tdata_int  = s_axis_tdata;
                     m_axis_tkeep_int  = s_axis_tkeep;
-                    m_axis_tvalid_int = s_axis_tvalid && s_axis_tready;;
+                    m_axis_tvalid_int = s_axis_tvalid && s_axis_tready;
                     m_axis_tlast_int  = s_axis_tlast;
                     m_axis_tuser_int  = s_axis_tuser;
                     state_next = STATE_SEND_DATA;

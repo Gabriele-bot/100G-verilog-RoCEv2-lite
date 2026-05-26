@@ -4,11 +4,11 @@
 module RoCE_retransmission_module_v2 #(
     parameter DATA_WIDTH = 64,
     parameter BUFFER_ADDR_WIDTH = 24,
+    parameter BASE_LOC_QPN = 256,
     parameter MAX_QPS = 4,
     parameter CLOCK_PERIOD = 6.4,
-    parameter AXI_FIFO_DEPTH = 4,
-    parameter HEADER_RAM_READ_LATENCY = 4,
-    parameter USE_XILINX_XPM_SDPRAM = 1
+    parameter USE_XILINX_XPM_SDPRAM = 1,
+    parameter OUTPUT_AXI_FIFO_DEPTH = 0
 ) (
     input wire clk,
     input wire rst,
@@ -184,7 +184,7 @@ module RoCE_retransmission_module_v2 #(
     input   wire         m_qp_close_ready,
     output  wire [23:0]  m_qp_close_loc_qpn,
     output  wire [23:0]  m_qp_close_rem_psn,
-    
+
     output wire [MAX_QPS-1:0]            stall_qp,
     /*
     Configuration
@@ -381,6 +381,7 @@ module RoCE_retransmission_module_v2 #(
     RoCE_rtr_write_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
+        .BASE_LOC_QPN(BASE_LOC_QPN),
         .MAX_QPS(MAX_QPS)
     ) RoCE_rtr_write_module_instance (
         .clk(clk),
@@ -465,6 +466,7 @@ module RoCE_retransmission_module_v2 #(
     RoCE_rtr_read_module #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
+        .BASE_LOC_QPN(BASE_LOC_QPN),
         .MAX_QPS(MAX_QPS)
     ) RoCE_rtr_read_module_instance (
         .clk(clk),
@@ -591,7 +593,7 @@ module RoCE_retransmission_module_v2 #(
                 .ADDR_WIDTH_B(BUFFER_ADDR_WIDTH-8), // DECIMAL
                 .AUTO_SLEEP_TIME(0), // DECIMAL
                 .BYTE_WRITE_WIDTH_A(HDR_DATA_WIDTH), // DECIMAL
-                .CASCADE_HEIGHT(HEADER_RAM_READ_LATENCY), // DECIMAL
+                .CASCADE_HEIGHT(4), // DECIMAL
                 .CLOCKING_MODE("common_clock"), // String
                 .ECC_BIT_RANGE("7:0"), // String
                 .ECC_MODE("no_ecc"), // String
@@ -604,7 +606,7 @@ module RoCE_retransmission_module_v2 #(
                 .MEMORY_SIZE(2**(BUFFER_ADDR_WIDTH-8)*HDR_DATA_WIDTH), // DECIMAL
                 .MESSAGE_CONTROL(0), // DECIMAL
                 .READ_DATA_WIDTH_B(HDR_DATA_WIDTH), // DECIMAL
-                .READ_LATENCY_B(HEADER_RAM_READ_LATENCY), // DECIMAL
+                .READ_LATENCY_B(4), // DECIMAL
                 .READ_RESET_VALUE_B("0"), // String
                 .RST_MODE_A("SYNC"), // String
                 .RST_MODE_B("SYNC"), // String
@@ -641,7 +643,7 @@ module RoCE_retransmission_module_v2 #(
                 .ADDR_WIDTH(BUFFER_ADDR_WIDTH-8),
                 .DATA_WIDTH(HDR_DATA_WIDTH),
                 .STRB_WIDTH(1),
-                .NPIPES(HEADER_RAM_READ_LATENCY-2),
+                .NPIPES(2),
                 .STYLE("ultra")
             ) hdr_ram_instance (
                 .clk(clk),
@@ -733,7 +735,7 @@ module RoCE_retransmission_module_v2 #(
     AXI fifo INTERFACE
     */
     wire [0                :0]                  m_axi_fifo_awid;
-    wire [BUFFER_ADDR_WIDTH-1:0] m_axi_fifo_awaddr;
+    wire [BUFFER_ADDR_WIDTH-1:0]                m_axi_fifo_awaddr;
     wire [7:0]                                  m_axi_fifo_awlen;
     wire [2:0]                                  m_axi_fifo_awsize;
     wire [1:0]                                  m_axi_fifo_awburst;
@@ -752,7 +754,7 @@ module RoCE_retransmission_module_v2 #(
     wire                                        m_axi_fifo_bvalid;
     wire                                        m_axi_fifo_bready;
     wire [0               :0]                   m_axi_fifo_arid;
-    wire [BUFFER_ADDR_WIDTH-1:0] m_axi_fifo_araddr;
+    wire [BUFFER_ADDR_WIDTH-1:0]                m_axi_fifo_araddr;
     wire [7:0]                                  m_axi_fifo_arlen;
     wire [2:0]                                  m_axi_fifo_arsize;
     wire [1:0]                                  m_axi_fifo_arburst;
@@ -875,98 +877,147 @@ module RoCE_retransmission_module_v2 #(
         .write_abort                   (1'b0)
     );
 
-    axi_fifo #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
-        .STRB_WIDTH(DATA_WIDTH/8),
-        .ID_WIDTH(1),
-        .WRITE_FIFO_DEPTH(AXI_FIFO_DEPTH),
-        .READ_FIFO_DEPTH(AXI_FIFO_DEPTH)
-    ) axi_fifo_instance (
-        .clk(clk),
-        .rst(rst),
+    generate
+        if (OUTPUT_AXI_FIFO_DEPTH > 0) begin
+            axi_fifo #(
+                .DATA_WIDTH(DATA_WIDTH),
+                .ADDR_WIDTH(BUFFER_ADDR_WIDTH),
+                .STRB_WIDTH(DATA_WIDTH/8),
+                .ID_WIDTH(1),
+                .WRITE_FIFO_DEPTH(OUTPUT_AXI_FIFO_DEPTH),
+                .READ_FIFO_DEPTH(OUTPUT_AXI_FIFO_DEPTH)
+            ) output_axi_fifo_instance (
+                .clk(clk),
+                .rst(rst),
 
-        .s_axi_awid    (m_axi_fifo_awid),
-        .s_axi_awaddr  (m_axi_fifo_awaddr),
-        .s_axi_awlen   (m_axi_fifo_awlen),
-        .s_axi_awsize  (m_axi_fifo_awsize),
-        .s_axi_awburst (m_axi_fifo_awburst),
-        .s_axi_awlock  (m_axi_fifo_awlock),
-        .s_axi_awcache (m_axi_fifo_awcache),
-        .s_axi_awprot  (m_axi_fifo_awprot),
-        .s_axi_awvalid (m_axi_fifo_awvalid),
-        .s_axi_awready (m_axi_fifo_awready),
+                .s_axi_awid    (m_axi_fifo_awid),
+                .s_axi_awaddr  (m_axi_fifo_awaddr),
+                .s_axi_awlen   (m_axi_fifo_awlen),
+                .s_axi_awsize  (m_axi_fifo_awsize),
+                .s_axi_awburst (m_axi_fifo_awburst),
+                .s_axi_awlock  (m_axi_fifo_awlock),
+                .s_axi_awcache (m_axi_fifo_awcache),
+                .s_axi_awprot  (m_axi_fifo_awprot),
+                .s_axi_awvalid (m_axi_fifo_awvalid),
+                .s_axi_awready (m_axi_fifo_awready),
 
-        .s_axi_wdata   (m_axi_fifo_wdata),
-        .s_axi_wstrb   (m_axi_fifo_wstrb),
-        .s_axi_wlast   (m_axi_fifo_wlast),
-        .s_axi_wvalid  (m_axi_fifo_wvalid),
-        .s_axi_wready  (m_axi_fifo_wready),
+                .s_axi_wdata   (m_axi_fifo_wdata),
+                .s_axi_wstrb   (m_axi_fifo_wstrb),
+                .s_axi_wlast   (m_axi_fifo_wlast),
+                .s_axi_wvalid  (m_axi_fifo_wvalid),
+                .s_axi_wready  (m_axi_fifo_wready),
 
-        .s_axi_bid     (m_axi_fifo_bid),
-        .s_axi_bresp   (m_axi_fifo_bresp),
-        .s_axi_bvalid  (m_axi_fifo_bvalid),
-        .s_axi_bready  (m_axi_fifo_bready),
+                .s_axi_bid     (m_axi_fifo_bid),
+                .s_axi_bresp   (m_axi_fifo_bresp),
+                .s_axi_bvalid  (m_axi_fifo_bvalid),
+                .s_axi_bready  (m_axi_fifo_bready),
 
-        .s_axi_arid    (m_axi_fifo_arid),
-        .s_axi_araddr  (m_axi_fifo_araddr),
-        .s_axi_arlen   (m_axi_fifo_arlen),
-        .s_axi_arsize  (m_axi_fifo_arsize),
-        .s_axi_arburst (m_axi_fifo_arburst),
-        .s_axi_arlock  (m_axi_fifo_arlock),
-        .s_axi_arcache (m_axi_fifo_arcache),
-        .s_axi_arprot  (m_axi_fifo_arprot),
-        .s_axi_arvalid (m_axi_fifo_arvalid),
-        .s_axi_arready (m_axi_fifo_arready),
+                .s_axi_arid    (m_axi_fifo_arid),
+                .s_axi_araddr  (m_axi_fifo_araddr),
+                .s_axi_arlen   (m_axi_fifo_arlen),
+                .s_axi_arsize  (m_axi_fifo_arsize),
+                .s_axi_arburst (m_axi_fifo_arburst),
+                .s_axi_arlock  (m_axi_fifo_arlock),
+                .s_axi_arcache (m_axi_fifo_arcache),
+                .s_axi_arprot  (m_axi_fifo_arprot),
+                .s_axi_arvalid (m_axi_fifo_arvalid),
+                .s_axi_arready (m_axi_fifo_arready),
 
-        .s_axi_rid     (m_axi_fifo_rid),
-        .s_axi_rdata   (m_axi_fifo_rdata),
-        .s_axi_rresp   (m_axi_fifo_rresp),
-        .s_axi_rlast   (m_axi_fifo_rlast),
-        .s_axi_rvalid  (m_axi_fifo_rvalid),
-        .s_axi_rready  (m_axi_fifo_rready),
+                .s_axi_rid     (m_axi_fifo_rid),
+                .s_axi_rdata   (m_axi_fifo_rdata),
+                .s_axi_rresp   (m_axi_fifo_rresp),
+                .s_axi_rlast   (m_axi_fifo_rlast),
+                .s_axi_rvalid  (m_axi_fifo_rvalid),
+                .s_axi_rready  (m_axi_fifo_rready),
 
 
-        .m_axi_awid    (m_axi_awid),
-        .m_axi_awaddr  (m_axi_awaddr),
-        .m_axi_awlen   (m_axi_awlen),
-        .m_axi_awsize  (m_axi_awsize),
-        .m_axi_awburst (m_axi_awburst),
-        .m_axi_awlock  (m_axi_awlock),
-        .m_axi_awcache (m_axi_awcache),
-        .m_axi_awprot  (m_axi_awprot),
-        .m_axi_awvalid (m_axi_awvalid),
-        .m_axi_awready (m_axi_awready),
+                .m_axi_awid    (m_axi_awid),
+                .m_axi_awaddr  (m_axi_awaddr),
+                .m_axi_awlen   (m_axi_awlen),
+                .m_axi_awsize  (m_axi_awsize),
+                .m_axi_awburst (m_axi_awburst),
+                .m_axi_awlock  (m_axi_awlock),
+                .m_axi_awcache (m_axi_awcache),
+                .m_axi_awprot  (m_axi_awprot),
+                .m_axi_awvalid (m_axi_awvalid),
+                .m_axi_awready (m_axi_awready),
 
-        .m_axi_wdata   (m_axi_wdata),
-        .m_axi_wstrb   (m_axi_wstrb),
-        .m_axi_wlast   (m_axi_wlast),
-        .m_axi_wvalid  (m_axi_wvalid),
-        .m_axi_wready  (m_axi_wready),
+                .m_axi_wdata   (m_axi_wdata),
+                .m_axi_wstrb   (m_axi_wstrb),
+                .m_axi_wlast   (m_axi_wlast),
+                .m_axi_wvalid  (m_axi_wvalid),
+                .m_axi_wready  (m_axi_wready),
 
-        .m_axi_bid     (m_axi_bid),
-        .m_axi_bresp   (m_axi_bresp),
-        .m_axi_bvalid  (m_axi_bvalid),
-        .m_axi_bready  (m_axi_bready),
+                .m_axi_bid     (m_axi_bid),
+                .m_axi_bresp   (m_axi_bresp),
+                .m_axi_bvalid  (m_axi_bvalid),
+                .m_axi_bready  (m_axi_bready),
 
-        .m_axi_arid    (m_axi_arid),
-        .m_axi_araddr  (m_axi_araddr),
-        .m_axi_arlen   (m_axi_arlen),
-        .m_axi_arsize  (m_axi_arsize),
-        .m_axi_arburst (m_axi_arburst),
-        .m_axi_arlock  (m_axi_arlock),
-        .m_axi_arcache (m_axi_arcache),
-        .m_axi_arprot  (m_axi_arprot),
-        .m_axi_arvalid (m_axi_arvalid),
-        .m_axi_arready (m_axi_arready),
+                .m_axi_arid    (m_axi_arid),
+                .m_axi_araddr  (m_axi_araddr),
+                .m_axi_arlen   (m_axi_arlen),
+                .m_axi_arsize  (m_axi_arsize),
+                .m_axi_arburst (m_axi_arburst),
+                .m_axi_arlock  (m_axi_arlock),
+                .m_axi_arcache (m_axi_arcache),
+                .m_axi_arprot  (m_axi_arprot),
+                .m_axi_arvalid (m_axi_arvalid),
+                .m_axi_arready (m_axi_arready),
 
-        .m_axi_rid     (m_axi_rid),
-        .m_axi_rdata   (m_axi_rdata),
-        .m_axi_rresp   (m_axi_rresp),
-        .m_axi_rlast   (m_axi_rlast),
-        .m_axi_rvalid  (m_axi_rvalid),
-        .m_axi_rready  (m_axi_rready)
-    );
+                .m_axi_rid     (m_axi_rid),
+                .m_axi_rdata   (m_axi_rdata),
+                .m_axi_rresp   (m_axi_rresp),
+                .m_axi_rlast   (m_axi_rlast),
+                .m_axi_rvalid  (m_axi_rvalid),
+                .m_axi_rready  (m_axi_rready)
+            );
+
+        end else begin
+            // Write request channel
+            assign m_axi_awid         = m_axi_fifo_awid;
+            assign m_axi_awaddr       = m_axi_fifo_awaddr;
+            assign m_axi_awlen        = m_axi_fifo_awlen;
+            assign m_axi_awsize       = m_axi_fifo_awsize;
+            assign m_axi_awburst      = m_axi_fifo_awburst;
+            assign m_axi_awlock       = m_axi_fifo_awlock;
+            assign m_axi_awcache      = m_axi_fifo_awcache;
+            assign m_axi_awprot       = m_axi_fifo_awprot;
+            assign m_axi_awvalid      = m_axi_fifo_awvalid;
+            assign m_axi_fifo_awready = m_axi_awready ;
+            // Write data channel
+            assign m_axi_wdata       = m_axi_fifo_wdata;
+            assign m_axi_wstrb       = m_axi_fifo_wstrb;
+            assign m_axi_wlast       = m_axi_fifo_wlast;
+            assign m_axi_wvalid      = m_axi_fifo_wvalid;
+            assign m_axi_fifo_wready = m_axi_wready;
+            // Write response channel
+            assign m_axi_fifo_bid    = m_axi_bid;
+            assign m_axi_fifo_bresp  = m_axi_bresp;
+            assign m_axi_fifo_bvalid = m_axi_bvalid;
+            assign m_axi_bready      = m_axi_fifo_bready;
+            // Read request channel
+            assign m_axi_arid         = m_axi_fifo_arid;
+            assign m_axi_araddr       = m_axi_fifo_araddr;
+            assign m_axi_arlen        = m_axi_fifo_arlen;
+            assign m_axi_arsize       = m_axi_fifo_arsize;
+            assign m_axi_arburst      = m_axi_fifo_arburst;
+            assign m_axi_arlock       = m_axi_fifo_arlock;
+            assign m_axi_arcache      = m_axi_fifo_arcache;
+            assign m_axi_arprot       = m_axi_fifo_arprot;
+            assign m_axi_arvalid      = m_axi_fifo_arvalid;
+            assign m_axi_fifo_arready = m_axi_arready;
+            // Read data channel
+            assign m_axi_fifo_rid    = m_axi_rid;
+            assign m_axi_fifo_rdata  = m_axi_rdata;
+            assign m_axi_fifo_rresp  = m_axi_rresp;
+            assign m_axi_fifo_rlast  = m_axi_rlast;
+            assign m_axi_fifo_rvalid = m_axi_rvalid;
+            assign m_axi_rready      = m_axi_fifo_rready;
+        end
+    endgenerate
+
+
+
 
 
 endmodule

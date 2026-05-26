@@ -219,7 +219,8 @@ module RoCE_tx_queue #(
     end
 
     axis_packet_framer #(
-        .DATA_WIDTH(DATA_WIDTH)
+        .DATA_WIDTH(DATA_WIDTH),
+        .ENABLE_OUTPUT_FIFO(0)
     ) axis_packet_framer_instance (
         .clk(clk),
         .rst(rst),

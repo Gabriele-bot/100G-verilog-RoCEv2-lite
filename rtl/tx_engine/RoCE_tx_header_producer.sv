@@ -731,6 +731,11 @@ module RoCE_tx_header_producer #(
                 header_sent_next = 1'b0;
                 if (m_roce_bth_valid && m_roce_bth_ready) begin
                     state_next            = state_cached_reg;
+                    if (state_cached_reg != STATE_IDLE) begin
+                        s_axis_tready_next = m_axis_tready_int_early && !stall;
+                    end else begin
+                        s_axis_tready_next = 1'b0;;
+                    end
                 end else begin
                     state_next = STATE_SEND_HEADER;
                 end

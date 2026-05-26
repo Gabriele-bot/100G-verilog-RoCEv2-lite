@@ -548,13 +548,8 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                 if (s_icmp_hdr_ready && s_icmp_hdr_valid) begin
                     store_icmp_hdr = 1'b1;
                     frame_ptr_next = 0;
-                    // 16'h0011 = zero padded type field
-                    // 16'h0010 = header length times two
                     checksum_next = {s_icmp_code, s_icmp_type};
-                    //checksum_temp1_next = s_ip_source_ip[31:16];
-                    //checksum_temp2_next = s_ip_source_ip[15:0];
 
-                    //checksum_test_next = 16'h0011 + 16'h0010;
                     checksum_temp_next[0] = s_icmp_roh[31:16];
                     checksum_temp_next[1] = s_icmp_roh[15:0];
                     for (j = 2; j < ADDER_STEPS; j = j + 1) begin
@@ -568,10 +563,6 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                 end
             end
             STATE_SUM_HEADER: begin
-                // sum pseudo header and header
-                //checksum_next = checksum_reg + checksum_temp1_reg + checksum_temp2_reg;
-                //checksum_temp1_next = ip_dest_ip_reg[31:16] + ip_dest_ip_reg[15:0];
-                //checksum_temp2_next = icmp_source_port_reg + icmp_dest_port_reg;
 
                 checksum_next = checksum_reg;
                 for (j = 0; j < ADDER_STEPS; j = j + 1) begin
@@ -596,9 +587,6 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                     for (i = 1; i <= (KEEP_WIDTH); i = i + 1) begin
                         if (s_icmp_payload_axis_tkeep == {KEEP_WIDTH{1'b1}} >> (KEEP_WIDTH-i)) word_cnt = i;
                     end
-
-                    //checksum_temp1_next = 0;
-                    //checksum_temp2_next = 0;
 
                     // Will it work with big datapath?
                     for (j = 0; j < ADDER_STEPS; j = j + 1) begin
@@ -668,9 +656,6 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
                 state_next = STATE_FINISH_SUM_3;
             end
             STATE_FINISH_SUM_3: begin
-                // add MSW (twice!) for proper ones complement sum
-                //checksum_part = checksum_reg[15:0] + checksum_reg[31:16];
-                //checksum_next = ~(checksum_part[15:0] + checksum_part[16]);
 
                 checksum_part = checksum_reg[15:0] + checksum_reg[31:16];
                 checksum_next = ~(checksum_part[15:0] + checksum_part[16]);
@@ -708,10 +693,6 @@ reg [$clog2(SUM_PIPELINE_STAGES):0] sum_ptr_reg = 6'd0, sum_ptr_next;
 
         frame_ptr_reg <= frame_ptr_next;
         checksum_reg <= checksum_next;
-        //checksum_temp1_reg <= checksum_temp1_next;
-        //checksum_temp2_reg <= checksum_temp2_next;
-
-        //checksum_test_reg <= checksum_test_next;
         for (j = 0; j < ADDER_STEPS; j = j + 1) begin
             checksum_temp_reg[j] <= checksum_temp_next[j];
         end

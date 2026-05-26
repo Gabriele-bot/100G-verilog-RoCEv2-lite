@@ -338,6 +338,7 @@ This module integrates the IP and ARP modules for a complete IP stack
   /*
   Input classifier (ip_protocol)
   Drop traffic that doesn't match the local ip addr or the broadcast ip add
+  TODO might be usefull to add register after the demuxing to improve timings
   */
   
   wire s_broadcast_ip_addr = ~(m_ip_rx_dest_ip | subnet_mask) == 0;
