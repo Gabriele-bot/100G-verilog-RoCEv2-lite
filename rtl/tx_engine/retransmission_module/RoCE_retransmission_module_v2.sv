@@ -467,6 +467,7 @@ module RoCE_retransmission_module_v2 #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .BASE_LOC_QPN(BASE_LOC_QPN),
+        .CLOCK_PERIOD(CLOCK_PERIOD),
         .MAX_QPS(MAX_QPS)
     ) RoCE_rtr_read_module_instance (
         .clk(clk),

@@ -221,7 +221,8 @@ module RoCE_simple_work_queue #
             STATE_IDLE: begin
                 s_wr_req_ready_next = 1'b1;
                 if (s_wr_req_valid && s_wr_req_ready) begin
-                    if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the right range
+                    //if (s_wr_req_loc_qp[23:8] == 16'd1 && s_wr_req_loc_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin // move only if loc qpn is in the right range
+                    if (s_wr_req_loc_qp == LOCAL_QPN) begin // move only if loc qpn is in the right one
                         s_wr_req_ready_next = 1'b0;
                         if (!cache_qp_active_reg) begin // QP not active, load QP CTX to cache (regs)
                             state_next = STATE_LOAD_QP_CACHE;

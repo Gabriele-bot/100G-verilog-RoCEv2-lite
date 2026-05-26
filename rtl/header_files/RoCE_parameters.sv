@@ -2,8 +2,6 @@
 
 package RoCE_params;
 
-    import Board_params::*; // Imports RoCE parameters
-
     function [31:0] time2clk;
         input real time_value; // in ms
         input real clock_period; // in ns
@@ -14,6 +12,26 @@ package RoCE_params;
         input [31:0] msg_freq; // in hz (integer)
         input [31:0] clock_freq; // in hz (integer)
         freq2clk = clock_freq/msg_freq;
+    endfunction
+
+    typedef logic [31:0] RnrTimerValues_t [0:31];
+    
+    function automatic RnrTimerValues_t getRNRtimercounts(input real clock_period_ns);
+
+        // These time values in milliseconds are fixed by the Infiniband specification.
+        // Infiniband specification Vol 1 realeas 1.4 page 354
+        const real time_values_ms [0:31] = '{
+        655.36, 0.01,   0.02,   0.03,   0.04,   0.06,   0.08,   0.12,
+        0.16,   0.24,   0.32,   0.48,   0.64,   0.96,   1.28,   1.92,
+        2.56,   3.84,   5.12,   7.68,   10.24,  15.36,  20.48,  30.72,
+        40.96,  61.44,  81.92,  122.88, 163.84, 245.76, 327.68, 491.52
+        };
+
+        RnrTimerValues_t rnr_timer_counts;
+        for (int i = 0; i < 32; i++) begin
+            rnr_timer_counts[i] = time2clk(time_values_ms[i], clock_period_ns);
+        end
+        return rnr_timer_counts;
     endfunction
 
     parameter [15:0] CM_LISTEN_UDP_PORT = 16'h4321; // 17185
@@ -40,71 +58,9 @@ package RoCE_params;
 
     parameter [15:0] ROCE_UDP_PORT = 16'h12B7;
 
-    // Infiniband specification Vol 1 realeas 1.4 page 354
-    parameter [0:31][31:0] RNR_TIMER_VALUES = {
-    time2clk(655.36, RoCE_CLOCK_PERIOD), // 0
-    time2clk(0.01,   RoCE_CLOCK_PERIOD), // 1
-    time2clk(0.02,   RoCE_CLOCK_PERIOD), // 2
-    time2clk(0.03,   RoCE_CLOCK_PERIOD), // 3
-    time2clk(0.04,   RoCE_CLOCK_PERIOD), // 4
-    time2clk(0.06,   RoCE_CLOCK_PERIOD), // 5
-    time2clk(0.08,   RoCE_CLOCK_PERIOD), // 6
-    time2clk(0.12,   RoCE_CLOCK_PERIOD), // 7
-    time2clk(0.16,   RoCE_CLOCK_PERIOD), // 8
-    time2clk(0.24,   RoCE_CLOCK_PERIOD), // 9
-    time2clk(0.32,   RoCE_CLOCK_PERIOD), // 10
-    time2clk(0.48,   RoCE_CLOCK_PERIOD), // 11
-    time2clk(0.64,   RoCE_CLOCK_PERIOD), // 12
-    time2clk(0.96,   RoCE_CLOCK_PERIOD), // 13
-    time2clk(1.28,   RoCE_CLOCK_PERIOD), // 14
-    time2clk(1.92,   RoCE_CLOCK_PERIOD), // 15
-    time2clk(2.56,   RoCE_CLOCK_PERIOD), // 16
-    time2clk(3.84,   RoCE_CLOCK_PERIOD), // 17
-    time2clk(5.12,   RoCE_CLOCK_PERIOD), // 18
-    time2clk(7.68,   RoCE_CLOCK_PERIOD), // 19
-    time2clk(10.24,  RoCE_CLOCK_PERIOD), // 20
-    time2clk(15.36,  RoCE_CLOCK_PERIOD), // 21
-    time2clk(20.48,  RoCE_CLOCK_PERIOD), // 22
-    time2clk(30.72,  RoCE_CLOCK_PERIOD), // 23
-    time2clk(40.98,  RoCE_CLOCK_PERIOD), // 24
-    time2clk(61.44,  RoCE_CLOCK_PERIOD), // 25
-    time2clk(81.92,  RoCE_CLOCK_PERIOD), // 26
-    time2clk(122.88, RoCE_CLOCK_PERIOD), // 27
-    time2clk(163.84, RoCE_CLOCK_PERIOD), // 28
-    time2clk(245.76, RoCE_CLOCK_PERIOD), // 29
-    time2clk(327.68, RoCE_CLOCK_PERIOD), // 30
-    time2clk(491.52, RoCE_CLOCK_PERIOD)  // 31
-    };
-
-    parameter [0:15][31:0] FREQ_CLK_COUNTER_VALUES = {
-    64'd0,
-    time2clk(1e3/1,   RoCE_CLOCK_PERIOD), // 1 Hz
-    time2clk(1e3/5,   RoCE_CLOCK_PERIOD), // 5 Hz
-    time2clk(1e3/10,  RoCE_CLOCK_PERIOD), // 10 Hz
-    time2clk(1e3/50,  RoCE_CLOCK_PERIOD), // 50 Hz
-    time2clk(1e3/100, RoCE_CLOCK_PERIOD), // 100 Hz
-    time2clk(1e3/500, RoCE_CLOCK_PERIOD), // 500 Hz
-    time2clk(1e3/1e3, RoCE_CLOCK_PERIOD), // 1 kHz
-    time2clk(1e3/5e3, RoCE_CLOCK_PERIOD), // 5 kHz
-    time2clk(1e3/1e4, RoCE_CLOCK_PERIOD), // 10 kHz
-    time2clk(1e3/5e4, RoCE_CLOCK_PERIOD), // 50 kHz
-    time2clk(1e3/1e5, RoCE_CLOCK_PERIOD), // 100 kHz
-    time2clk(1e3/5e5, RoCE_CLOCK_PERIOD), // 500 kHz
-    time2clk(1e3/1e6, RoCE_CLOCK_PERIOD), // 1 MHz
-    time2clk(1e3/5e6, RoCE_CLOCK_PERIOD), // 5 MHz
-    time2clk(1e3/1e7, RoCE_CLOCK_PERIOD)  // 10 MHz
-
-    };
-
     /*
     Connection manager parameters
     */
-    /*
-    Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
-    */
-    parameter MAX_QUEUE_PAIRS = 2**3;
-
-    parameter MAX_QUEUE_PAIRS_WIDTH = $clog2(MAX_QUEUE_PAIRS);
     //REQUESTS types
     parameter
     REQ_NULL          = 3'h0,

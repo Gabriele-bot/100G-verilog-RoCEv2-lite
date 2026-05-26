@@ -741,9 +741,10 @@ module RoCE_stack_wrapper #(
 
     // Connection manager
     udp_RoCE_connection_manager #(
-        .DATA_WIDTH     (OUT_DATA_WIDTH),
+        .DATA_WIDTH      (OUT_DATA_WIDTH),
+        .N_QUEUE_PAIRS   (N_QUEUE_PAIRS),
         .MODULE_DIRECTION("Slave"),
-        .MASTER_TIMEOUT(1*10**8)
+        .MASTER_TIMEOUT  (1*10**8)
     ) udp_RoCE_connection_manager_instance (
         .clk(clk_stack),
         .rst(rst_stack),
@@ -1501,6 +1502,7 @@ module RoCE_stack_wrapper #(
 
 
     RoCE_qp_state_module #(
+        .N_QUEUE_PAIRS(N_QUEUE_PAIRS),
         .REM_ADDR_WIDTH(16)
     ) RoCE_qp_state_module_instance (
         .clk                    (clk_roce_eng),

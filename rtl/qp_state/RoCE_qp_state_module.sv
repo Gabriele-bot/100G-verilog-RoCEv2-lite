@@ -2,7 +2,8 @@
 
 
 module RoCE_qp_state_module #(
-  parameter REM_ADDR_WIDTH           = 32
+  parameter N_QUEUE_PAIRS   = 2,
+  parameter REM_ADDR_WIDTH  = 32
 ) (
   input wire clk,
   input wire rst,
@@ -168,13 +169,16 @@ module RoCE_qp_state_module #(
   STATE_UPDATE_CONTEXT = 3'd6,
   STATE_READ_CONTEXT   = 3'd7;
 
-  reg [QP_CONTEXT_LENGTH*8-1 :0] qp_contex [MAX_QUEUE_PAIRS-1:0];
+  localparam N_QUEUE_PAIRS_WIDTH = $clog2(N_QUEUE_PAIRS);
+  
+
+  reg [QP_CONTEXT_LENGTH*8-1 :0] qp_contex [N_QUEUE_PAIRS-1:0];
   reg [QP_CONTEXT_LENGTH*8-1 :0] qp_contex_state_temp;
-  reg [24-1 :0] qp_rem_acked_psn_mem [MAX_QUEUE_PAIRS-1:0];
-  reg [MAX_QUEUE_PAIRS_WIDTH-1:0] cm_qp_ptr_reg = 0, cm_qp_ptr_next;
-  reg [MAX_QUEUE_PAIRS_WIDTH-1:0] qp_update_ptr_reg, qp_update_ptr_next;
-  reg [MAX_QUEUE_PAIRS_WIDTH-1:0] qp_close_ptr_reg, qp_close_ptr_next;
-  reg [MAX_QUEUE_PAIRS_WIDTH-1:0] qp_ptr_reg, qp_ptr_next;
+  reg [24-1 :0] qp_rem_acked_psn_mem [N_QUEUE_PAIRS-1:0];
+  reg [N_QUEUE_PAIRS_WIDTH-1:0] cm_qp_ptr_reg = 0, cm_qp_ptr_next;
+  reg [N_QUEUE_PAIRS_WIDTH-1:0] qp_update_ptr_reg, qp_update_ptr_next;
+  reg [N_QUEUE_PAIRS_WIDTH-1:0] qp_close_ptr_reg, qp_close_ptr_next;
+  reg [N_QUEUE_PAIRS_WIDTH-1:0] qp_ptr_reg, qp_ptr_next;
 
   reg store_qp_info;
 
@@ -269,7 +273,7 @@ module RoCE_qp_state_module #(
   integer i;
 
   initial begin
-    for(i = 0; i < MAX_QUEUE_PAIRS; i = i + 1) begin
+    for(i = 0; i < N_QUEUE_PAIRS; i = i + 1) begin
       qp_contex[i] <= {QP_CONTEXT_LENGTH*8{1'b0}}; // all QP in RESET STATE
       qp_rem_acked_psn_mem[i] <= 24'd0;
     end
@@ -297,40 +301,40 @@ module RoCE_qp_state_module #(
 
     case (state_reg)
       STATE_IDLE: begin
-        if (s_qp_close_valid && (s_qp_close_loc_qpn[23:8] == 16'd1 && s_qp_close_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+        if (s_qp_close_valid && (s_qp_close_loc_qpn[23:8] == 16'd1 && s_qp_close_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0)) begin
           //  QP goes to error state, some errors occoured during transfer (e.g. transmission timeout)
           qp_aeth_syndrome_next = {1'b1, 2'b00, 5'b11111}; // 8'h9F
-          qp_close_ptr_next = s_qp_close_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+          qp_close_ptr_next = s_qp_close_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
           qp_close_rem_psn_next = s_qp_close_rem_psn;
           state_next = STATE_ERROR_QP;
         end else if (s_qp_update_context_valid) begin
           // update QP
-          if (s_qp_update_loc_qpn[23:8] == 16'd1 && s_qp_update_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+          if (s_qp_update_loc_qpn[23:8] == 16'd1 && s_qp_update_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
             qp_update_rem_psn_next = s_qp_update_rem_psn;
-            qp_update_ptr_next = s_qp_update_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+            qp_update_ptr_next = s_qp_update_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
             state_next = STATE_UPDATE_QP;
           end
         end else if (cm_qp_valid) begin
           store_qp_info = 1'b1;
-          if (cm_qp_loc_qpn[23:8] == 16'd1 && cm_qp_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-            // local qp must be between 256 and 256+MAX_QUEUE_PAIRS
+          if (cm_qp_loc_qpn[23:8] == 16'd1 && cm_qp_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+            // local qp must be between 256 and 256+N_QUEUE_PAIRS
             cm_qp_req_type_next = cm_qp_req_type;
             case(cm_qp_req_type)
               REQ_OPEN_QP: begin
-                cm_qp_ptr_next = cm_qp_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+                cm_qp_ptr_next = cm_qp_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
                 state_next = STATE_OPEN_QP;
               end
               REQ_MODIFY_QP_RTS:begin
-                qp_update_ptr_next = cm_qp_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+                qp_update_ptr_next = cm_qp_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
                 state_next = STATE_MODIFY_QP_RTS;
               end
               REQ_CLOSE_QP:begin
                 qp_aeth_syndrome_next = 8'd0;
-                qp_close_ptr_next = cm_qp_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+                qp_close_ptr_next = cm_qp_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
                 state_next = STATE_CLOSE_QP;
               end
               REQ_FETCH_QP_INFO:begin // fetch context from QP state table
-                cm_qp_ptr_next = cm_qp_loc_qpn[MAX_QUEUE_PAIRS_WIDTH-1:0];
+                cm_qp_ptr_next = cm_qp_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0];
                 state_next = STATE_READ_CONTEXT;
               end
               default:begin
@@ -342,11 +346,11 @@ module RoCE_qp_state_module #(
 
         if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
           // recieved an ACK packet
-          if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+          if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
             // QP goes to error state if a NAK is received, but not a PSN sequence error (the latter will trigger retransmission)
             if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b11 && s_roce_rx_aeth_syndrome[4:0] != 5'b00000) begin
               qp_aeth_syndrome_next = s_roce_rx_aeth_syndrome;
-              qp_close_ptr_next = s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS_WIDTH-1:0];
+              qp_close_ptr_next = s_roce_rx_bth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0];
               state_next = STATE_ERROR_QP;
             end
           end
@@ -370,7 +374,7 @@ module RoCE_qp_state_module #(
       STATE_UPDATE_CONTEXT: begin
         if (cm_qp_req_type_reg == REQ_OPEN_QP) begin
           cm_qp_req_type_next = REQ_MODIFY_QP_RTS;
-          qp_update_ptr_next = cm_qp_loc_qpn_reg[MAX_QUEUE_PAIRS_WIDTH-1:0];
+          qp_update_ptr_next = cm_qp_loc_qpn_reg[N_QUEUE_PAIRS_WIDTH-1:0];
           state_next = STATE_MODIFY_QP_RTS;
         end else begin
           state_next   = STATE_IDLE;
@@ -388,18 +392,18 @@ module RoCE_qp_state_module #(
 
     // write first, else read
     if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
-      // local qp must be between 256 and 256+MAX_QUEUE_PAIRS
-      if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
+      // local qp must be between 256 and 256+N_QUEUE_PAIRS
+      if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
         if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin // ACK
-          qp_rem_acked_psn_mem[s_roce_rx_bth_dest_qp[MAX_QUEUE_PAIRS_WIDTH-1:0]] <= s_roce_rx_bth_psn;
+          qp_rem_acked_psn_mem[s_roce_rx_bth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0]] <= s_roce_rx_bth_psn;
         end
       end
       // if reset QP put it to 0  
     end else if (state_reg == STATE_OPEN_QP) begin
       qp_rem_acked_psn_mem[cm_qp_ptr_reg] <= 24'd0;
     end else if (qp_context_spy) begin
-      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_spy_rem_acked_psn_reg <= qp_rem_acked_psn_mem[qp_local_qpn_spy[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_spy_rem_acked_psn_reg <= qp_rem_acked_psn_mem[qp_local_qpn_spy[N_QUEUE_PAIRS_WIDTH-1:0]];
       end
     end
   end
@@ -410,8 +414,8 @@ module RoCE_qp_state_module #(
     if (s_qp_context_req_valid && s_qp_context_req_ready) begin
       qp_spy_context_valid_pipes[0] <= 1'b0;
       error_invalid_qp_spy          <= 1'b0;
-      if (s_qp_context_loc_qpn_req[23:8] == 16'd1 && s_qp_context_loc_qpn_req[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_req_context <= qp_contex[s_qp_context_loc_qpn_req[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+      if (s_qp_context_loc_qpn_req[23:8] == 16'd1 && s_qp_context_loc_qpn_req[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_req_context <= qp_contex[s_qp_context_loc_qpn_req[N_QUEUE_PAIRS_WIDTH-1:0]];
         qp_req_context_valid_pipes[0] <= 1'b1;
         error_invalid_qp_req          <= 1'b0;
       end else begin
@@ -421,8 +425,8 @@ module RoCE_qp_state_module #(
     end else if (qp_context_spy) begin
       qp_req_context_valid_pipes[0] <= 1'b0;
       error_invalid_qp_req          <= 1'b0;
-      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:MAX_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_spy_context <= qp_contex[qp_local_qpn_spy[MAX_QUEUE_PAIRS_WIDTH-1:0]];
+      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_spy_context <= qp_contex[qp_local_qpn_spy[N_QUEUE_PAIRS_WIDTH-1:0]];
         qp_spy_context_valid_pipes[0] <= 1'b1;
         error_invalid_qp_spy          <= 1'b0;
       end else begin

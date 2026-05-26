@@ -4,7 +4,9 @@
 module network_wrapper_roce_generic #(
     parameter MAC_DATA_WIDTH = 1024,
     parameter STACK_DATA_WIDTH = 1024,
+    parameter R0CE_ENG_CLK_PERIOD = 3.000, // in ns, needed to compute RNR timer values
     parameter N_ROCE_TX_ENGINES = 1,
+    parameter N_QUEUE_PAIRS = 4,
     parameter FIFO_REGS = 4,
     parameter ASYNC_MAC_STACK = 1,
     parameter ENABLE_PFC = 0,
@@ -83,7 +85,13 @@ module network_wrapper_roce_generic #(
     output wire [31:0] n_rnr_retransmit_triggers
 );
 
-    import Board_params::*; // Imports Board parameters
+   initial begin
+        if (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES <  2) begin
+            $error("Error: Must have at least 2 QUEUE PAIRS per TX engine (instance %m)");
+            $finish;
+        end
+    end
+
     import RoCE_params::*; // Imports RoCE parameters
 
     wire [MAC_DATA_WIDTH -1 :0]      s_rx_axis_srl_fifo_tdata;
@@ -711,12 +719,12 @@ module network_wrapper_roce_generic #(
         .OUT_DATA_WIDTH                  (STACK_DATA_WIDTH),
         .OUT_KEEP_ENABLE                 (1),
         .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),
-        .CLOCK_PERIOD                    (RoCE_CLOCK_PERIOD),
+        .CLOCK_PERIOD                    (R0CE_ENG_CLK_PERIOD),
         .DEBUG                           (DEBUG),
         .REFRESH_CACHE_TICKS             (32767),
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(23),
         .N_ROCE_TX_ENGINES               (N_ROCE_TX_ENGINES),
-        .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)
+        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS) // must be a power of two
     ) RoCE_stack_wrapper_instance (
         .clk_stack(clk_stack),
         .rst_stack(rst_stack),

@@ -261,6 +261,7 @@ module RoCE_tx_queue #(
 
     RoCE_simple_work_queue #(
         .DATA_WIDTH         (DATA_WIDTH),
+        .LOCAL_QPN          (LOCAL_QPN),
         .REFRESH_CACHE_TICKS(REFRESH_CACHE_TICKS)
     ) RoCE_simple_work_queue_instance (
         .clk(clk),

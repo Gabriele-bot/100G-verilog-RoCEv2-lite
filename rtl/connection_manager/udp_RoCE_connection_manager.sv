@@ -43,6 +43,7 @@
 
 module udp_RoCE_connection_manager #(
     parameter DATA_WIDTH       = 256,
+    parameter N_QUEUE_PAIRS    = 2,
     parameter MODULE_DIRECTION = "Slave", // Slave or Master 
     parameter MASTER_TIMEOUT   = 200 // with 5ns clock it is equivalent to 10 ms 
     // Master:
@@ -143,6 +144,8 @@ module udp_RoCE_connection_manager #(
 );
 
     import RoCE_params::*; // Imports RoCE parameters
+
+    localparam N_QUEUE_PAIRS_WIDTH = $clog2(N_QUEUE_PAIRS);
 
 
     wire        m_qp_info_valid;
@@ -345,7 +348,7 @@ module udp_RoCE_connection_manager #(
 
 
     qpn_fifo_init #(
-        .MAX_QUEUE_PAIRS_FIFO(MAX_QUEUE_PAIRS),
+        .MAX_QUEUE_PAIRS_FIFO(N_QUEUE_PAIRS),
         .BASE_QPN_FIFO(256)
     ) qpn_fifo_init_instance (
         .clk(clk),
@@ -489,7 +492,7 @@ module udp_RoCE_connection_manager #(
                                 end
                                 REQ_CLOSE_QP: begin
 
-                                    if ((m_qp_info_rem_qpn[23:8] == 16'd1 && m_qp_info_rem_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+                                    if ((m_qp_info_rem_qpn[23:8] == 16'd1 && m_qp_info_rem_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0)) begin
                                         //  QP goes to error state, some errors occoured during transfer (e.g. transmission timeout)
 
                                         qp_close_req_next = 1'b1;
@@ -706,7 +709,7 @@ module udp_RoCE_connection_manager #(
                                 end
                                 REQ_CLOSE_QP: begin
                                     // close local qp
-                                    if ((cm_qp_master_req_loc_qpn[23:8] == 16'd1 && cm_qp_master_req_loc_qpn[7:MAX_QUEUE_PAIRS_WIDTH] == 0)) begin
+                                    if ((cm_qp_master_req_loc_qpn[23:8] == 16'd1 && cm_qp_master_req_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0)) begin
                                         cm_qp_valid_next = 1'b1;
                                         // fetch QP parameters from table
                                         cm_qp_req_type_next         = REQ_FETCH_QP_INFO;
