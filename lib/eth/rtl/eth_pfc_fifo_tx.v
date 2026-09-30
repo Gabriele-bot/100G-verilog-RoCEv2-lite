@@ -13,6 +13,10 @@ module eth_pfc_fifo_tx#
     parameter KEEP_WIDTH = (DATA_WIDTH/8),
     // Flow control fifo depth
     parameter FIFO_DEPTH = 1024,
+    // FIFO RAM PIPELINE
+    parameter RAM_PIPELINE = 1,
+    // FRAME_FIFO
+    parameter FRAME_FIFO = 0,
     // output srl register
     parameter OUTPUT_SRL_REG = 0
 )
@@ -124,8 +128,8 @@ module eth_pfc_fifo_tx#
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
         .USER_WIDTH(1),
-        .RAM_PIPELINE(2),
-        .FRAME_FIFO(1),
+        .RAM_PIPELINE(RAM_PIPELINE),
+        .FRAME_FIFO(FRAME_FIFO),
         .PAUSE_ENABLE(1),
         .FRAME_PAUSE(1)
     ) tx_pfc_priority_fifo (

@@ -54,6 +54,8 @@ module eth_mac_10g_fifo #
     parameter RX_DROP_OVERSIZE_FRAME = RX_FRAME_FIFO,
     parameter RX_DROP_BAD_FRAME = RX_DROP_OVERSIZE_FRAME,
     parameter RX_DROP_WHEN_FULL = RX_DROP_OVERSIZE_FRAME,
+    parameter PFC_ENABLE = 0,
+    parameter PAUSE_ENABLE = PFC_ENABLE,
     parameter PTP_TS_ENABLE = 0,
     parameter PTP_TS_FMT_TOD = 1,
     parameter PTP_TS_WIDTH = PTP_TS_FMT_TOD ? 96 : 64,
@@ -62,9 +64,7 @@ module eth_mac_10g_fifo #
     parameter TX_PTP_TAG_ENABLE = PTP_TS_ENABLE,
     parameter PTP_TAG_WIDTH = 16,
     parameter TX_USER_WIDTH = (PTP_TS_ENABLE ? (TX_PTP_TAG_ENABLE ? PTP_TAG_WIDTH : 0) + (TX_PTP_TS_CTRL_IN_TUSER ? 1 : 0) : 0) + 1,
-    parameter RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1,
-    parameter PFC_ENABLE = 0,
-    parameter PAUSE_ENABLE = PFC_ENABLE
+    parameter RX_USER_WIDTH = (PTP_TS_ENABLE ? PTP_TS_WIDTH : 0) + 1
 )
 (
     input  wire                       rx_clk,
@@ -125,10 +125,27 @@ module eth_mac_10g_fifo #
     output wire                       rx_fifo_good_frame,
 
     /*
-    Pause outputs
+    Pause interface
     */
-    output wire [8:0] tx_pause_req_out,
-    output wire [8:0] tx_pause_ack_out,
+
+    /*
+     * Link-level Flow Control (LFC) (IEEE 802.3 annex 31B PAUSE)
+     */
+    input  wire                       tx_lfc_en,
+    input  wire                       tx_lfc_req,
+    input  wire                       tx_lfc_resend,
+    input  wire                       rx_lfc_en,
+    output wire                       rx_lfc_req, // global pause handled
+
+    /*
+     * Priority Flow Control (PFC) (IEEE 802.3 annex 31D PFC)
+     */
+    input  wire [7:0]                 tx_pfc_en,
+    input  wire [7:0]                 tx_pfc_req,
+    input  wire                       tx_pfc_resend,
+    input  wire [7:0]                 rx_pfc_en,
+    output wire [7:0]                 rx_pfc_req,
+    input  wire [7:0]                 rx_pfc_ack,
     /*
      * PTP clock
      */
@@ -139,7 +156,6 @@ module eth_mac_10g_fifo #
      * Configuration
      */
     input  wire [7:0]                 cfg_ifg,
-    input  wire [2:0]                 ctrl_priority_tag,
     input  wire                       cfg_tx_enable,
     input  wire                       cfg_rx_enable,
     input  wire [47:0]                cfg_local_mac
@@ -166,20 +182,6 @@ module eth_mac_10g_fifo #
     wire                       tx_fifo_axis_tlast;
     wire [TX_USER_WIDTH-1:0]   tx_fifo_axis_tuser;
 
-    wire [DATA_WIDTH -1 :0]      m_tx_axis_pfc_demux_tdata;
-    wire [KEEP_WIDTH-1 :0 ]      m_tx_axis_pfc_demux_tkeep;
-    wire                         m_tx_axis_pfc_demux_tvalid;
-    wire                         m_tx_axis_pfc_demux_tready;
-    wire                         m_tx_axis_pfc_demux_tlast;
-    wire                         m_tx_axis_pfc_demux_tuser;
-
-    wire [DATA_WIDTH -1 :0]      tx_mac_fifo_axis_tdata;
-    wire [KEEP_WIDTH-1 :0 ]      tx_mac_fifo_axis_tkeep;
-    wire                         tx_mac_fifo_axis_tvalid;
-    wire                         tx_mac_fifo_axis_tready;
-    wire                         tx_mac_fifo_axis_tlast;
-    wire                         tx_mac_fifo_axis_tuser;
-
     wire [DATA_WIDTH-1:0]      rx_fifo_axis_tdata;
     wire [KEEP_WIDTH-1:0]      rx_fifo_axis_tkeep;
     wire                       rx_fifo_axis_tvalid;
@@ -200,13 +202,6 @@ module eth_mac_10g_fifo #
     reg [0:0] tx_sync_reg_2 = 1'b0;
     reg [0:0] tx_sync_reg_3 = 1'b0;
     reg [0:0] tx_sync_reg_4 = 1'b0;
-
-    reg [8:0] eth_tx_pause_req_sync_reg_1 = 9'd0;
-    reg [8:0] eth_tx_pause_req_sync_reg_2 = 9'd0;
-    reg [8:0] eth_tx_pause_req_sync_reg_3 = 9'd0;
-
-    wire [8:0] eth_tx_pause_req;
-    wire [8:0] eth_tx_pause_ack;
 
     assign tx_error_underflow = tx_sync_reg_3[0] ^ tx_sync_reg_4[0];
 
@@ -239,50 +234,6 @@ module eth_mac_10g_fifo #
     reg [1:0] rx_sync_reg_3 = 2'd0;
     reg [1:0] rx_sync_reg_4 = 2'd0;
 
-    wire [8:0] eth_rx_pause_req;
-
-
-    reg [8:0] eth_rx_pause_ack_sync_reg_1 = 8'd0;
-    reg [8:0] eth_rx_pause_ack_sync_reg_2 = 8'd0;
-    reg [8:0] eth_rx_pause_ack_sync_reg_3 = 8'd0;
-
-    // sync rx pfc req with logic clock
-    always @(posedge rx_clk or posedge rx_rst) begin
-        if (rx_rst) begin
-            eth_tx_pause_req_sync_reg_1 <= 9'd0;
-        end else begin
-            eth_tx_pause_req_sync_reg_1 <= eth_rx_pause_req;
-        end
-    end
-
-    always @(posedge logic_clk or posedge logic_rst) begin
-        if (logic_rst) begin
-            eth_tx_pause_req_sync_reg_2 <= 9'd0;
-            eth_tx_pause_req_sync_reg_3 <= 9'd0;
-        end else begin
-            eth_tx_pause_req_sync_reg_2 <= eth_tx_pause_req_sync_reg_1;
-            eth_tx_pause_req_sync_reg_3 <= eth_tx_pause_req_sync_reg_2;
-        end
-    end
-
-    // sync tx ack with rx clock
-    always @(posedge logic_clk or posedge logic_rst) begin
-        if (logic_rst) begin
-            eth_rx_pause_ack_sync_reg_1 <= 9'd0;
-        end else begin
-            eth_rx_pause_ack_sync_reg_1 <= eth_tx_pause_ack;
-        end
-    end
-
-    always @(posedge rx_clk or posedge rx_rst) begin
-        if (rx_rst) begin
-            eth_rx_pause_ack_sync_reg_2 <= 9'd0;
-            eth_rx_pause_ack_sync_reg_3 <= 9'd0;
-        end else begin
-            eth_rx_pause_ack_sync_reg_2 <= eth_rx_pause_ack_sync_reg_1;
-            eth_rx_pause_ack_sync_reg_3 <= eth_rx_pause_ack_sync_reg_2;
-        end
-    end
 
     assign rx_error_bad_frame = rx_sync_reg_3[0] ^ rx_sync_reg_4[0];
     assign rx_error_bad_fcs = rx_sync_reg_3[1] ^ rx_sync_reg_4[1];
@@ -307,54 +258,6 @@ module eth_mac_10g_fifo #
         end
     end
 
-    assign eth_tx_pause_req = eth_tx_pause_req_sync_reg_3;
-    // PFC fifos
-    generate
-
-        if (PFC_ENABLE) begin
-
-            eth_pfc_fifo_tx #(
-                .DATA_WIDTH(DATA_WIDTH),
-                .KEEP_WIDTH(KEEP_WIDTH),
-                .FIFO_DEPTH(TX_FIFO_DEPTH)
-            ) eth_pfc_fifo_tx_instance (
-                .clk(logic_clk),
-                .rst(logic_rst),
-                .s_priority_axis_tdata (tx_axis_tdata),
-                .s_priority_axis_tkeep (tx_axis_tkeep),
-                .s_priority_axis_tvalid(tx_axis_tvalid),
-                .s_priority_axis_tready(tx_axis_tready),
-                .s_priority_axis_tlast (tx_axis_tlast ),
-                .s_priority_axis_tuser (tx_axis_tuser ),
-
-
-                .m_axis_tdata (tx_mac_fifo_axis_tdata),
-                .m_axis_tkeep (tx_mac_fifo_axis_tkeep),
-                .m_axis_tvalid(tx_mac_fifo_axis_tvalid),
-                .m_axis_tready(tx_mac_fifo_axis_tready),
-                .m_axis_tlast (tx_mac_fifo_axis_tlast),
-                .m_axis_tuser (tx_mac_fifo_axis_tuser),
-
-                .priority_tag(ctrl_priority_tag),
-
-                .pause_req(eth_tx_pause_req[7:0]),
-                .pause_ack(eth_tx_pause_ack[7:0])
-            );
-        end else begin
-            assign tx_mac_fifo_axis_tdata     = tx_axis_tdata;
-            assign tx_mac_fifo_axis_tkeep     = tx_axis_tkeep;
-            assign tx_mac_fifo_axis_tvalid    = tx_axis_tvalid;
-            assign tx_axis_tready             = tx_mac_fifo_axis_tready;
-            assign tx_mac_fifo_axis_tlast     = tx_axis_tlast;
-            assign tx_mac_fifo_axis_tuser     = tx_axis_tuser;
-
-            assign eth_tx_pause_ack[7:0] = 8'hFF;
-        end
-
-    endgenerate
-
-    assign tx_pause_req_out = eth_tx_pause_req;
-    assign tx_pause_ack_out = eth_tx_pause_ack;
 
     // PTP timestamping
     generate
@@ -461,15 +364,6 @@ module eth_mac_10g_fifo #
         end
 
     endgenerate
-    
-    wire [7:0] rx_pfc_en;
-    generate
-    if (PFC_ENABLE) begin
-    	assign rx_pfc_en = 8'hff;
-    end else begin
-    	assign rx_pfc_en = 8'd0;
-    end
-    endgenerate
 
     eth_mac_10g #(
         .DATA_WIDTH(DATA_WIDTH),
@@ -522,25 +416,25 @@ module eth_mac_10g_fifo #
         /*
          * Link-level Flow Control (LFC) (IEEE 802.3 annex 31B PAUSE)
          */
-        .tx_lfc_req(1'b0),
-        .tx_lfc_resend(1'b0),
-        .rx_lfc_en(PAUSE_ENABLE),
-        .rx_lfc_req(eth_rx_pause_req[8]),
-        .rx_lfc_ack(1'b0),
+        .tx_lfc_req(tx_lfc_req),
+        .tx_lfc_resend(tx_lfc_resend),
+        .rx_lfc_en(rx_lfc_en),
+        .rx_lfc_req(rx_lfc_req),
+        .rx_lfc_ack(1'b0), //handled interlally
 
         /*
          * Priority Flow Control (PFC) (IEEE 802.3 annex 31D PFC)
          */
-        .tx_pfc_req(1'b0),
-        .tx_pfc_resend(1'b0),
+        .tx_pfc_req(tx_pfc_req & tx_pfc_en),
+        .tx_pfc_resend(tx_pfc_resend),
         .rx_pfc_en(rx_pfc_en),
-        .rx_pfc_req(eth_rx_pause_req[7:0]),
-        .rx_pfc_ack(eth_rx_pause_ack_sync_reg_3[7:0]),
+        .rx_pfc_req(rx_pfc_req),
+        .rx_pfc_ack(rx_pfc_ack),
 
         /*
          * Pause interface
          */
-        .tx_lfc_pause_en(PAUSE_ENABLE),
+        .tx_lfc_pause_en(tx_lfc_en),
         .tx_pause_req(1'b0),
         .tx_pause_ack(),
 
@@ -563,29 +457,29 @@ module eth_mac_10g_fifo #
         .cfg_mcf_rx_check_eth_src(1'b0),
         .cfg_mcf_rx_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
         .cfg_mcf_rx_opcode_lfc(LFC_OPCODE),
-        .cfg_mcf_rx_check_opcode_lfc(PAUSE_ENABLE),
+        .cfg_mcf_rx_check_opcode_lfc(rx_lfc_en),
         .cfg_mcf_rx_opcode_pfc(PFC_OPCODE),
-        .cfg_mcf_rx_check_opcode_pfc(PFC_ENABLE),
+        .cfg_mcf_rx_check_opcode_pfc(|rx_pfc_en),
         .cfg_mcf_rx_forward(1'b0),
-        .cfg_mcf_rx_enable(PFC_ENABLE | PAUSE_ENABLE),
+        .cfg_mcf_rx_enable(rx_lfc_en | (|rx_pfc_en)),
         .cfg_tx_lfc_eth_dst(MAC_MULTICAST_ADDRESS),
-        .cfg_tx_lfc_eth_src(LOCAL_MAC_ADDRESS),
+        .cfg_tx_lfc_eth_src(cfg_local_mac),
         .cfg_tx_lfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
         .cfg_tx_lfc_opcode(LFC_OPCODE),
-        .cfg_tx_lfc_en(PAUSE_ENABLE),
+        .cfg_tx_lfc_en(tx_lfc_en),
         .cfg_tx_lfc_quanta(LFC_QUANTA),
         .cfg_tx_lfc_refresh(LFC_REFRESH),
         .cfg_tx_pfc_eth_dst(MAC_MULTICAST_ADDRESS),
-        .cfg_tx_pfc_eth_src(LOCAL_MAC_ADDRESS),
+        .cfg_tx_pfc_eth_src(cfg_local_mac),
         .cfg_tx_pfc_eth_type(MAC_CONTROL_FRAME_ETH_TYPE),
         .cfg_tx_pfc_opcode(PFC_OPCODE),
-        .cfg_tx_pfc_en(PFC_ENABLE),
+        .cfg_tx_pfc_en(|(tx_pfc_en)),
         .cfg_tx_pfc_quanta(PFC_QUANTA),
         .cfg_tx_pfc_refresh(PFC_REFRESH),
         .cfg_rx_lfc_opcode(LFC_OPCODE),
-        .cfg_rx_lfc_en(PAUSE_ENABLE),
+        .cfg_rx_lfc_en(rx_lfc_en),
         .cfg_rx_pfc_opcode(PFC_OPCODE),
-        .cfg_rx_pfc_en(PFC_ENABLE)
+        .cfg_rx_pfc_en(|rx_pfc_en)
     );
 
 
@@ -613,14 +507,14 @@ module eth_mac_10g_fifo #
         // AXI input
         .s_clk(logic_clk),
         .s_rst(logic_rst),
-        .s_axis_tdata (tx_mac_fifo_axis_tdata),
-        .s_axis_tkeep (tx_mac_fifo_axis_tkeep),
-        .s_axis_tvalid(tx_mac_fifo_axis_tvalid),
-        .s_axis_tready(tx_mac_fifo_axis_tready),
-        .s_axis_tlast (tx_mac_fifo_axis_tlast),
+        .s_axis_tdata (tx_axis_tdata),
+        .s_axis_tkeep (tx_axis_tkeep),
+        .s_axis_tvalid(tx_axis_tvalid),
+        .s_axis_tready(tx_axis_tready),
+        .s_axis_tlast (tx_axis_tlast),
         .s_axis_tid   (0),
         .s_axis_tdest (0),
-        .s_axis_tuser (tx_mac_fifo_axis_tuser),
+        .s_axis_tuser (tx_axis_tuser),
         // AXI output
         .m_clk(tx_clk),
         .m_rst(tx_rst),

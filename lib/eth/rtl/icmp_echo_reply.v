@@ -352,7 +352,7 @@ module icmp_echo_reply #(
         .s_icmp_hdr_ready(tx_icmp_hdr_ready),
         .s_eth_dest_mac(tx_icmp_eth_dest_mac),
         .s_eth_src_mac(tx_icmp_eth_src_mac),
-        .s_eth_type(tx_icmp_type),
+        .s_eth_type(tx_icmp_eth_type),
         .s_ip_version(4'h4),
         .s_ip_ihl(4'h5),
         .s_ip_dscp(tx_icmp_ip_dscp),

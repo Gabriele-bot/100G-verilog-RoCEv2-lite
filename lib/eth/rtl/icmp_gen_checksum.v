@@ -162,8 +162,8 @@ the IP headers, and transmits the complete IP payload on an AXI interface.
     parameter BYTE_LANES = KEEP_ENABLE ? KEEP_WIDTH : 1;
 
     initial begin
-        if (DATA_WIDTH < 64) begin
-            $error("Error: AXIS data with too small, minimum value is 64 bits");
+        if (DATA_WIDTH < 32) begin
+            $error("Error: AXIS data with too small, minimum value is 32 bits");
             $finish;
         end
         if (BYTE_LANES * 8 != DATA_WIDTH) begin

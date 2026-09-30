@@ -15,8 +15,15 @@ module udp_complete_opt #(
   parameter ENABLE_DOT1Q_HEADER = 0,
   // Pipelined IP header checksum computation
   parameter HEADER_CHECKSUM_PIPELINED = 0,
+  // IP payload fifo to accomodate the header's checksum delay
+  parameter IP_PAYLOAD_FIFO_CHECKSUM = 0,
   // compute ICRC for RoCE packets
-  parameter ROCE_ICRC_INSERTER = 1
+  parameter ROCE_ICRC_INSERTER = 1,
+  // ARP and ICMP fixed datapath width (adapted from DATA_WIDTH)
+  parameter ARP_ICMP_DATA_WIDTH = 64,
+  parameter ARP_ICMP_KEEP_WIDTH = (ARP_ICMP_DATA_WIDTH / 8),
+  // Register to achieve better timings, enable them if you want to trade some flops with better timing
+  parameter ENABLE_TIMING_OPT_REGS = 0
 ) (
   input wire clk,
   input wire rst,
@@ -237,13 +244,13 @@ module udp_complete_opt #(
   wire                    arp_response_error;
   wire [            47:0] arp_response_mac;
 
-  // ARP RX 64-bit adapter output
-  wire [            63:0] arp_rx_eth_payload_64_axis_tdata;
-  wire [             7:0] arp_rx_eth_payload_64_axis_tkeep;
-  wire                    arp_rx_eth_payload_64_axis_tvalid;
-  wire                    arp_rx_eth_payload_64_axis_tready;
-  wire                    arp_rx_eth_payload_64_axis_tlast;
-  wire                    arp_rx_eth_payload_64_axis_tuser;
+  // ARP RX fixed-width adapter output
+  wire [ARP_ICMP_DATA_WIDTH-1:0] arp_rx_eth_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] arp_rx_eth_payload_fixed_axis_tkeep;
+  wire                    arp_rx_eth_payload_fixed_axis_tvalid;
+  wire                    arp_rx_eth_payload_fixed_axis_tready;
+  wire                    arp_rx_eth_payload_fixed_axis_tlast;
+  wire                    arp_rx_eth_payload_fixed_axis_tuser;
 
   // ARP TX eth header + 64-bit payload (from arp module)
   wire                    arp_tx_eth_hdr_valid;
@@ -251,12 +258,12 @@ module udp_complete_opt #(
   wire [            47:0] arp_tx_eth_dest_mac;
   wire [            47:0] arp_tx_eth_src_mac;
   wire [            15:0] arp_tx_eth_type;
-  wire [            63:0] arp_tx_eth_payload_64_axis_tdata;
-  wire [             7:0] arp_tx_eth_payload_64_axis_tkeep;
-  wire                    arp_tx_eth_payload_64_axis_tvalid;
-  wire                    arp_tx_eth_payload_64_axis_tready;
-  wire                    arp_tx_eth_payload_64_axis_tlast;
-  wire                    arp_tx_eth_payload_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] arp_tx_eth_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] arp_tx_eth_payload_fixed_axis_tkeep;
+  wire                    arp_tx_eth_payload_fixed_axis_tvalid;
+  wire                    arp_tx_eth_payload_fixed_axis_tready;
+  wire                    arp_tx_eth_payload_fixed_axis_tlast;
+  wire                    arp_tx_eth_payload_fixed_axis_tuser;
 
   // ICMP TX IP header (from icmp_echo_reply)
   wire                    icmp_tx_ip_hdr_valid;
@@ -281,36 +288,36 @@ module udp_complete_opt #(
 
 
   // ICMP TX eth header + payload (ip_eth_tx output)
-  wire                    icmp_tx_eth_hdr_valid;
+  wire          icmp_tx_eth_hdr_valid;
   wire          icmp_tx_eth_hdr_ready;
   wire [  47:0] icmp_tx_eth_dest_mac;
   wire [  47:0] icmp_tx_eth_src_mac;
   wire [  15:0] icmp_tx_eth_type;
-  wire [  63:0] icmp_tx_eth_payload_64_axis_tdata;
-  wire [  7 :0] icmp_tx_eth_payload_64_axis_tkeep;
-  wire          icmp_tx_eth_payload_64_axis_tvalid;
-  wire          icmp_tx_eth_payload_64_axis_tready;
-  wire          icmp_tx_eth_payload_64_axis_tlast;
-  wire          icmp_tx_eth_payload_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] icmp_tx_eth_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] icmp_tx_eth_payload_fixed_axis_tkeep;
+  wire          icmp_tx_eth_payload_fixed_axis_tvalid;
+  wire          icmp_tx_eth_payload_fixed_axis_tready;
+  wire          icmp_tx_eth_payload_fixed_axis_tlast;
+  wire          icmp_tx_eth_payload_fixed_axis_tuser;
 
   wire          icmp_arp_tx_eth_hdr_valid;
   wire          icmp_arp_tx_eth_hdr_ready;
   wire [  47:0] icmp_arp_tx_eth_dest_mac;
   wire [  47:0] icmp_arp_tx_eth_src_mac;
   wire [  15:0] icmp_arp_tx_eth_type;
-  wire [  63:0] icmp_arp_tx_eth_payload_64_axis_tdata;
-  wire [  7 :0] icmp_arp_tx_eth_payload_64_axis_tkeep;
-  wire          icmp_arp_tx_eth_payload_64_axis_tvalid;
-  wire          icmp_arp_tx_eth_payload_64_axis_tready;
-  wire          icmp_arp_tx_eth_payload_64_axis_tlast;
-  wire          icmp_arp_tx_eth_payload_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] icmp_arp_tx_eth_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] icmp_arp_tx_eth_payload_fixed_axis_tkeep;
+  wire          icmp_arp_tx_eth_payload_fixed_axis_tvalid;
+  wire          icmp_arp_tx_eth_payload_fixed_axis_tready;
+  wire          icmp_arp_tx_eth_payload_fixed_axis_tlast;
+  wire          icmp_arp_tx_eth_payload_fixed_axis_tuser;
 
-  wire [  63          :0] m_icmp_arp_64_axis_tdata;
-  wire [  7           :0] m_icmp_arp_64_axis_tkeep;
-  wire                    m_icmp_arp_64_axis_tvalid;
-  wire                    m_icmp_arp_64_axis_tready;
-  wire                    m_icmp_arp_64_axis_tlast;
-  wire                    m_icmp_arp_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] m_icmp_arp_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] m_icmp_arp_fixed_axis_tkeep;
+  wire                    m_icmp_arp_fixed_axis_tvalid;
+  wire                    m_icmp_arp_fixed_axis_tready;
+  wire                    m_icmp_arp_fixed_axis_tlast;
+  wire                    m_icmp_arp_fixed_axis_tuser;
 
   // ICMP eth_axis_tx output
   wire [  DATA_WIDTH-1:0] m_icmp_arp_axis_tdata;
@@ -346,6 +353,13 @@ module udp_complete_opt #(
   wire                    s_ip_payload_axis_tready;
   wire                    s_ip_payload_axis_tlast;
   wire                    s_ip_payload_axis_tuser;
+
+  wire [  DATA_WIDTH-1:0] m_ip_payload_reg_axis_tdata;
+  wire [  KEEP_WIDTH-1:0] m_ip_payload_reg_axis_tkeep;
+  wire                    m_ip_payload_reg_axis_tvalid;
+  wire                    m_ip_payload_reg_axis_tready;
+  wire                    m_ip_payload_reg_axis_tlast;
+  wire                    m_ip_payload_reg_axis_tuser;
 
   wire [  DATA_WIDTH-1:0] m_ip_fifo_payload_axis_tdata;
   wire [  KEEP_WIDTH-1:0] m_ip_fifo_payload_axis_tkeep;
@@ -539,67 +553,10 @@ module udp_complete_opt #(
   (s_select_arp_reg && arp_rx_eth_payload_axis_tready) ||
   s_select_none_reg;
 
-  // TODO merge APR and ICMP path, share same eth block and same arbiter
-
-
-  /*
-   * ARP module
-   */
-  arp #(
-    .DATA_WIDTH            (64),
-    .KEEP_ENABLE           (KEEP_ENABLE),
-    .KEEP_WIDTH            (8),
-    .CACHE_ADDR_WIDTH      (ARP_CACHE_ADDR_WIDTH),
-    .REQUEST_RETRY_COUNT   (ARP_REQUEST_RETRY_COUNT),
-    .REQUEST_RETRY_INTERVAL(ARP_REQUEST_RETRY_INTERVAL),
-    .REQUEST_TIMEOUT       (ARP_REQUEST_TIMEOUT)
-  ) arp_inst (
-    .clk                      (clk),
-    .rst                      (rst),
-    // Ethernet frame input
-    .s_eth_hdr_valid          (arp_rx_eth_hdr_valid),
-    .s_eth_hdr_ready          (arp_rx_eth_hdr_ready),
-    .s_eth_dest_mac           (arp_rx_eth_dest_mac),
-    .s_eth_src_mac            (arp_rx_eth_src_mac),
-    .s_eth_type               (arp_rx_eth_type),
-    .s_eth_payload_axis_tdata (arp_rx_eth_payload_64_axis_tdata),
-    .s_eth_payload_axis_tkeep (arp_rx_eth_payload_64_axis_tkeep),
-    .s_eth_payload_axis_tvalid(arp_rx_eth_payload_64_axis_tvalid),
-    .s_eth_payload_axis_tready(arp_rx_eth_payload_64_axis_tready),
-    .s_eth_payload_axis_tlast (arp_rx_eth_payload_64_axis_tlast),
-    .s_eth_payload_axis_tuser (arp_rx_eth_payload_64_axis_tuser),
-    // Ethernet frame output
-    .m_eth_hdr_valid          (arp_tx_eth_hdr_valid),
-    .m_eth_hdr_ready          (arp_tx_eth_hdr_ready),
-    .m_eth_dest_mac           (arp_tx_eth_dest_mac),
-    .m_eth_src_mac            (arp_tx_eth_src_mac),
-    .m_eth_type               (arp_tx_eth_type),
-    .m_eth_payload_axis_tdata (arp_tx_eth_payload_64_axis_tdata),
-    .m_eth_payload_axis_tkeep (arp_tx_eth_payload_64_axis_tkeep),
-    .m_eth_payload_axis_tvalid(arp_tx_eth_payload_64_axis_tvalid),
-    .m_eth_payload_axis_tready(arp_tx_eth_payload_64_axis_tready),
-    .m_eth_payload_axis_tlast (arp_tx_eth_payload_64_axis_tlast),
-    .m_eth_payload_axis_tuser (arp_tx_eth_payload_64_axis_tuser),
-    // ARP requests
-    .arp_request_valid        (arp_request_valid),
-    .arp_request_ready        (arp_request_ready),
-    .arp_request_ip           (arp_request_ip),
-    .arp_response_valid       (arp_response_valid),
-    .arp_response_ready       (arp_response_ready),
-    .arp_response_error       (arp_response_error),
-    .arp_response_mac         (arp_response_mac),
-    // Configuration
-    .local_mac                (local_mac_addr),
-    .local_ip                 (local_ip_addr),
-    .gateway_ip               (gateway_ip),
-    .subnet_mask              (subnet_mask),
-    .clear_cache              (clear_arp_cache)
-  );
-
   axis_adapter #(
     .S_DATA_WIDTH(DATA_WIDTH),
     .S_KEEP_ENABLE(1),
-    .M_DATA_WIDTH(64),
+    .M_DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
     .M_KEEP_ENABLE(1),
     .ID_ENABLE(0),
     .DEST_ENABLE(0),
@@ -618,14 +575,68 @@ module udp_complete_opt #(
     .s_axis_tdest (0),
     .s_axis_tuser (arp_rx_eth_payload_axis_tuser),
     // AXI output
-    .m_axis_tdata (arp_rx_eth_payload_64_axis_tdata),
-    .m_axis_tkeep (arp_rx_eth_payload_64_axis_tkeep),
-    .m_axis_tvalid(arp_rx_eth_payload_64_axis_tvalid),
-    .m_axis_tready(arp_rx_eth_payload_64_axis_tready),
-    .m_axis_tlast (arp_rx_eth_payload_64_axis_tlast),
+    .m_axis_tdata (arp_rx_eth_payload_fixed_axis_tdata),
+    .m_axis_tkeep (arp_rx_eth_payload_fixed_axis_tkeep),
+    .m_axis_tvalid(arp_rx_eth_payload_fixed_axis_tvalid),
+    .m_axis_tready(arp_rx_eth_payload_fixed_axis_tready),
+    .m_axis_tlast (arp_rx_eth_payload_fixed_axis_tlast),
     .m_axis_tid   (),
     .m_axis_tdest (),
-    .m_axis_tuser (arp_rx_eth_payload_64_axis_tuser)
+    .m_axis_tuser (arp_rx_eth_payload_fixed_axis_tuser)
+  );
+
+  /*
+   * ARP module
+   */
+  arp #(
+    .DATA_WIDTH            (ARP_ICMP_DATA_WIDTH),
+    .KEEP_ENABLE           (ARP_ICMP_DATA_WIDTH > 8),
+    .KEEP_WIDTH            (ARP_ICMP_KEEP_WIDTH),
+    .CACHE_ADDR_WIDTH      (ARP_CACHE_ADDR_WIDTH),
+    .REQUEST_RETRY_COUNT   (ARP_REQUEST_RETRY_COUNT),
+    .REQUEST_RETRY_INTERVAL(ARP_REQUEST_RETRY_INTERVAL),
+    .REQUEST_TIMEOUT       (ARP_REQUEST_TIMEOUT)
+  ) arp_inst (
+    .clk                      (clk),
+    .rst                      (rst),
+    // Ethernet frame input
+    .s_eth_hdr_valid          (arp_rx_eth_hdr_valid),
+    .s_eth_hdr_ready          (arp_rx_eth_hdr_ready),
+    .s_eth_dest_mac           (arp_rx_eth_dest_mac),
+    .s_eth_src_mac            (arp_rx_eth_src_mac),
+    .s_eth_type               (arp_rx_eth_type),
+    .s_eth_payload_axis_tdata (arp_rx_eth_payload_fixed_axis_tdata),
+    .s_eth_payload_axis_tkeep (arp_rx_eth_payload_fixed_axis_tkeep),
+    .s_eth_payload_axis_tvalid(arp_rx_eth_payload_fixed_axis_tvalid),
+    .s_eth_payload_axis_tready(arp_rx_eth_payload_fixed_axis_tready),
+    .s_eth_payload_axis_tlast (arp_rx_eth_payload_fixed_axis_tlast),
+    .s_eth_payload_axis_tuser (arp_rx_eth_payload_fixed_axis_tuser),
+    // Ethernet frame output
+    .m_eth_hdr_valid          (arp_tx_eth_hdr_valid),
+    .m_eth_hdr_ready          (arp_tx_eth_hdr_ready),
+    .m_eth_dest_mac           (arp_tx_eth_dest_mac),
+    .m_eth_src_mac            (arp_tx_eth_src_mac),
+    .m_eth_type               (arp_tx_eth_type),
+    .m_eth_payload_axis_tdata (arp_tx_eth_payload_fixed_axis_tdata),
+    .m_eth_payload_axis_tkeep (arp_tx_eth_payload_fixed_axis_tkeep),
+    .m_eth_payload_axis_tvalid(arp_tx_eth_payload_fixed_axis_tvalid),
+    .m_eth_payload_axis_tready(arp_tx_eth_payload_fixed_axis_tready),
+    .m_eth_payload_axis_tlast (arp_tx_eth_payload_fixed_axis_tlast),
+    .m_eth_payload_axis_tuser (arp_tx_eth_payload_fixed_axis_tuser),
+    // ARP requests
+    .arp_request_valid        (arp_request_valid),
+    .arp_request_ready        (arp_request_ready),
+    .arp_request_ip           (arp_request_ip),
+    .arp_response_valid       (arp_response_valid),
+    .arp_response_ready       (arp_response_ready),
+    .arp_response_error       (arp_response_error),
+    .arp_response_mac         (arp_response_mac),
+    // Configuration
+    .local_mac                (local_mac_addr),
+    .local_ip                 (local_ip_addr),
+    .gateway_ip               (gateway_ip),
+    .subnet_mask              (subnet_mask),
+    .clear_cache              (clear_arp_cache)
   );
 
 
@@ -763,22 +774,54 @@ module udp_complete_opt #(
    * ICMP Echo reply
    */
 
-  wire [ 63:0] icmp_tx_ip_payload_64_axis_tdata;
-  wire [7 : 0] icmp_tx_ip_payload_64_axis_tkeep;
-  wire         icmp_tx_ip_payload_64_axis_tvalid;
-  wire         icmp_tx_ip_payload_64_axis_tready;
-  wire         icmp_tx_ip_payload_64_axis_tlast;
-  wire         icmp_tx_ip_payload_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] icmp_tx_ip_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] icmp_tx_ip_payload_fixed_axis_tkeep;
+  wire         icmp_tx_ip_payload_fixed_axis_tvalid;
+  wire         icmp_tx_ip_payload_fixed_axis_tready;
+  wire         icmp_tx_ip_payload_fixed_axis_tlast;
+  wire         icmp_tx_ip_payload_fixed_axis_tuser;
 
-  wire [ 63:0] icmp_rx_ip_payload_64_axis_tdata;
-  wire [7 : 0] icmp_rx_ip_payload_64_axis_tkeep;
-  wire         icmp_rx_ip_payload_64_axis_tvalid;
-  wire         icmp_rx_ip_payload_64_axis_tready;
-  wire         icmp_rx_ip_payload_64_axis_tlast;
-  wire         icmp_rx_ip_payload_64_axis_tuser;
+  wire [ARP_ICMP_DATA_WIDTH-1:0] icmp_rx_ip_payload_fixed_axis_tdata;
+  wire [ARP_ICMP_KEEP_WIDTH-1:0] icmp_rx_ip_payload_fixed_axis_tkeep;
+  wire         icmp_rx_ip_payload_fixed_axis_tvalid;
+  wire         icmp_rx_ip_payload_fixed_axis_tready;
+  wire         icmp_rx_ip_payload_fixed_axis_tlast;
+  wire         icmp_rx_ip_payload_fixed_axis_tuser;
+
+  axis_adapter #(
+    .S_DATA_WIDTH(DATA_WIDTH),
+    .S_KEEP_ENABLE(1),
+    .M_DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
+    .M_KEEP_ENABLE(1),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1)
+  ) icmp_rx_adapter_inst (
+    .clk(clk),
+    .rst(rst),
+    // AXI input
+    .s_axis_tdata (icmp_rx_ip_payload_axis_tdata),
+    .s_axis_tkeep (icmp_rx_ip_payload_axis_tkeep),
+    .s_axis_tvalid(icmp_rx_ip_payload_axis_tvalid),
+    .s_axis_tready(icmp_rx_ip_payload_axis_tready),
+    .s_axis_tlast (icmp_rx_ip_payload_axis_tlast),
+    .s_axis_tid   (0),
+    .s_axis_tdest (0),
+    .s_axis_tuser (icmp_rx_ip_payload_axis_tuser),
+    // AXI output
+    .m_axis_tdata (icmp_rx_ip_payload_fixed_axis_tdata),
+    .m_axis_tkeep (icmp_rx_ip_payload_fixed_axis_tkeep),
+    .m_axis_tvalid(icmp_rx_ip_payload_fixed_axis_tvalid),
+    .m_axis_tready(icmp_rx_ip_payload_fixed_axis_tready),
+    .m_axis_tlast (icmp_rx_ip_payload_fixed_axis_tlast),
+    .m_axis_tid   (),
+    .m_axis_tdest (),
+    .m_axis_tuser (icmp_rx_ip_payload_fixed_axis_tuser)
+  );
 
   icmp_echo_reply #(
-    .DATA_WIDTH(64),
+    .DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
     .KEEP_ENABLE(1),
     .CHECKSUM_PAYLOAD_FIFO_DEPTH(1024),
     .CHECKSUM_HEADER_FIFO_DEPTH(4),
@@ -806,12 +849,12 @@ module udp_complete_opt #(
     .s_ip_header_checksum(icmp_rx_ip_header_checksum),
     .s_ip_source_ip(icmp_rx_ip_source_ip),
     .s_ip_dest_ip(icmp_rx_ip_dest_ip),
-    .s_ip_payload_axis_tdata(icmp_rx_ip_payload_64_axis_tdata),
-    .s_ip_payload_axis_tkeep(icmp_rx_ip_payload_64_axis_tkeep),
-    .s_ip_payload_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid),
-    .s_ip_payload_axis_tready(icmp_rx_ip_payload_64_axis_tready),
-    .s_ip_payload_axis_tlast(icmp_rx_ip_payload_64_axis_tlast),
-    .s_ip_payload_axis_tuser(icmp_rx_ip_payload_64_axis_tuser),
+    .s_ip_payload_axis_tdata (icmp_rx_ip_payload_fixed_axis_tdata),
+    .s_ip_payload_axis_tkeep (icmp_rx_ip_payload_fixed_axis_tkeep),
+    .s_ip_payload_axis_tvalid(icmp_rx_ip_payload_fixed_axis_tvalid),
+    .s_ip_payload_axis_tready(icmp_rx_ip_payload_fixed_axis_tready),
+    .s_ip_payload_axis_tlast (icmp_rx_ip_payload_fixed_axis_tlast),
+    .s_ip_payload_axis_tuser (icmp_rx_ip_payload_fixed_axis_tuser),
     // IP frame output
     .m_ip_hdr_valid      (icmp_tx_ip_hdr_valid),
     .m_ip_hdr_ready      (icmp_tx_ip_hdr_ready),
@@ -832,52 +875,20 @@ module udp_complete_opt #(
     .m_ip_source_ip      (icmp_tx_ip_source_ip),
     .m_ip_dest_ip        (icmp_tx_ip_dest_ip),
     .m_is_roce_packet    (icmp_tx_is_roce_packet),
-    .m_ip_payload_axis_tdata (icmp_tx_ip_payload_64_axis_tdata),
-    .m_ip_payload_axis_tkeep (icmp_tx_ip_payload_64_axis_tkeep),
-    .m_ip_payload_axis_tvalid(icmp_tx_ip_payload_64_axis_tvalid),
-    .m_ip_payload_axis_tready(icmp_tx_ip_payload_64_axis_tready),
-    .m_ip_payload_axis_tlast (icmp_tx_ip_payload_64_axis_tlast),
-    .m_ip_payload_axis_tuser (icmp_tx_ip_payload_64_axis_tuser),
+    .m_ip_payload_axis_tdata (icmp_tx_ip_payload_fixed_axis_tdata),
+    .m_ip_payload_axis_tkeep (icmp_tx_ip_payload_fixed_axis_tkeep),
+    .m_ip_payload_axis_tvalid(icmp_tx_ip_payload_fixed_axis_tvalid),
+    .m_ip_payload_axis_tready(icmp_tx_ip_payload_fixed_axis_tready),
+    .m_ip_payload_axis_tlast (icmp_tx_ip_payload_fixed_axis_tlast),
+    .m_ip_payload_axis_tuser (icmp_tx_ip_payload_fixed_axis_tuser),
     // Configuration
     .local_ip(local_ip_addr)
   );
 
-  axis_adapter #(
-    .S_DATA_WIDTH(DATA_WIDTH),
-    .S_KEEP_ENABLE(1),
-    .M_DATA_WIDTH(64),
-    .M_KEEP_ENABLE(1),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1)
-  ) icmp_rx_adapter_inst (
-    .clk(clk),
-    .rst(rst),
-    // AXI input
-    .s_axis_tdata (icmp_rx_ip_payload_axis_tdata),
-    .s_axis_tkeep (icmp_rx_ip_payload_axis_tkeep),
-    .s_axis_tvalid(icmp_rx_ip_payload_axis_tvalid),
-    .s_axis_tready(icmp_rx_ip_payload_axis_tready),
-    .s_axis_tlast (icmp_rx_ip_payload_axis_tlast),
-    .s_axis_tid   (0),
-    .s_axis_tdest (0),
-    .s_axis_tuser (icmp_rx_ip_payload_axis_tuser),
-    // AXI output
-    .m_axis_tdata (icmp_rx_ip_payload_64_axis_tdata),
-    .m_axis_tkeep (icmp_rx_ip_payload_64_axis_tkeep),
-    .m_axis_tvalid(icmp_rx_ip_payload_64_axis_tvalid),
-    .m_axis_tready(icmp_rx_ip_payload_64_axis_tready),
-    .m_axis_tlast (icmp_rx_ip_payload_64_axis_tlast),
-    .m_axis_tid   (),
-    .m_axis_tdest (),
-    .m_axis_tuser (icmp_rx_ip_payload_64_axis_tuser)
-  );
-
   ip_eth_tx_test #(
-    .DATA_WIDTH (64),
+    .DATA_WIDTH (ARP_ICMP_DATA_WIDTH),
     .KEEP_ENABLE(1),
-    .KEEP_WIDTH (8)
+    .KEEP_WIDTH (ARP_ICMP_KEEP_WIDTH)
   ) ip_eth_tx_icmp (
     .clk                     (clk),
     .rst                     (rst),
@@ -898,12 +909,12 @@ module udp_complete_opt #(
     .s_ip_source_ip          (icmp_tx_ip_source_ip),
     .s_ip_dest_ip            (icmp_tx_ip_dest_ip),
     .s_is_roce_packet        (0),
-    .s_ip_payload_axis_tdata (icmp_tx_ip_payload_64_axis_tdata),
-    .s_ip_payload_axis_tkeep (icmp_tx_ip_payload_64_axis_tkeep),
-    .s_ip_payload_axis_tvalid(icmp_tx_ip_payload_64_axis_tvalid),
-    .s_ip_payload_axis_tready(icmp_tx_ip_payload_64_axis_tready),
-    .s_ip_payload_axis_tlast (icmp_tx_ip_payload_64_axis_tlast),
-    .s_ip_payload_axis_tuser (icmp_tx_ip_payload_64_axis_tuser),
+    .s_ip_payload_axis_tdata (icmp_tx_ip_payload_fixed_axis_tdata),
+    .s_ip_payload_axis_tkeep (icmp_tx_ip_payload_fixed_axis_tkeep),
+    .s_ip_payload_axis_tvalid(icmp_tx_ip_payload_fixed_axis_tvalid),
+    .s_ip_payload_axis_tready(icmp_tx_ip_payload_fixed_axis_tready),
+    .s_ip_payload_axis_tlast (icmp_tx_ip_payload_fixed_axis_tlast),
+    .s_ip_payload_axis_tuser (icmp_tx_ip_payload_fixed_axis_tuser),
 
     .m_eth_hdr_valid          (icmp_tx_eth_hdr_valid),
     .m_eth_hdr_ready          (icmp_tx_eth_hdr_ready),
@@ -911,62 +922,62 @@ module udp_complete_opt #(
     .m_eth_src_mac            (icmp_tx_eth_src_mac),
     .m_eth_type               (icmp_tx_eth_type),
     .m_is_roce_packet         (),
-    .m_eth_payload_axis_tdata (icmp_tx_eth_payload_64_axis_tdata),
-    .m_eth_payload_axis_tkeep (icmp_tx_eth_payload_64_axis_tkeep),
-    .m_eth_payload_axis_tvalid(icmp_tx_eth_payload_64_axis_tvalid),
-    .m_eth_payload_axis_tready(icmp_tx_eth_payload_64_axis_tready),
-    .m_eth_payload_axis_tlast (icmp_tx_eth_payload_64_axis_tlast),
-    .m_eth_payload_axis_tuser (icmp_tx_eth_payload_64_axis_tuser),
+    .m_eth_payload_axis_tdata (icmp_tx_eth_payload_fixed_axis_tdata),
+    .m_eth_payload_axis_tkeep (icmp_tx_eth_payload_fixed_axis_tkeep),
+    .m_eth_payload_axis_tvalid(icmp_tx_eth_payload_fixed_axis_tvalid),
+    .m_eth_payload_axis_tready(icmp_tx_eth_payload_fixed_axis_tready),
+    .m_eth_payload_axis_tlast (icmp_tx_eth_payload_fixed_axis_tlast),
+    .m_eth_payload_axis_tuser (icmp_tx_eth_payload_fixed_axis_tuser),
     .busy                     ()
   );
 
   eth_arb_mux #(
-      .S_COUNT(2),
-      .DATA_WIDTH(64),
-      .KEEP_ENABLE(1),
-      .ID_ENABLE(0),
-      .DEST_ENABLE(0),
-      .USER_ENABLE(1),
-      .USER_WIDTH(1),
-      .ARB_TYPE_ROUND_ROBIN(0),
-      .ARB_LSB_HIGH_PRIORITY(0)
+    .S_COUNT(2),
+    .DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
+    .KEEP_ENABLE(1),
+    .ID_ENABLE(0),
+    .DEST_ENABLE(0),
+    .USER_ENABLE(1),
+    .USER_WIDTH(1),
+    .ARB_TYPE_ROUND_ROBIN(0),
+    .ARB_LSB_HIGH_PRIORITY(0)
   ) eth_arb_mux_arp_icmp_inst (
-      .clk(clk),
-      .rst(rst),
-      // Ethernet frame inputs
-      .s_eth_hdr_valid ({icmp_tx_eth_hdr_valid, arp_tx_eth_hdr_valid}),
-      .s_eth_hdr_ready ({icmp_tx_eth_hdr_ready, arp_tx_eth_hdr_ready}),
-      .s_eth_dest_mac  ({icmp_tx_eth_dest_mac , arp_tx_eth_dest_mac}),
-      .s_eth_src_mac   ({icmp_tx_eth_src_mac  , arp_tx_eth_src_mac}),
-      .s_eth_type      ({icmp_tx_eth_type     , arp_tx_eth_type}),
-      .s_is_roce_packet({1'b0, 1'b0}),
-      .s_eth_payload_axis_tdata ({icmp_tx_eth_payload_64_axis_tdata,  arp_tx_eth_payload_64_axis_tdata}),
-      .s_eth_payload_axis_tkeep ({icmp_tx_eth_payload_64_axis_tkeep,  arp_tx_eth_payload_64_axis_tkeep}),
-      .s_eth_payload_axis_tvalid({icmp_tx_eth_payload_64_axis_tvalid, arp_tx_eth_payload_64_axis_tvalid}),
-      .s_eth_payload_axis_tready({icmp_tx_eth_payload_64_axis_tready, arp_tx_eth_payload_64_axis_tready}),
-      .s_eth_payload_axis_tlast ({icmp_tx_eth_payload_64_axis_tlast,  arp_tx_eth_payload_64_axis_tlast}),
-      .s_eth_payload_axis_tid   (0),
-      .s_eth_payload_axis_tdest (0),
-      .s_eth_payload_axis_tuser ({icmp_tx_eth_payload_64_axis_tuser, arp_tx_eth_payload_64_axis_tuser}),
-      // Ethernet frame output
-      .m_eth_hdr_valid(icmp_arp_tx_eth_hdr_valid),
-      .m_eth_hdr_ready(icmp_arp_tx_eth_hdr_ready),
-      .m_eth_dest_mac (icmp_arp_tx_eth_dest_mac),
-      .m_eth_src_mac  (icmp_arp_tx_eth_src_mac),
-      .m_eth_type     (icmp_arp_tx_eth_type),
-      .m_eth_payload_axis_tdata (icmp_arp_tx_eth_payload_64_axis_tdata),
-      .m_eth_payload_axis_tkeep (icmp_arp_tx_eth_payload_64_axis_tkeep),
-      .m_eth_payload_axis_tvalid(icmp_arp_tx_eth_payload_64_axis_tvalid),
-      .m_eth_payload_axis_tready(icmp_arp_tx_eth_payload_64_axis_tready),
-      .m_eth_payload_axis_tlast (icmp_arp_tx_eth_payload_64_axis_tlast),
-      .m_eth_payload_axis_tid   (),
-      .m_eth_payload_axis_tdest (),
-      .m_eth_payload_axis_tuser (icmp_arp_tx_eth_payload_64_axis_tuser)
+    .clk(clk),
+    .rst(rst),
+    // Ethernet frame inputs
+    .s_eth_hdr_valid ({icmp_tx_eth_hdr_valid, arp_tx_eth_hdr_valid}),
+    .s_eth_hdr_ready ({icmp_tx_eth_hdr_ready, arp_tx_eth_hdr_ready}),
+    .s_eth_dest_mac  ({icmp_tx_eth_dest_mac , arp_tx_eth_dest_mac}),
+    .s_eth_src_mac   ({icmp_tx_eth_src_mac  , arp_tx_eth_src_mac}),
+    .s_eth_type      ({icmp_tx_eth_type     , arp_tx_eth_type}),
+    .s_is_roce_packet({1'b0, 1'b0}),
+    .s_eth_payload_axis_tdata ({icmp_tx_eth_payload_fixed_axis_tdata,  arp_tx_eth_payload_fixed_axis_tdata}),
+    .s_eth_payload_axis_tkeep ({icmp_tx_eth_payload_fixed_axis_tkeep,  arp_tx_eth_payload_fixed_axis_tkeep}),
+    .s_eth_payload_axis_tvalid({icmp_tx_eth_payload_fixed_axis_tvalid, arp_tx_eth_payload_fixed_axis_tvalid}),
+    .s_eth_payload_axis_tready({icmp_tx_eth_payload_fixed_axis_tready, arp_tx_eth_payload_fixed_axis_tready}),
+    .s_eth_payload_axis_tlast ({icmp_tx_eth_payload_fixed_axis_tlast,  arp_tx_eth_payload_fixed_axis_tlast}),
+    .s_eth_payload_axis_tid   (0),
+    .s_eth_payload_axis_tdest (0),
+    .s_eth_payload_axis_tuser ({icmp_tx_eth_payload_fixed_axis_tuser, arp_tx_eth_payload_fixed_axis_tuser}),
+    // Ethernet frame output
+    .m_eth_hdr_valid(icmp_arp_tx_eth_hdr_valid),
+    .m_eth_hdr_ready(icmp_arp_tx_eth_hdr_ready),
+    .m_eth_dest_mac (icmp_arp_tx_eth_dest_mac),
+    .m_eth_src_mac  (icmp_arp_tx_eth_src_mac),
+    .m_eth_type     (icmp_arp_tx_eth_type),
+    .m_eth_payload_axis_tdata (icmp_arp_tx_eth_payload_fixed_axis_tdata),
+    .m_eth_payload_axis_tkeep (icmp_arp_tx_eth_payload_fixed_axis_tkeep),
+    .m_eth_payload_axis_tvalid(icmp_arp_tx_eth_payload_fixed_axis_tvalid),
+    .m_eth_payload_axis_tready(icmp_arp_tx_eth_payload_fixed_axis_tready),
+    .m_eth_payload_axis_tlast (icmp_arp_tx_eth_payload_fixed_axis_tlast),
+    .m_eth_payload_axis_tid   (),
+    .m_eth_payload_axis_tdest (),
+    .m_eth_payload_axis_tuser (icmp_arp_tx_eth_payload_fixed_axis_tuser)
   );
 
 
   eth_axis_tx #(
-    .DATA_WIDTH(64),
+    .DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
     .ENABLE_DOT1Q_HEADER(ENABLE_DOT1Q_HEADER)
   ) eth_axis_tx_icmp (
     .clk                      (clk),
@@ -980,23 +991,23 @@ module udp_complete_opt #(
     .s_eth_dei                (0),
     .s_eth_vid                (0),
     .s_eth_type               (icmp_arp_tx_eth_type),
-    .s_eth_payload_axis_tdata (icmp_arp_tx_eth_payload_64_axis_tdata),
-    .s_eth_payload_axis_tkeep (icmp_arp_tx_eth_payload_64_axis_tkeep),
-    .s_eth_payload_axis_tvalid(icmp_arp_tx_eth_payload_64_axis_tvalid),
-    .s_eth_payload_axis_tready(icmp_arp_tx_eth_payload_64_axis_tready),
-    .s_eth_payload_axis_tlast (icmp_arp_tx_eth_payload_64_axis_tlast),
-    .s_eth_payload_axis_tuser (icmp_arp_tx_eth_payload_64_axis_tuser),
-    .m_axis_tdata             (m_icmp_arp_64_axis_tdata),
-    .m_axis_tkeep             (m_icmp_arp_64_axis_tkeep),
-    .m_axis_tvalid            (m_icmp_arp_64_axis_tvalid),
-    .m_axis_tready            (m_icmp_arp_64_axis_tready),
-    .m_axis_tlast             (m_icmp_arp_64_axis_tlast),
-    .m_axis_tuser             (m_icmp_arp_64_axis_tuser),
+    .s_eth_payload_axis_tdata (icmp_arp_tx_eth_payload_fixed_axis_tdata),
+    .s_eth_payload_axis_tkeep (icmp_arp_tx_eth_payload_fixed_axis_tkeep),
+    .s_eth_payload_axis_tvalid(icmp_arp_tx_eth_payload_fixed_axis_tvalid),
+    .s_eth_payload_axis_tready(icmp_arp_tx_eth_payload_fixed_axis_tready),
+    .s_eth_payload_axis_tlast (icmp_arp_tx_eth_payload_fixed_axis_tlast),
+    .s_eth_payload_axis_tuser (icmp_arp_tx_eth_payload_fixed_axis_tuser),
+    .m_axis_tdata             (m_icmp_arp_fixed_axis_tdata),
+    .m_axis_tkeep             (m_icmp_arp_fixed_axis_tkeep),
+    .m_axis_tvalid            (m_icmp_arp_fixed_axis_tvalid),
+    .m_axis_tready            (m_icmp_arp_fixed_axis_tready),
+    .m_axis_tlast             (m_icmp_arp_fixed_axis_tlast),
+    .m_axis_tuser             (m_icmp_arp_fixed_axis_tuser),
     .busy                     ()
   );
 
   axis_adapter #(
-    .S_DATA_WIDTH(64),
+    .S_DATA_WIDTH(ARP_ICMP_DATA_WIDTH),
     .S_KEEP_ENABLE(1),
     .M_DATA_WIDTH(DATA_WIDTH),
     .M_KEEP_ENABLE(1),
@@ -1008,14 +1019,14 @@ module udp_complete_opt #(
     .clk(clk),
     .rst(rst),
     // AXI input
-    .s_axis_tdata (m_icmp_arp_64_axis_tdata),
-    .s_axis_tkeep (m_icmp_arp_64_axis_tkeep),
-    .s_axis_tvalid(m_icmp_arp_64_axis_tvalid),
-    .s_axis_tready(m_icmp_arp_64_axis_tready),
-    .s_axis_tlast (m_icmp_arp_64_axis_tlast),
+    .s_axis_tdata (m_icmp_arp_fixed_axis_tdata),
+    .s_axis_tkeep (m_icmp_arp_fixed_axis_tkeep),
+    .s_axis_tvalid(m_icmp_arp_fixed_axis_tvalid),
+    .s_axis_tready(m_icmp_arp_fixed_axis_tready),
+    .s_axis_tlast (m_icmp_arp_fixed_axis_tlast),
     .s_axis_tid   (0),
     .s_axis_tdest (0),
-    .s_axis_tuser (m_icmp_arp_64_axis_tuser),
+    .s_axis_tuser (m_icmp_arp_fixed_axis_tuser),
     // AXI output
     .m_axis_tdata (m_icmp_arp_axis_tdata),
     .m_axis_tkeep (m_icmp_arp_axis_tkeep),
@@ -1174,7 +1185,7 @@ module udp_complete_opt #(
     end
   end
 
-  // compute ip header check sum and query MAC address form ARP table
+  // compute ip header checksum and query MAC address from ARP table
   always @* begin
     state_next = STATE_IDLE;
 
@@ -1205,7 +1216,7 @@ module udp_complete_opt #(
     case (state_reg)
       STATE_IDLE: begin
         // wait for outgoing packet
-        if (s_ip_hdr_valid) begin
+        if (s_ip_hdr_valid && outgoing_ip_hdr_ready) begin
           outgoing_ip_dscp_next = s_ip_dscp;
           outgoing_ip_ecn_next = s_ip_ecn;
           outgoing_ip_length_next = s_ip_length;
@@ -1367,8 +1378,10 @@ module udp_complete_opt #(
     end
   end
 
+  localparam HDR_FIFO_DEPTH  = 8;
+
   axis_fifo #(
-    .DEPTH(64),
+    .DEPTH(HDR_FIFO_DEPTH),
     .RAM_PIPELINE(1),
     .DATA_WIDTH(48+6+2+16+16+8+8+16+32+1),
     .KEEP_ENABLE(0),
@@ -1421,38 +1434,120 @@ module udp_complete_opt #(
     .m_axis_tdest ()
   );
 
+  generate
+    if (IP_PAYLOAD_FIFO_CHECKSUM) begin
+      if (ENABLE_TIMING_OPT_REGS) begin
+        axis_register #(
+          .DATA_WIDTH(DATA_WIDTH),
+          .KEEP_ENABLE(KEEP_ENABLE),
+          .KEEP_WIDTH(KEEP_WIDTH),
+          .ID_ENABLE(0),
+          .DEST_ENABLE(0),
+          .USER_ENABLE(1),
+          .USER_WIDTH(1),
+          .REG_TYPE(2)
+        ) axis_ip_payload_register_inst (
+          .clk(clk),
+          .rst(rst),
 
-  axis_fifo #(
-    .DEPTH(8192-KEEP_WIDTH), 
-    .DATA_WIDTH(DATA_WIDTH),
-    .KEEP_ENABLE(KEEP_ENABLE),
-    .KEEP_WIDTH(KEEP_WIDTH),
-    .ID_ENABLE(0),
-    .DEST_ENABLE(0),
-    .USER_ENABLE(1),
-    .USER_WIDTH(1),
-    .RAM_PIPELINE(1),
-    .FRAME_FIFO(1),
-    .PAUSE_ENABLE(0),
-    .FRAME_PAUSE(0)
-  ) axis_fifo_instance (
-    .clk(clk),
-    .rst(rst),
-    .s_axis_tdata (s_ip_payload_axis_tdata),
-    .s_axis_tkeep (s_ip_payload_axis_tkeep),
-    .s_axis_tvalid(s_ip_payload_axis_tvalid && !drop_packet_reg),
-    .s_axis_tready(outgoing_ip_payload_axis_tready),
-    .s_axis_tlast (s_ip_payload_axis_tlast),
-    .s_axis_tuser (s_ip_payload_axis_tuser),
-    .s_axis_tid   (0),
-    .s_axis_tdest (0),
-    .m_axis_tdata (m_ip_fifo_payload_axis_tdata ),
-    .m_axis_tkeep (m_ip_fifo_payload_axis_tkeep ),
-    .m_axis_tvalid(m_ip_fifo_payload_axis_tvalid),
-    .m_axis_tready(m_ip_fifo_payload_axis_tready),
-    .m_axis_tlast (m_ip_fifo_payload_axis_tlast ),
-    .m_axis_tuser (m_ip_fifo_payload_axis_tuser )
-  );
+          .s_axis_tdata (s_ip_payload_axis_tdata),
+          .s_axis_tkeep (s_ip_payload_axis_tkeep),
+          .s_axis_tvalid(s_ip_payload_axis_tvalid && !drop_packet_reg),
+          .s_axis_tready(outgoing_ip_payload_axis_tready),
+          .s_axis_tlast (s_ip_payload_axis_tlast),
+          .s_axis_tuser (s_ip_payload_axis_tuser),
+          .s_axis_tid   (0),
+          .s_axis_tdest (0),
+
+          .m_axis_tdata (m_ip_payload_reg_axis_tdata),
+          .m_axis_tkeep (m_ip_payload_reg_axis_tkeep),
+          .m_axis_tvalid(m_ip_payload_reg_axis_tvalid),
+          .m_axis_tready(m_ip_payload_reg_axis_tready),
+          .m_axis_tlast (m_ip_payload_reg_axis_tlast),
+          .m_axis_tuser (m_ip_payload_reg_axis_tuser)
+        );
+      end else begin
+        assign m_ip_payload_reg_axis_tdata     = s_ip_payload_axis_tdata;
+        assign m_ip_payload_reg_axis_tkeep     = s_ip_payload_axis_tkeep;
+        assign m_ip_payload_reg_axis_tvalid    = s_ip_payload_axis_tvalid && !drop_packet_reg;
+        assign outgoing_ip_payload_axis_tready = m_ip_payload_reg_axis_tready;
+        assign m_ip_payload_reg_axis_tlast     = s_ip_payload_axis_tlast;
+        assign m_ip_payload_reg_axis_tuser     = s_ip_payload_axis_tuser;
+      end
+
+      axis_fifo #(
+        .DEPTH(KEEP_WIDTH*8),
+        .DATA_WIDTH(DATA_WIDTH),
+        .KEEP_ENABLE(KEEP_ENABLE),
+        .KEEP_WIDTH(KEEP_WIDTH),
+        .ID_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(1),
+        .USER_WIDTH(1),
+        .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0),
+        .FRAME_FIFO(0),
+        .PAUSE_ENABLE(0),
+        .FRAME_PAUSE(0)
+      ) axis_ip_payload_fifo_inst (
+        .clk(clk),
+        .rst(rst),
+        .s_axis_tdata (m_ip_payload_reg_axis_tdata),
+        .s_axis_tkeep (m_ip_payload_reg_axis_tkeep),
+        .s_axis_tvalid(m_ip_payload_reg_axis_tvalid),
+        .s_axis_tready(m_ip_payload_reg_axis_tready),
+        .s_axis_tlast (m_ip_payload_reg_axis_tlast),
+        .s_axis_tuser (m_ip_payload_reg_axis_tuser),
+        .s_axis_tid   (0),
+        .s_axis_tdest (0),
+        .m_axis_tdata (m_ip_fifo_payload_axis_tdata ),
+        .m_axis_tkeep (m_ip_fifo_payload_axis_tkeep ),
+        .m_axis_tvalid(m_ip_fifo_payload_axis_tvalid),
+        .m_axis_tready(m_ip_fifo_payload_axis_tready),
+        .m_axis_tlast (m_ip_fifo_payload_axis_tlast ),
+        .m_axis_tuser (m_ip_fifo_payload_axis_tuser )
+      );
+    end else begin
+      if (ENABLE_TIMING_OPT_REGS) begin
+        axis_pipeline_register #(
+          .DATA_WIDTH(DATA_WIDTH),
+          .KEEP_ENABLE(KEEP_ENABLE),
+          .KEEP_WIDTH(KEEP_WIDTH),
+          .ID_ENABLE(0),
+          .DEST_ENABLE(0),
+          .USER_ENABLE(1),
+          .USER_WIDTH(1),
+          .REG_TYPE(2),
+          .LENGTH(3)
+        ) axis_ip_payload_register_inst (
+          .clk(clk),
+          .rst(rst),
+
+          .s_axis_tdata (s_ip_payload_axis_tdata),
+          .s_axis_tkeep (s_ip_payload_axis_tkeep),
+          .s_axis_tvalid(s_ip_payload_axis_tvalid && !drop_packet_reg),
+          .s_axis_tready(outgoing_ip_payload_axis_tready),
+          .s_axis_tlast (s_ip_payload_axis_tlast),
+          .s_axis_tuser (s_ip_payload_axis_tuser),
+          .s_axis_tid   (0),
+          .s_axis_tdest (0),
+
+          .m_axis_tdata (m_ip_fifo_payload_axis_tdata ),
+          .m_axis_tkeep (m_ip_fifo_payload_axis_tkeep ),
+          .m_axis_tvalid(m_ip_fifo_payload_axis_tvalid),
+          .m_axis_tready(m_ip_fifo_payload_axis_tready),
+          .m_axis_tlast (m_ip_fifo_payload_axis_tlast ),
+          .m_axis_tuser (m_ip_fifo_payload_axis_tuser )
+        );
+      end else begin
+        assign m_ip_fifo_payload_axis_tdata    = s_ip_payload_axis_tdata;
+        assign m_ip_fifo_payload_axis_tkeep    = s_ip_payload_axis_tkeep;
+        assign m_ip_fifo_payload_axis_tvalid   = s_ip_payload_axis_tvalid && !drop_packet_reg;
+        assign outgoing_ip_payload_axis_tready = m_ip_fifo_payload_axis_tready;
+        assign m_ip_fifo_payload_axis_tlast    = s_ip_payload_axis_tlast;
+        assign m_ip_fifo_payload_axis_tuser    = s_ip_payload_axis_tuser;
+      end
+    end
+  endgenerate
 
 
   ip_eth_tx_test #(
@@ -1536,7 +1631,7 @@ module udp_complete_opt #(
       // Insert ICRC
       axis_RoCE_icrc_insert #(
         .DATA_WIDTH(DATA_WIDTH),
-        .N_PIPE    (5)
+        .N_PIPE    (6)
       ) axis_RoCE_icrc_insert_instance (
         .clk(clk),
         .rst(rst),
@@ -1557,35 +1652,44 @@ module udp_complete_opt #(
         .busy                     ()
       );
 
-      axis_register #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .KEEP_ENABLE(KEEP_ENABLE),
-        .KEEP_WIDTH(KEEP_WIDTH),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .REG_TYPE(2)
-      ) axis_register_icrc_out_inst (
-        .clk(clk),
-        .rst(rst),
+      if (ENABLE_TIMING_OPT_REGS) begin
+        axis_register #(
+          .DATA_WIDTH(DATA_WIDTH),
+          .KEEP_ENABLE(KEEP_ENABLE),
+          .KEEP_WIDTH(KEEP_WIDTH),
+          .ID_ENABLE(0),
+          .DEST_ENABLE(0),
+          .USER_ENABLE(1),
+          .USER_WIDTH(1),
+          .REG_TYPE(2)
+        ) axis_register_icrc_out_inst (
+          .clk(clk),
+          .rst(rst),
 
-        .s_axis_tdata (m_eth_payload_reg_axis_tdata),
-        .s_axis_tkeep (m_eth_payload_reg_axis_tkeep),
-        .s_axis_tvalid(m_eth_payload_reg_axis_tvalid),
-        .s_axis_tready(m_eth_payload_reg_axis_tready),
-        .s_axis_tlast (m_eth_payload_reg_axis_tlast),
-        .s_axis_tuser (m_eth_payload_reg_axis_tuser),
-        .s_axis_tid   (0),
-        .s_axis_tdest (0),
+          .s_axis_tdata (m_eth_payload_reg_axis_tdata),
+          .s_axis_tkeep (m_eth_payload_reg_axis_tkeep),
+          .s_axis_tvalid(m_eth_payload_reg_axis_tvalid),
+          .s_axis_tready(m_eth_payload_reg_axis_tready),
+          .s_axis_tlast (m_eth_payload_reg_axis_tlast),
+          .s_axis_tuser (m_eth_payload_reg_axis_tuser),
+          .s_axis_tid   (0),
+          .s_axis_tdest (0),
 
-        .m_axis_tdata (m_eth_payload_axis_tdata),
-        .m_axis_tkeep (m_eth_payload_axis_tkeep),
-        .m_axis_tvalid(m_eth_payload_axis_tvalid),
-        .m_axis_tready(m_eth_payload_axis_tready),
-        .m_axis_tlast (m_eth_payload_axis_tlast),
-        .m_axis_tuser (m_eth_payload_axis_tuser)
-      );
+          .m_axis_tdata (m_eth_payload_axis_tdata),
+          .m_axis_tkeep (m_eth_payload_axis_tkeep),
+          .m_axis_tvalid(m_eth_payload_axis_tvalid),
+          .m_axis_tready(m_eth_payload_axis_tready),
+          .m_axis_tlast (m_eth_payload_axis_tlast),
+          .m_axis_tuser (m_eth_payload_axis_tuser)
+        );
+      end else begin
+        assign m_eth_payload_axis_tdata      = m_eth_payload_reg_axis_tdata;
+        assign m_eth_payload_axis_tkeep      = m_eth_payload_reg_axis_tkeep;
+        assign m_eth_payload_axis_tvalid     = m_eth_payload_reg_axis_tvalid;
+        assign m_eth_payload_reg_axis_tready = m_eth_payload_axis_tready; 
+        assign m_eth_payload_axis_tlast      = m_eth_payload_reg_axis_tlast;
+        assign m_eth_payload_axis_tuser      = m_eth_payload_reg_axis_tuser;
+      end
     end else begin
 
       assign m_eth_hdr_valid            = tx_eth_hdr_valid;
