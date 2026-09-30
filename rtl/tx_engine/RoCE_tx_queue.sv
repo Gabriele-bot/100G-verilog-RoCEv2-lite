@@ -3,9 +3,13 @@
 
 module RoCE_tx_queue #(
     parameter DATA_WIDTH                       = 256,
-    parameter CLOCK_PERIOD                     = 6.4, // in ns
+    parameter real CLOCK_PERIOD                = 6.4, // in ns
     parameter LOCAL_QPN                        = 256,
-    parameter REFRESH_CACHE_TICKS              = 32768
+    parameter REFRESH_CACHE_TICKS              = 32768,
+    parameter ENABLE_RATE_LIM                  = 1,
+    parameter real TARGET_RATE                 = 49.05, // in Gbps
+    // Register to achieve better timings, enable them if you want to trade some flops with better timings
+    parameter ENABLE_TIMING_OPT_REGS           = 0
 ) (
     input wire clk,
     input wire rst,
@@ -116,17 +120,25 @@ module RoCE_tx_queue #(
 
     // TODO Fix stall
     input wire stall,
+    input wire throttle,
 
     /* Configuration
      */
     input  wire [  2:0] pmtu,
     input  wire [ 15:0] RoCE_udp_port,
-    input  wire [ 31:0] loc_ip_addr
+    input  wire [ 31:0] loc_ip_addr,
+    input  wire         bypass_rate_limit
 
 );
 
     import RoCE_params::*; // Imports RoCE parameters
 
+    // compute rate limit
+    localparam real RAW_RATE    = 1/CLOCK_PERIOD * DATA_WIDTH; // in Gbps
+    localparam [7:0] RATE_NUM   = TARGET_RATE / RAW_RATE * 255;
+    localparam [7:0] RATE_DENOM = 8'd255;
+
+    reg [7:0] rate_num_reg;
 
     // work request metadata
     wire         m_wr_req_valid;
@@ -146,13 +158,21 @@ module RoCE_tx_queue #(
     wire [14:0]                 m_payload_framer_axis_tuser;
     wire                        m_payload_framer_axis_tready;
 
-    // axis from framer to RoCE queue
+    // axis from framer to rate_limiter
     wire [DATA_WIDTH   - 1 : 0] m_payload_queue_axis_tdata;
     wire [DATA_WIDTH/8 - 1 : 0] m_payload_queue_axis_tkeep;
     wire                        m_payload_queue_axis_tvalid;
     wire                        m_payload_queue_axis_tlast;
     wire [14:0]                 m_payload_queue_axis_tuser;
     wire                        m_payload_queue_axis_tready;
+
+    // axis from rate_limiter to RoCE queue
+    wire [DATA_WIDTH   - 1 : 0] m_payload_rate_lim_axis_tdata;
+    wire [DATA_WIDTH/8 - 1 : 0] m_payload_rate_lim_axis_tkeep;
+    wire                        m_payload_rate_lim_axis_tvalid;
+    wire                        m_payload_rate_lim_axis_tlast;
+    wire [14:0]                 m_payload_rate_lim_axis_tuser;
+    wire                        m_payload_rate_lim_axis_tready;
 
     // dma metadata from framer to RoCE queue
     wire        m_framer_dma_meta_valid;
@@ -209,18 +229,25 @@ module RoCE_tx_queue #(
     always @(posedge clk) begin
         if (rst) begin
             qp_active     <= 1'b0;
+            rate_num_reg  <= 8'd255;
         end else begin
             if (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP && !qp_active && cm_qp_loc_qpn == LOCAL_QPN) begin
                 qp_active     <= 1'b1;
             end else if (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP && qp_active && cm_qp_loc_qpn == LOCAL_QPN) begin
                 qp_active     <= 1'b0;
             end
+            if (bypass_rate_limit || !throttle) begin // dont throttle the rate if bypass_rate_limit is set or throttle is not set
+                rate_num_reg <= 8'd255;
+            end else begin // throttle otherwise
+                rate_num_reg <= RATE_NUM;
+            end
         end
     end
 
     axis_packet_framer #(
         .DATA_WIDTH(DATA_WIDTH),
-        .ENABLE_OUTPUT_FIFO(0)
+        .ENABLE_OUTPUT_FIFO(0),
+        .ENABLE_TIMING_OPT_REGS(ENABLE_TIMING_OPT_REGS)
     ) axis_packet_framer_instance (
         .clk(clk),
         .rst(rst),
@@ -390,12 +417,12 @@ module RoCE_tx_queue #(
         .m_udp_length              (m_roce_udp_length),
         .m_udp_checksum            (m_roce_udp_checksum),
 
-        .m_roce_payload_axis_tdata (m_roce_payload_axis_tdata),
-        .m_roce_payload_axis_tkeep (m_roce_payload_axis_tkeep),
-        .m_roce_payload_axis_tvalid(m_roce_payload_axis_tvalid),
-        .m_roce_payload_axis_tready(m_roce_payload_axis_tready),
-        .m_roce_payload_axis_tlast (m_roce_payload_axis_tlast),
-        .m_roce_payload_axis_tuser (m_roce_payload_axis_tuser),
+        .m_roce_payload_axis_tdata (m_payload_rate_lim_axis_tdata),
+        .m_roce_payload_axis_tkeep (m_payload_rate_lim_axis_tkeep),
+        .m_roce_payload_axis_tvalid(m_payload_rate_lim_axis_tvalid),
+        .m_roce_payload_axis_tready(m_payload_rate_lim_axis_tready),
+        .m_roce_payload_axis_tlast (m_payload_rate_lim_axis_tlast),
+        .m_roce_payload_axis_tuser (m_payload_rate_lim_axis_tuser),
 
         .stall                     (stall),
 
@@ -403,6 +430,46 @@ module RoCE_tx_queue #(
         .RoCE_udp_port             (RoCE_udp_port),
         .loc_ip_addr               (loc_ip_addr)
     );
+
+    generate
+        if (ENABLE_RATE_LIM) begin
+            axis_rate_limit #(
+                .DATA_WIDTH (DATA_WIDTH),
+                .ID_ENABLE  (0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH (1)
+            ) axis_rate_limit_instance (
+                .clk(clk),
+                .rst(rst),
+                .s_axis_tdata (m_payload_rate_lim_axis_tdata),
+                .s_axis_tkeep (m_payload_rate_lim_axis_tkeep),
+                .s_axis_tvalid(m_payload_rate_lim_axis_tvalid),
+                .s_axis_tready(m_payload_rate_lim_axis_tready),
+                .s_axis_tlast (m_payload_rate_lim_axis_tlast),
+                .s_axis_tuser (m_payload_rate_lim_axis_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                .m_axis_tdata (m_roce_payload_axis_tdata),
+                .m_axis_tkeep (m_roce_payload_axis_tkeep),
+                .m_axis_tvalid(m_roce_payload_axis_tvalid),
+                .m_axis_tready(m_roce_payload_axis_tready),
+                .m_axis_tlast (m_roce_payload_axis_tlast),
+                .m_axis_tuser (m_roce_payload_axis_tuser),
+                .rate_num     (rate_num_reg),
+                .rate_denom   (RATE_DENOM),
+                .rate_by_frame(0)
+            );
+        end else begin
+            assign m_roce_payload_axis_tdata      = m_payload_rate_lim_axis_tdata;
+            assign m_roce_payload_axis_tkeep      = m_payload_rate_lim_axis_tkeep;
+            assign m_roce_payload_axis_tvalid     = m_payload_rate_lim_axis_tvalid;
+            assign m_payload_rate_lim_axis_tready = m_roce_payload_axis_tready;
+            assign m_roce_payload_axis_tlast      = m_payload_rate_lim_axis_tlast;
+            assign m_roce_payload_axis_tuser      = m_payload_rate_lim_axis_tuser;
+        end
+    endgenerate
 
     assign wr_error_qp_not_rts_out = wr_error_qp_not_rts;
     assign wr_error_loc_qpn_out    = wr_error_loc_qpn;

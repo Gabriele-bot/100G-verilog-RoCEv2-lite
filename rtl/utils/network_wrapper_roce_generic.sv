@@ -2,23 +2,28 @@
 
 
 module network_wrapper_roce_generic #(
-    parameter MAC_DATA_WIDTH = 1024,
-    parameter STACK_DATA_WIDTH = 1024,
-    parameter QP_CH_DATA_WIDTH = STACK_DATA_WIDTH,   
-    parameter QP_CH_KEEP_ENABLE = QP_CH_DATA_WIDTH > 8,  
-    parameter QP_CH_KEEP_WIDTH = QP_CH_DATA_WIDTH/8,   
-    parameter R0CE_ENG_CLK_PERIOD = 3.000, // in ns, needed to compute RNR timer values
-    parameter N_ROCE_TX_ENGINES = 1,
-    parameter N_QUEUE_PAIRS = 4,
+    parameter STACK_DATA_WIDTH         = 1024,
+    parameter ROCE_ENG_DATA_WIDTH      = STACK_DATA_WIDTH,
+    parameter ROCE_ENG_KEEP_ENABLE     = (ROCE_ENG_DATA_WIDTH>8),
+    parameter ROCE_ENG_KEEP_WIDTH      = (ROCE_ENG_DATA_WIDTH/8),
+    parameter QP_CH_DATA_WIDTH         = STACK_DATA_WIDTH,
+    parameter QP_CH_KEEP_ENABLE        = QP_CH_DATA_WIDTH > 8,
+    parameter QP_CH_KEEP_WIDTH         = QP_CH_DATA_WIDTH/8,
+    parameter real ROCE_ENG_CLK_PERIOD = 3.000, // in ns, needed to compute RNR timer values
+    parameter real STACK_CLK_PERIOD    = 3.000, // in ns
+    parameter N_ROCE_TX_ENGINES        = 1,
+    parameter real TARGET_SPEED        = 98.05,
+    parameter N_QUEUE_PAIRS            = 4,
     parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 23,
-    parameter FIFO_REGS = 4,
-    parameter ASYNC_MAC_STACK = 1,
+    parameter HEADER_CHECKSUM_PIPELINED = 1,
+    parameter IP_PAYLOAD_FIFO_CHECKSUM  = 1,
+    parameter RX_FIFO_REGS = 2,
+    parameter TX_FIFO_REGS = 2,
     parameter ENABLE_PFC = 0,
-    parameter DEBUG = 0
+    parameter DEBUG = 0,
+    // Register to achieve better timings, enable them if you want to trade some flops with better timing
+    parameter ENABLE_TIMING_OPT_REGS = 0
 ) (
-    input wire clk_mac,
-    input wire rst_mac,
-
     input wire clk_stack,
     input wire rst_stack,
 
@@ -28,33 +33,92 @@ module network_wrapper_roce_generic #(
     input wire flow_ctrl_pause, // stack clock domain
 
     /*
+    AXIS input streams
+    */
+    // input Work request
+    input  wire         s_wr_req_valid          [N_QUEUE_PAIRS-1:0],
+    output wire         s_wr_req_ready          [N_QUEUE_PAIRS-1:0],
+    input  wire         s_wr_req_tx_type        [N_QUEUE_PAIRS-1:0], // 0 WRITE, 1 SEND
+    input  wire         s_wr_req_is_immediate   [N_QUEUE_PAIRS-1:0],
+    input  wire [31:0]  s_wr_req_immediate_data [N_QUEUE_PAIRS-1:0],
+    input  wire [23:0]  s_wr_req_loc_qp         [N_QUEUE_PAIRS-1:0],
+    input  wire [63:0]  s_wr_req_addr_offset    [N_QUEUE_PAIRS-1:0],
+    input  wire [31:0]  s_wr_req_dma_length     [N_QUEUE_PAIRS-1:0], // for each transfer
+
+    // input QPs AXIS
+    input  wire [QP_CH_DATA_WIDTH - 1 :0]  s_axis_tdata  [N_QUEUE_PAIRS-1:0],
+    input  wire [QP_CH_KEEP_WIDTH - 1 :0]  s_axis_tkeep  [N_QUEUE_PAIRS-1:0],
+    input  wire                            s_axis_tvalid [N_QUEUE_PAIRS-1:0],
+    output wire                            s_axis_tready [N_QUEUE_PAIRS-1:0],
+    input  wire                            s_axis_tlast  [N_QUEUE_PAIRS-1:0],
+    input  wire                            s_axis_tuser  [N_QUEUE_PAIRS-1:0],
+
+    /*
      * Ethernet: AXIS
      */
-
-    output wire [MAC_DATA_WIDTH -1 :0]      m_network_tx_axis_tdata,
-    output wire [MAC_DATA_WIDTH/8-1 :0 ]    m_network_tx_axis_tkeep,
+    // TX AXIS
+    output wire [STACK_DATA_WIDTH -1 :0]    m_network_tx_axis_tdata,
+    output wire [STACK_DATA_WIDTH/8-1 :0 ]  m_network_tx_axis_tkeep,
     output wire                             m_network_tx_axis_tvalid,
     input  wire                             m_network_tx_axis_tready,
     output wire                             m_network_tx_axis_tlast,
     output wire                             m_network_tx_axis_tuser,
-
-    input  wire [MAC_DATA_WIDTH -1 :0]      s_network_rx_axis_tdata,
-    input  wire [MAC_DATA_WIDTH/8-1 :0]     s_network_rx_axis_tkeep,
+    // RX AXIS
+    input  wire [STACK_DATA_WIDTH -1 :0]    s_network_rx_axis_tdata,
+    input  wire [STACK_DATA_WIDTH/8-1 :0]   s_network_rx_axis_tkeep,
     input  wire                             s_network_rx_axis_tvalid,
     output wire                             s_network_rx_axis_tready,
     input  wire                             s_network_rx_axis_tlast,
     input  wire                             s_network_rx_axis_tuser,
     /*
+     * AXI master interface to RAM
+     */
+    output wire [0                :0]                                            m_axi_awid    [N_ROCE_TX_ENGINES-1:0],
+    output wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-$clog2(N_ROCE_TX_ENGINES)-1:0] m_axi_awaddr  [N_ROCE_TX_ENGINES-1:0],
+    output wire [7:0]                                                            m_axi_awlen   [N_ROCE_TX_ENGINES-1:0],
+    output wire [2:0]                                                            m_axi_awsize  [N_ROCE_TX_ENGINES-1:0],
+    output wire [1:0]                                                            m_axi_awburst [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_awlock  [N_ROCE_TX_ENGINES-1:0],
+    output wire [3:0]                                                            m_axi_awcache [N_ROCE_TX_ENGINES-1:0],
+    output wire [2:0]                                                            m_axi_awprot  [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_awvalid [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_awready [N_ROCE_TX_ENGINES-1:0],
+    output wire [ROCE_ENG_DATA_WIDTH - 1 : 0]                                    m_axi_wdata   [N_ROCE_TX_ENGINES-1:0],
+    output wire [ROCE_ENG_KEEP_WIDTH - 1 : 0]                                    m_axi_wstrb   [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_wlast   [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_wvalid  [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_wready  [N_ROCE_TX_ENGINES-1:0],
+    input  wire [0:0]                                                            m_axi_bid     [N_ROCE_TX_ENGINES-1:0],
+    input  wire [1:0]                                                            m_axi_bresp   [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_bvalid  [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_bready  [N_ROCE_TX_ENGINES-1:0],
+    output wire [0               :0]                                             m_axi_arid    [N_ROCE_TX_ENGINES-1:0],
+    output wire [RETRANSMISSION_ADDR_BUFFER_WIDTH-$clog2(N_ROCE_TX_ENGINES)-1:0] m_axi_araddr  [N_ROCE_TX_ENGINES-1:0],
+    output wire [7:0]                                                            m_axi_arlen   [N_ROCE_TX_ENGINES-1:0],
+    output wire [2:0]                                                            m_axi_arsize  [N_ROCE_TX_ENGINES-1:0],
+    output wire [1:0]                                                            m_axi_arburst [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_arlock  [N_ROCE_TX_ENGINES-1:0],
+    output wire [3:0]                                                            m_axi_arcache [N_ROCE_TX_ENGINES-1:0],
+    output wire [2:0]                                                            m_axi_arprot  [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_arvalid [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_arready [N_ROCE_TX_ENGINES-1:0],
+    input  wire [0             :0]                                               m_axi_rid     [N_ROCE_TX_ENGINES-1:0],
+    input  wire [ROCE_ENG_DATA_WIDTH  -1:0]                                      m_axi_rdata   [N_ROCE_TX_ENGINES-1:0],
+    input  wire [1:0]                                                            m_axi_rresp   [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_rlast   [N_ROCE_TX_ENGINES-1:0],
+    input  wire                                                                  m_axi_rvalid  [N_ROCE_TX_ENGINES-1:0],
+    output wire                                                                  m_axi_rready  [N_ROCE_TX_ENGINES-1:0],
+    /*
     Pause signals
     */
     input  wire [7:0]             pfc_pause_req,
     output wire [7:0]             pfc_pause_ack,
-
     /* 
     QP state spy
     */
-    input wire         m_qp_context_spy,
-    input wire [23:0]  m_qp_local_qpn_spy,
+    input wire         m_qp_spy_context,
+    input wire [23:0]  m_qp_spy_loc_qpn,
+
     output wire        s_qp_spy_context_valid,
     output wire [2 :0] s_qp_spy_state,
     output wire [23:0] s_qp_spy_rem_qpn,
@@ -69,51 +133,88 @@ module network_wrapper_roce_generic #(
     /*
     Control registers
     */
-    input wire [47:0] ctrl_local_mac_address, // Should not be a generic
-    input wire [31:0] ctrl_local_ip,
-    input wire        ctrl_clear_arp_cache,
-    input wire [2:0 ] ctrl_pmtu,
-    input wire [15:0] ctrl_RoCE_udp_port,
-    input wire [2:0 ] ctrl_priority_tag,
+    input wire [47:0]               ctrl_local_mac_address, // Should not be a generic
+    input wire [31:0]               ctrl_local_ip,
+    input wire                      ctrl_clear_arp_cache,
+    input wire [2:0 ]               ctrl_pmtu,
+    input wire [15:0]               ctrl_RoCE_udp_port,
+    input wire [2:0 ]               ctrl_priority_tag,
+    input wire [31:0]               ctrl_retry_timeout, // in number of clk_stack cycles, after which a packet is considered lost and retransmission is triggered
+    input wire  [N_QUEUE_PAIRS-1:0] ctrl_use_data_gen,
+
+    // dcqcn
+    input wire        ctrl_dcqcn_en,
+    input wire [9:0]  ctrl_dcqcn_par_g,
+    input wire [9:0]  ctrl_dcqcn_alpha_min,
+    input wire [31:0] ctrl_dcqcn_alpha_upd_time,
+    input wire [9:0]  ctrl_dcqcn_rate_decr_min,
+    input wire [10:0] ctrl_dcqcn_rate_min,
+    input wire [31:0] ctrl_dcqcn_upd_time,
+    input wire [31:0] ctrl_dcqcn_rate_ai_time,
+    input wire [31:0] ctrl_dcqcn_rate_hai_time,
+    input wire [9:0]  ctrl_dcqcn_rate_incr_ai,
+    input wire [9:0]  ctrl_dcqcn_rate_incr_hai,
 
     // perf monitor
-    input  wire [3:0]  cfg_latency_avg_po2,
-    input  wire [4:0]  cfg_throughput_avg_po2,
-    input  wire [23:0] monitor_loc_qpn,
-    output wire [31:0] transfer_time_avg,
-    output wire [31:0] transfer_time_moving_avg,
-    output wire [31:0] latency_avg,
-    output wire [31:0] latency_moving_avg,
-    output wire [23:0] psn_diff,                 
-    output wire [31:0] n_retransmit_triggers,    
-    output wire [31:0] n_rnr_retransmit_triggers
+    input  wire [3:0]  perf_cfg_latency_avg_po2,
+    input  wire [4:0]  perf_cfg_throughput_avg_po2,
+    input  wire [23:0] perf_monitor_loc_qpn,
+    output wire [31:0] perf_transfer_time_avg,
+    output wire [31:0] perf_transfer_time_moving_avg,
+    output wire [31:0] perf_latency_max,
+    output wire [31:0] perf_latency_avg,
+    output wire [31:0] perf_latency_moving_avg,
+    output wire [23:0] perf_psn_diff,
+    output wire [23:0] perf_psn_diff_max,
+    output wire [31:0] perf_n_retransmit_triggers,
+    output wire [31:0] perf_n_rnr_retransmit_triggers,
+    output wire [31:0] perf_n_total_psn_seq_errors,
+    output wire [31:0] perf_n_total_timeout_errors,
+    //latency histogram
+    input  wire        perf_lat_histo_reset_counts,
+    input  wire        perf_lat_histo_trgg_readout,
+    output wire [31:0] perf_lat_histo_index,
+    output wire        perf_lat_histo_valid,
+    output wire [31:0] perf_lat_histo_counts,
+    output wire        perf_lat_histo_rst_done,
+    output wire        perf_lat_histo_ovflw,
+
+    input  wire        perf_adj_ack_histo_reset_counts,
+    input  wire        perf_adj_ack_histo_trgg_readout,
+    output wire [31:0] perf_adj_ack_histo_index,
+    output wire        perf_adj_ack_histo_valid,
+    output wire [31:0] perf_adj_ack_histo_counts,
+    output wire        perf_adj_ack_histo_rst_done,
+    output wire        perf_adj_ack_histo_ovflw
+
+
 );
 
-   initial begin
-        if (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES <  2) begin
-            $error("Error: Must have at least 2 QUEUE PAIRS per TX engine (instance %m)");
+    initial begin
+        if (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES <  1) begin
+            $error("Error: Must have at least 1 QUEUE PAIR per TX engine (instance %m)");
             $finish;
         end
     end
 
     import RoCE_params::*; // Imports RoCE parameters
 
-    wire [MAC_DATA_WIDTH -1 :0]      s_rx_axis_srl_fifo_tdata;
-    wire [MAC_DATA_WIDTH/8-1 :0 ]    s_rx_axis_srl_fifo_tkeep;
+    wire [STACK_DATA_WIDTH -1 :0]    s_rx_axis_srl_fifo_tdata;
+    wire [STACK_DATA_WIDTH/8-1 :0 ]  s_rx_axis_srl_fifo_tkeep;
     wire                             s_rx_axis_srl_fifo_tvalid;
     wire                             s_rx_axis_srl_fifo_tready;
     wire                             s_rx_axis_srl_fifo_tlast;
     wire                             s_rx_axis_srl_fifo_tuser;
 
-    wire [MAC_DATA_WIDTH -1 :0]      m_tx_axis_srl_fifo_tdata;
-    wire [MAC_DATA_WIDTH/8-1 :0 ]    m_tx_axis_srl_fifo_tkeep;
+    wire [STACK_DATA_WIDTH -1 :0]    m_tx_axis_srl_fifo_tdata;
+    wire [STACK_DATA_WIDTH/8-1 :0 ]  m_tx_axis_srl_fifo_tkeep;
     wire                             m_tx_axis_srl_fifo_tvalid;
     wire                             m_tx_axis_srl_fifo_tready;
     wire                             m_tx_axis_srl_fifo_tlast;
     wire                             m_tx_axis_srl_fifo_tuser;
 
-    wire [MAC_DATA_WIDTH -1 :0]      m_tx_axis_pfc_tdata;
-    wire [MAC_DATA_WIDTH/8-1 :0 ]    m_tx_axis_pfc_tkeep;
+    wire [STACK_DATA_WIDTH -1 :0]    m_tx_axis_pfc_tdata;
+    wire [STACK_DATA_WIDTH/8-1 :0 ]  m_tx_axis_pfc_tkeep;
     wire                             m_tx_axis_pfc_tvalid;
     wire                             m_tx_axis_pfc_tready;
     wire                             m_tx_axis_pfc_tlast;
@@ -199,118 +300,179 @@ module network_wrapper_roce_generic #(
     reg [2:0 ] ctrl_pmtu_reg;
     reg [15:0] ctrl_RoCE_udp_port_reg;
     reg [2:0 ] ctrl_priority_tag_reg;
+    reg [31:0] ctrl_retry_timeout_reg;
+    reg [31:0] ctrl_use_data_gen_reg;
 
-    always @(clk_stack) begin
+    always @(posedge clk_stack) begin
         ctrl_local_mac_address_reg <= ctrl_local_mac_address;
         ctrl_local_ip_reg          <= ctrl_local_ip;
         ctrl_clear_arp_cache_reg   <= ctrl_clear_arp_cache;
         ctrl_pmtu_reg              <= ctrl_pmtu;
         ctrl_RoCE_udp_port_reg     <= ctrl_RoCE_udp_port;
         ctrl_priority_tag_reg      <= ctrl_priority_tag;
+        ctrl_retry_timeout_reg     <= ctrl_retry_timeout;
+        ctrl_use_data_gen_reg      <= ctrl_use_data_gen;
     end
-    
+
 
     // Configuration
     wire [31:0] gateway_ip = {ctrl_local_ip_reg[31:8], 8'd1};
     wire [31:0] subnet_mask = {8'd255, 8'd255, 8'd255, 8'd0  };
 
-
-
-
-    axis_srl_fifo #(
-        .DATA_WIDTH(MAC_DATA_WIDTH),
-        .KEEP_ENABLE(1),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .DEPTH(FIFO_REGS)
-    ) rx_axis_srl_fifo (
-        .clk(clk_mac),
-        .rst(rst_mac),
-
-        // AXI input
-        .s_axis_tdata (s_network_rx_axis_tdata),
-        .s_axis_tkeep (s_network_rx_axis_tkeep),
-        .s_axis_tvalid(s_network_rx_axis_tvalid),
-        .s_axis_tready(s_network_rx_axis_tready),
-        .s_axis_tlast (s_network_rx_axis_tlast),
-        .s_axis_tuser (s_network_rx_axis_tuser),
-        .s_axis_tid   (0),
-        .s_axis_tdest (0),
-
-        // AXI output
-        .m_axis_tdata (s_rx_axis_srl_fifo_tdata),
-        .m_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
-        .m_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
-        .m_axis_tready(s_rx_axis_srl_fifo_tready),
-        .m_axis_tlast (s_rx_axis_srl_fifo_tlast),
-        .m_axis_tuser (s_rx_axis_srl_fifo_tuser)
-    );
-
-    axis_srl_fifo #(
-        .DATA_WIDTH(MAC_DATA_WIDTH),
-        .KEEP_ENABLE(1),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .DEPTH(FIFO_REGS)
-    ) tx_axis_srl_fifo (
-        .clk(clk_mac),
-        .rst(rst_mac),
-
-        // AXI input
-        .s_axis_tdata (m_tx_axis_srl_fifo_tdata),
-        .s_axis_tkeep (m_tx_axis_srl_fifo_tkeep),
-        .s_axis_tvalid(m_tx_axis_srl_fifo_tvalid),
-        .s_axis_tready(m_tx_axis_srl_fifo_tready),
-        .s_axis_tlast (m_tx_axis_srl_fifo_tlast),
-        .s_axis_tuser (m_tx_axis_srl_fifo_tuser),
-        .s_axis_tid   (0),
-        .s_axis_tdest (0),
-
-        // AXI output
-        .m_axis_tdata (m_network_tx_axis_tdata),
-        .m_axis_tkeep (m_network_tx_axis_tkeep),
-        .m_axis_tvalid(m_network_tx_axis_tvalid),
-        .m_axis_tready(m_network_tx_axis_tready),
-        .m_axis_tlast (m_network_tx_axis_tlast),
-        .m_axis_tuser (m_network_tx_axis_tuser)
-    );
-
-
-
     generate
+
+        if (TX_FIFO_REGS == 0) begin
+            assign m_network_tx_axis_tdata   = m_tx_axis_srl_fifo_tdata;
+            assign m_network_tx_axis_tkeep   = m_tx_axis_srl_fifo_tkeep;
+            assign m_network_tx_axis_tvalid  = m_tx_axis_srl_fifo_tvalid;
+            assign m_tx_axis_srl_fifo_tready = m_network_tx_axis_tready;
+            assign m_network_tx_axis_tlast   = m_tx_axis_srl_fifo_tlast;
+            assign m_network_tx_axis_tuser   = m_tx_axis_srl_fifo_tuser;
+        end else if (TX_FIFO_REGS == 1) begin
+            axis_srl_register #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1)
+            ) tx_axis_srl_reg (
+                .clk(clk_stack),
+                .rst(rst_stack),
+
+                // AXI input
+                .s_axis_tdata (m_tx_axis_srl_fifo_tdata),
+                .s_axis_tkeep (m_tx_axis_srl_fifo_tkeep),
+                .s_axis_tvalid(m_tx_axis_srl_fifo_tvalid),
+                .s_axis_tready(m_tx_axis_srl_fifo_tready),
+                .s_axis_tlast (m_tx_axis_srl_fifo_tlast),
+                .s_axis_tuser (m_tx_axis_srl_fifo_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (m_network_tx_axis_tdata),
+                .m_axis_tkeep (m_network_tx_axis_tkeep),
+                .m_axis_tvalid(m_network_tx_axis_tvalid),
+                .m_axis_tready(m_network_tx_axis_tready),
+                .m_axis_tlast (m_network_tx_axis_tlast),
+                .m_axis_tuser (m_network_tx_axis_tuser)
+            );
+        end else begin
+            axis_srl_fifo #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1),
+                .DEPTH(TX_FIFO_REGS)
+            ) tx_axis_srl_fifo (
+                .clk(clk_stack),
+                .rst(rst_stack),
+
+                // AXI input
+                .s_axis_tdata (m_tx_axis_srl_fifo_tdata),
+                .s_axis_tkeep (m_tx_axis_srl_fifo_tkeep),
+                .s_axis_tvalid(m_tx_axis_srl_fifo_tvalid),
+                .s_axis_tready(m_tx_axis_srl_fifo_tready),
+                .s_axis_tlast (m_tx_axis_srl_fifo_tlast),
+                .s_axis_tuser (m_tx_axis_srl_fifo_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (m_network_tx_axis_tdata),
+                .m_axis_tkeep (m_network_tx_axis_tkeep),
+                .m_axis_tvalid(m_network_tx_axis_tvalid),
+                .m_axis_tready(m_network_tx_axis_tready),
+                .m_axis_tlast (m_network_tx_axis_tlast),
+                .m_axis_tuser (m_network_tx_axis_tuser)
+            );
+        end
+        if (RX_FIFO_REGS == 0) begin
+            assign s_rx_axis_srl_fifo_tdata   = s_network_rx_axis_tdata;
+            assign s_rx_axis_srl_fifo_tkeep   = s_network_rx_axis_tkeep;
+            assign s_rx_axis_srl_fifo_tvalid  = s_network_rx_axis_tvalid;
+            assign s_network_rx_axis_tready   = s_rx_axis_srl_fifo_tready;
+            assign s_rx_axis_srl_fifo_tlast   = s_network_rx_axis_tlast;
+            assign s_rx_axis_srl_fifo_tuser   = s_network_rx_axis_tuser;
+        end else if (RX_FIFO_REGS == 1) begin
+            axis_srl_register #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1)
+            ) rx_axis_srl_reg (
+                .clk(clk_stack),
+                .rst(rst_stack),
+
+                // AXI input
+                .s_axis_tdata (s_network_rx_axis_tdata),
+                .s_axis_tkeep (s_network_rx_axis_tkeep),
+                .s_axis_tvalid(s_network_rx_axis_tvalid),
+                .s_axis_tready(s_network_rx_axis_tready),
+                .s_axis_tlast (s_network_rx_axis_tlast),
+                .s_axis_tuser (s_network_rx_axis_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (s_rx_axis_srl_fifo_tdata),
+                .m_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
+                .m_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
+                .m_axis_tready(s_rx_axis_srl_fifo_tready),
+                .m_axis_tlast (s_rx_axis_srl_fifo_tlast),
+                .m_axis_tuser (s_rx_axis_srl_fifo_tuser)
+            );
+        end else begin
+            axis_srl_fifo #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1),
+                .DEPTH(RX_FIFO_REGS)
+            ) rx_axis_srl_fifo (
+                .clk(clk_stack),
+                .rst(rst_stack),
+
+                // AXI input
+                .s_axis_tdata (s_network_rx_axis_tdata),
+                .s_axis_tkeep (s_network_rx_axis_tkeep),
+                .s_axis_tvalid(s_network_rx_axis_tvalid),
+                .s_axis_tready(s_network_rx_axis_tready),
+                .s_axis_tlast (s_network_rx_axis_tlast),
+                .s_axis_tuser (s_network_rx_axis_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (s_rx_axis_srl_fifo_tdata),
+                .m_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
+                .m_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
+                .m_axis_tready(s_rx_axis_srl_fifo_tready),
+                .m_axis_tlast (s_rx_axis_srl_fifo_tlast),
+                .m_axis_tuser (s_rx_axis_srl_fifo_tuser)
+            );
+        end
 
         if (ENABLE_PFC) begin
 
-            wire [2:0] ctrl_priority_tag_sync;
-
-            xpm_cdc_array_single #(
-                .DEST_SYNC_FF(4),
-                .INIT_SYNC_FF(0),
-                .SIM_ASSERT_CHK(0),
-                .SRC_INPUT_REG(1),
-                .WIDTH(3)
-            ) sync_bit_array_instance (
-                .src_clk(clk_stack),
-                //.src_rst(rst_stack),
-                .dest_clk(clk_mac),
-                .src_in(ctrl_priority_tag_reg),
-                .dest_out(ctrl_priority_tag_sync)
-            );
-
-            localparam OPTIMAL_FIFO_SIZE = (512-1)*MAC_DATA_WIDTH/8; // for 1024b it's around 60kB
+            localparam OPTIMAL_FIFO_SIZE = (512-1)*STACK_DATA_WIDTH/8; // for 1024b it's around 60kB
+            localparam PFC_FIFO_SIZE = OPTIMAL_FIFO_SIZE > 4200 ? OPTIMAL_FIFO_SIZE : (8192 - STACK_DATA_WIDTH/8); // for 1024b it's around 60kB
 
             eth_pfc_fifo_tx #(
-                .DATA_WIDTH(MAC_DATA_WIDTH),
+                .DATA_WIDTH(STACK_DATA_WIDTH),
                 // And the minimum depth would be 512, so why not use all of them rather than underutilize them
-                .FIFO_DEPTH(OPTIMAL_FIFO_SIZE), 
+                .FIFO_DEPTH(PFC_FIFO_SIZE),
                 .OUTPUT_SRL_REG(0)
             ) eth_pfc_fifo_tx_instance (
-                .clk(clk_mac),
-                .rst(rst_mac),
+                .clk(clk_stack),
+                .rst(rst_stack),
                 .s_priority_axis_tdata (m_tx_axis_pfc_tdata ),
                 .s_priority_axis_tkeep (m_tx_axis_pfc_tkeep ),
                 .s_priority_axis_tvalid(m_tx_axis_pfc_tvalid),
@@ -327,7 +489,7 @@ module network_wrapper_roce_generic #(
                 .m_axis_tlast (m_tx_axis_srl_fifo_tlast),
                 .m_axis_tuser (m_tx_axis_srl_fifo_tuser),
 
-                .priority_tag(ctrl_priority_tag_sync),
+                .priority_tag(ctrl_priority_tag_reg),
 
                 .pause_req(pfc_pause_req),
                 .pause_ack(pfc_pause_ack)
@@ -344,302 +506,98 @@ module network_wrapper_roce_generic #(
             assign pfc_pause_ack = 8'hFF;
         end
 
-        if (ASYNC_MAC_STACK) begin
-            if (STACK_DATA_WIDTH != MAC_DATA_WIDTH) begin
-                axis_async_fifo_adapter #(
-                    .DEPTH(1024),
-                    .S_DATA_WIDTH(MAC_DATA_WIDTH),
-                    .S_KEEP_ENABLE(1),
-                    .M_DATA_WIDTH(STACK_DATA_WIDTH),
-                    .M_KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) rx_axis_adapter_fifo (
-                    .s_clk(clk_mac),
-                    .s_rst(rst_mac),
+        if (ENABLE_TIMING_OPT_REGS) begin
+            // RX
+            axis_register #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1),
+                .REG_TYPE(2)
+            ) rx_axis_register (
+                .clk(clk_stack),
+                .rst(rst_stack),
 
-                    // AXI input
-                    .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
-                    .s_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
-                    .s_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
-                    .s_axis_tready(s_rx_axis_srl_fifo_tready),
-                    .s_axis_tlast (s_rx_axis_srl_fifo_tlast),
-                    .s_axis_tuser (s_rx_axis_srl_fifo_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
+                // AXI input
+                .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
+                .s_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
+                .s_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
+                .s_axis_tready(s_rx_axis_srl_fifo_tready),
+                .s_axis_tlast (s_rx_axis_srl_fifo_tlast),
+                .s_axis_tuser (s_rx_axis_srl_fifo_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
 
-                    .m_clk(clk_stack),
-                    .m_rst(rst_stack),
+                // AXI output
+                .m_axis_tdata (s_rx_axis_adapter_tdata),
+                .m_axis_tkeep (s_rx_axis_adapter_tkeep),
+                .m_axis_tvalid(s_rx_axis_adapter_tvalid),
+                .m_axis_tready(s_rx_axis_adapter_tready),
+                .m_axis_tlast (s_rx_axis_adapter_tlast),
+                .m_axis_tuser (s_rx_axis_adapter_tuser)
+            );
+            // TX
+            axis_register #(
+                .DATA_WIDTH(STACK_DATA_WIDTH),
+                .KEEP_ENABLE(1),
+                .ID_ENABLE(0),
+                .DEST_ENABLE(0),
+                .USER_ENABLE(1),
+                .USER_WIDTH(1),
+                .REG_TYPE(2)
+            ) tx_axis_register (
+                .clk(clk_stack),
+                .rst(rst_stack),
 
-                    // AXI output
-                    .m_axis_tdata (s_rx_axis_adapter_tdata),
-                    .m_axis_tkeep (s_rx_axis_adapter_tkeep),
-                    .m_axis_tvalid(s_rx_axis_adapter_tvalid),
-                    .m_axis_tready(s_rx_axis_adapter_tready),
-                    .m_axis_tlast (s_rx_axis_adapter_tlast),
-                    .m_axis_tuser (s_rx_axis_adapter_tuser)
-                );
+                // AXI input
+                .s_axis_tdata (m_tx_axis_adapter_tdata),
+                .s_axis_tkeep (m_tx_axis_adapter_tkeep),
+                .s_axis_tvalid(m_tx_axis_adapter_tvalid),
+                .s_axis_tready(m_tx_axis_adapter_tready),
+                .s_axis_tlast (m_tx_axis_adapter_tlast),
+                .s_axis_tuser (m_tx_axis_adapter_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
 
-                axis_async_fifo_adapter #(
-                    .DEPTH(1024),
-                    .S_DATA_WIDTH(STACK_DATA_WIDTH),
-                    .S_KEEP_ENABLE(1),
-                    .M_DATA_WIDTH(MAC_DATA_WIDTH),
-                    .M_KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) tx_axis_adapter_fifo (
-                    .s_clk(clk_stack),
-                    .s_rst(rst_stack),
+                // AXI output
+                .m_axis_tdata (m_tx_axis_pfc_tdata),
+                .m_axis_tkeep (m_tx_axis_pfc_tkeep),
+                .m_axis_tvalid(m_tx_axis_pfc_tvalid),
+                .m_axis_tready(m_tx_axis_pfc_tready),
+                .m_axis_tlast (m_tx_axis_pfc_tlast),
+                .m_axis_tuser (m_tx_axis_pfc_tuser)
+            );
+        end else begin
+            assign s_rx_axis_adapter_tdata   = s_rx_axis_srl_fifo_tdata;
+            assign s_rx_axis_adapter_tkeep   = s_rx_axis_srl_fifo_tkeep;
+            assign s_rx_axis_adapter_tvalid  = s_rx_axis_srl_fifo_tvalid;
+            assign s_rx_axis_srl_fifo_tready = s_rx_axis_adapter_tready;
+            assign s_rx_axis_adapter_tlast   = s_rx_axis_srl_fifo_tlast;
+            assign s_rx_axis_adapter_tuser   = s_rx_axis_srl_fifo_tuser;
 
-                    // AXI input
-                    .s_axis_tdata (m_tx_axis_adapter_tdata),
-                    .s_axis_tkeep (m_tx_axis_adapter_tkeep),
-                    .s_axis_tvalid(m_tx_axis_adapter_tvalid),
-                    .s_axis_tready(m_tx_axis_adapter_tready),
-                    .s_axis_tlast (m_tx_axis_adapter_tlast),
-                    .s_axis_tuser (m_tx_axis_adapter_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    .m_clk(clk_mac),
-                    .m_rst(rst_mac),
-
-                    // AXI output
-                    .m_axis_tdata (m_tx_axis_pfc_tdata),
-                    .m_axis_tkeep (m_tx_axis_pfc_tkeep),
-                    .m_axis_tvalid(m_tx_axis_pfc_tvalid),
-                    .m_axis_tready(m_tx_axis_pfc_tready),
-                    .m_axis_tlast (m_tx_axis_pfc_tlast),
-                    .m_axis_tuser (m_tx_axis_pfc_tuser)
-                );
-            end else begin
-                axis_async_fifo #(
-                    .DEPTH(1024),
-                    .DATA_WIDTH(MAC_DATA_WIDTH),
-                    .KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) rx_axis_async_fifo (
-                    .s_clk(clk_mac),
-                    .s_rst(rst_mac),
-
-                    // AXI input
-                    .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
-                    .s_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
-                    .s_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
-                    .s_axis_tready(s_rx_axis_srl_fifo_tready),
-                    .s_axis_tlast (s_rx_axis_srl_fifo_tlast),
-                    .s_axis_tuser (s_rx_axis_srl_fifo_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    .m_clk(clk_stack),
-                    .m_rst(rst_stack),
-
-                    // AXI output
-                    .m_axis_tdata (s_rx_axis_adapter_tdata),
-                    .m_axis_tkeep (s_rx_axis_adapter_tkeep),
-                    .m_axis_tvalid(s_rx_axis_adapter_tvalid),
-                    .m_axis_tready(s_rx_axis_adapter_tready),
-                    .m_axis_tlast (s_rx_axis_adapter_tlast),
-                    .m_axis_tuser (s_rx_axis_adapter_tuser)
-                );
-
-                axis_async_fifo #(
-                    .DEPTH(1024),
-                    .DATA_WIDTH(STACK_DATA_WIDTH),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) tx_axis_async_fifo (
-                    .s_clk(clk_stack),
-                    .s_rst(rst_stack),
-
-                    // AXI input
-                    .s_axis_tdata (m_tx_axis_adapter_tdata),
-                    .s_axis_tkeep (m_tx_axis_adapter_tkeep),
-                    .s_axis_tvalid(m_tx_axis_adapter_tvalid),
-                    .s_axis_tready(m_tx_axis_adapter_tready),
-                    .s_axis_tlast (m_tx_axis_adapter_tlast),
-                    .s_axis_tuser (m_tx_axis_adapter_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    .m_clk(clk_mac),
-                    .m_rst(rst_mac),
-
-                    // AXI output
-                    .m_axis_tdata (m_tx_axis_pfc_tdata),
-                    .m_axis_tkeep (m_tx_axis_pfc_tkeep),
-                    .m_axis_tvalid(m_tx_axis_pfc_tvalid),
-                    .m_axis_tready(m_tx_axis_pfc_tready),
-                    .m_axis_tlast (m_tx_axis_pfc_tlast),
-                    .m_axis_tuser (m_tx_axis_pfc_tuser)
-                );
-            end
-        end else begin // same clock
-            if (STACK_DATA_WIDTH != MAC_DATA_WIDTH) begin
-                axis_fifo_adapter #(
-                    .DEPTH(1024),
-                    .S_DATA_WIDTH(MAC_DATA_WIDTH),
-                    .S_KEEP_ENABLE(1),
-                    .M_DATA_WIDTH(STACK_DATA_WIDTH),
-                    .M_KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) rx_axis_adapter_fifo (
-                    .clk(clk_mac),
-                    .rst(rst_mac),
-
-                    // AXI input
-                    .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
-                    .s_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
-                    .s_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
-                    .s_axis_tready(s_rx_axis_srl_fifo_tready),
-                    .s_axis_tlast (s_rx_axis_srl_fifo_tlast),
-                    .s_axis_tuser (s_rx_axis_srl_fifo_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    // AXI output
-                    .m_axis_tdata (s_rx_axis_adapter_tdata),
-                    .m_axis_tkeep (s_rx_axis_adapter_tkeep),
-                    .m_axis_tvalid(s_rx_axis_adapter_tvalid),
-                    .m_axis_tready(s_rx_axis_adapter_tready),
-                    .m_axis_tlast (s_rx_axis_adapter_tlast),
-                    .m_axis_tuser (s_rx_axis_adapter_tuser)
-                );
-
-                axis_fifo_adapter #(
-                    .DEPTH(1024),
-                    .S_DATA_WIDTH(STACK_DATA_WIDTH),
-                    .S_KEEP_ENABLE(1),
-                    .M_DATA_WIDTH(MAC_DATA_WIDTH),
-                    .M_KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .RAM_PIPELINE(1),
-                    .FRAME_FIFO(0)
-                ) tx_axis_adapter_fifo (
-                    .clk(clk_mac),
-                    .rst(rst_mac),
-
-                    // AXI input
-                    .s_axis_tdata (m_tx_axis_adapter_tdata),
-                    .s_axis_tkeep (m_tx_axis_adapter_tkeep),
-                    .s_axis_tvalid(m_tx_axis_adapter_tvalid),
-                    .s_axis_tready(m_tx_axis_adapter_tready),
-                    .s_axis_tlast (m_tx_axis_adapter_tlast),
-                    .s_axis_tuser (m_tx_axis_adapter_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    // AXI output
-                    .m_axis_tdata (m_tx_axis_pfc_tdata),
-                    .m_axis_tkeep (m_tx_axis_pfc_tkeep),
-                    .m_axis_tvalid(m_tx_axis_pfc_tvalid),
-                    .m_axis_tready(m_tx_axis_pfc_tready),
-                    .m_axis_tlast (m_tx_axis_pfc_tlast),
-                    .m_axis_tuser (m_tx_axis_pfc_tuser)
-                );
-            end else begin // no need for fifos
-                // RX
-                axis_register #(
-                    .DATA_WIDTH(STACK_DATA_WIDTH),
-                    .KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .REG_TYPE(2)
-                ) rx_axis_register (
-                    .clk(clk_stack),
-                    .rst(rst_stack),
-
-                    // AXI input
-                    .s_axis_tdata (s_rx_axis_srl_fifo_tdata),
-                    .s_axis_tkeep (s_rx_axis_srl_fifo_tkeep),
-                    .s_axis_tvalid(s_rx_axis_srl_fifo_tvalid),
-                    .s_axis_tready(s_rx_axis_srl_fifo_tready),
-                    .s_axis_tlast (s_rx_axis_srl_fifo_tlast),
-                    .s_axis_tuser (s_rx_axis_srl_fifo_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    // AXI output
-                    .m_axis_tdata (s_rx_axis_adapter_tdata),
-                    .m_axis_tkeep (s_rx_axis_adapter_tkeep),
-                    .m_axis_tvalid(s_rx_axis_adapter_tvalid),
-                    .m_axis_tready(s_rx_axis_adapter_tready),
-                    .m_axis_tlast (s_rx_axis_adapter_tlast),
-                    .m_axis_tuser (s_rx_axis_adapter_tuser)
-                );
-                // TX
-                axis_register #(
-                    .DATA_WIDTH(STACK_DATA_WIDTH),
-                    .KEEP_ENABLE(1),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(1),
-                    .USER_WIDTH(1),
-                    .REG_TYPE(2)
-                ) tx_axis_register (
-                    .clk(clk_stack),
-                    .rst(rst_stack),
-
-                    // AXI input
-                    .s_axis_tdata (m_tx_axis_adapter_tdata),
-                    .s_axis_tkeep (m_tx_axis_adapter_tkeep),
-                    .s_axis_tvalid(m_tx_axis_adapter_tvalid),
-                    .s_axis_tready(m_tx_axis_adapter_tready),
-                    .s_axis_tlast (m_tx_axis_adapter_tlast),
-                    .s_axis_tuser (m_tx_axis_adapter_tuser),
-                    .s_axis_tid   (0),
-                    .s_axis_tdest (0),
-
-                    // AXI output
-                    .m_axis_tdata (m_tx_axis_pfc_tdata),
-                    .m_axis_tkeep (m_tx_axis_pfc_tkeep),
-                    .m_axis_tvalid(m_tx_axis_pfc_tvalid),
-                    .m_axis_tready(m_tx_axis_pfc_tready),
-                    .m_axis_tlast (m_tx_axis_pfc_tlast),
-                    .m_axis_tuser (m_tx_axis_pfc_tuser)
-                );
-            end
+            assign m_tx_axis_pfc_tdata      = m_tx_axis_adapter_tdata;
+            assign m_tx_axis_pfc_tkeep      = m_tx_axis_adapter_tkeep;
+            assign m_tx_axis_pfc_tvalid     = m_tx_axis_adapter_tvalid;
+            assign m_tx_axis_adapter_tready = m_tx_axis_pfc_tready;
+            assign m_tx_axis_pfc_tlast      = m_tx_axis_adapter_tlast;
+            assign m_tx_axis_pfc_tuser      = m_tx_axis_adapter_tuser;
         end
 
-    endgenerate
+    endgenerate;
 
     udp_complete_opt #(
-        .DATA_WIDTH(STACK_DATA_WIDTH),
-        .ARP_CACHE_ADDR_WIDTH(9),
-        .ARP_REQUEST_RETRY_INTERVAL(411000000*2),
-        .ARP_REQUEST_TIMEOUT(411000000*30),
-        .ENABLE_DOT1Q_HEADER(0),
-        .HEADER_CHECKSUM_PIPELINED(1),
-        .ROCE_ICRC_INSERTER(1)
+        .DATA_WIDTH                (STACK_DATA_WIDTH),
+        .ARP_CACHE_ADDR_WIDTH      (9),
+        .ARP_REQUEST_RETRY_INTERVAL($rtoi(10**9/STACK_CLK_PERIOD)*2),
+        .ARP_REQUEST_TIMEOUT       ($rtoi(10**9/STACK_CLK_PERIOD)*30),
+        .ENABLE_DOT1Q_HEADER       (0),
+        .HEADER_CHECKSUM_PIPELINED (HEADER_CHECKSUM_PIPELINED),
+        .IP_PAYLOAD_FIFO_CHECKSUM  (IP_PAYLOAD_FIFO_CHECKSUM),
+        .ARP_ICMP_DATA_WIDTH       (32),
+        .ROCE_ICRC_INSERTER        (1),
+        .ENABLE_TIMING_OPT_REGS    (ENABLE_TIMING_OPT_REGS)
     ) udp_complete_opt_instance (
         .clk(clk_stack),
         .rst(rst_stack),
@@ -720,15 +678,21 @@ module network_wrapper_roce_generic #(
         .QP_CH_DATA_WIDTH                (QP_CH_DATA_WIDTH),
         .QP_CH_KEEP_ENABLE               (QP_CH_KEEP_ENABLE),
         .QP_CH_KEEP_WIDTH                (QP_CH_KEEP_WIDTH),
+        .ROCE_ENG_DATA_WIDTH             (ROCE_ENG_DATA_WIDTH),
+        .ROCE_ENG_KEEP_ENABLE            (ROCE_ENG_KEEP_ENABLE),
+        .ROCE_ENG_KEEP_WIDTH             (ROCE_ENG_KEEP_WIDTH),
         .OUT_DATA_WIDTH                  (STACK_DATA_WIDTH),
         .OUT_KEEP_ENABLE                 (1),
         .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),
-        .CLOCK_PERIOD                    (R0CE_ENG_CLK_PERIOD),
+        .CLOCK_PERIOD                    (ROCE_ENG_CLK_PERIOD),
+        .ASYNC_OUTPUT                    (ROCE_ENG_CLK_PERIOD != STACK_CLK_PERIOD),
         .DEBUG                           (DEBUG),
         .REFRESH_CACHE_TICKS             (32767),
+        .TARGET_SPEED                    (TARGET_SPEED), // in Gbps
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
         .N_ROCE_TX_ENGINES               (N_ROCE_TX_ENGINES),
-        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS) // must be a power of two
+        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS), // must be a power of two
+        .ENABLE_TIMING_OPT_REGS          (ENABLE_TIMING_OPT_REGS)
     ) RoCE_stack_wrapper_instance (
         .clk_stack(clk_stack),
         .rst_stack(rst_stack),
@@ -736,24 +700,23 @@ module network_wrapper_roce_generic #(
         .clk_roce_eng(clk_roce_eng),
         .rst_roce_eng(rst_roce_eng),
 
-        .flow_ctrl_pause          (flow_ctrl_pause), // roce ang domain
+        .flow_ctrl_pause          (flow_ctrl_pause),
 
-        // TODO forward these signals outside
         // clk roce eng  domain
-        //.s_wr_req_valid           ('{default:0}),          
-        //.s_wr_req_ready           (),          
-        //.s_wr_req_tx_type         ('{default:0}),        
-        //.s_wr_req_is_immediate    ('{default:0}),   
-        //.s_wr_req_immediate_data  ('{default:0}), 
-        //.s_wr_req_loc_qp          ('{default:0}),         
-        //.s_wr_req_addr_offset     ('{default:0}),    
-        //.s_wr_req_dma_length      ('{default:0}), 
-        //.s_axis_tdata             ('{default:0}),
-        //.s_axis_tkeep             ('{default:0}),
-        //.s_axis_tvalid            ('{default:0}),
-        //.s_axis_tready            (),
-        //.s_axis_tlast             ('{default:0}),
-        //.s_axis_tuser             ('{default:0}),  
+        .s_wr_req_valid           (s_wr_req_valid),
+        .s_wr_req_ready           (s_wr_req_ready),
+        .s_wr_req_tx_type         (s_wr_req_tx_type),
+        .s_wr_req_is_immediate    (s_wr_req_is_immediate),
+        .s_wr_req_immediate_data  (s_wr_req_immediate_data),
+        .s_wr_req_loc_qp          (s_wr_req_loc_qp),
+        .s_wr_req_addr_offset     (s_wr_req_addr_offset),
+        .s_wr_req_dma_length      (s_wr_req_dma_length),
+        .s_axis_tdata             (s_axis_tdata),
+        .s_axis_tkeep             (s_axis_tkeep),
+        .s_axis_tvalid            (s_axis_tvalid),
+        .s_axis_tready            (s_axis_tready),
+        .s_axis_tlast             (s_axis_tlast),
+        .s_axis_tuser             (s_axis_tuser),
 
         // clk stack domain
         .s_udp_hdr_valid          (s_rx_udp_hdr_valid),
@@ -805,9 +768,46 @@ module network_wrapper_roce_generic #(
         .m_udp_payload_axis_tlast (m_tx_udp_payload_axis_tlast),
         .m_udp_payload_axis_tuser (m_tx_udp_payload_axis_tuser),
 
+        // AXI master interface to RoCE buffers, 1 per RoCE engine
+        .m_axi_awid   (m_axi_awid),
+        .m_axi_awaddr (m_axi_awaddr),
+        .m_axi_awlen  (m_axi_awlen),
+        .m_axi_awsize (m_axi_awsize),
+        .m_axi_awburst(m_axi_awburst),
+        .m_axi_awlock (m_axi_awlock),
+        .m_axi_awcache(m_axi_awcache),
+        .m_axi_awprot (m_axi_awprot),
+        .m_axi_awvalid(m_axi_awvalid),
+        .m_axi_awready(m_axi_awready),
+        .m_axi_wdata  (m_axi_wdata),
+        .m_axi_wstrb  (m_axi_wstrb),
+        .m_axi_wlast  (m_axi_wlast),
+        .m_axi_wvalid (m_axi_wvalid),
+        .m_axi_wready (m_axi_wready),
+        .m_axi_bid    (m_axi_bid),
+        .m_axi_bresp  (m_axi_bresp),
+        .m_axi_bvalid (m_axi_bvalid),
+        .m_axi_bready (m_axi_bready),
+        .m_axi_arid   (m_axi_arid),
+        .m_axi_araddr (m_axi_araddr),
+        .m_axi_arlen  (m_axi_arlen),
+        .m_axi_arsize (m_axi_arsize),
+        .m_axi_arburst(m_axi_arburst),
+        .m_axi_arlock (m_axi_arlock),
+        .m_axi_arcache(m_axi_arcache),
+        .m_axi_arprot (m_axi_arprot),
+        .m_axi_arvalid(m_axi_arvalid),
+        .m_axi_arready(m_axi_arready),
+        .m_axi_rid    (m_axi_rid),
+        .m_axi_rdata  (m_axi_rdata),
+        .m_axi_rresp  (m_axi_rresp),
+        .m_axi_rlast  (m_axi_rlast),
+        .m_axi_rvalid (m_axi_rvalid),
+        .m_axi_rready (m_axi_rready),
+
         // QP spy output roce engine domain
-        .m_qp_context_spy         (m_qp_context_spy),
-        .m_qp_local_qpn_spy       (m_qp_local_qpn_spy),
+        .m_qp_spy_context         (m_qp_spy_context),
+        .m_qp_spy_loc_qpn         (m_qp_spy_loc_qpn),
         .s_qp_spy_context_valid   (s_qp_spy_context_valid),
         .s_qp_spy_state           (s_qp_spy_state),
         .s_qp_spy_rem_qpn         (s_qp_spy_rem_qpn),
@@ -822,20 +822,54 @@ module network_wrapper_roce_generic #(
 
         .pmtu           (ctrl_pmtu_reg),
         .loc_ip_addr    (ctrl_local_ip_reg),
-        .timeout_period (64'd15000), //3.3 ns * 15000 = 50 us
+        .timeout_period (ctrl_retry_timeout_reg),
+        .use_data_gen   (ctrl_use_data_gen_reg),
         .retry_count    (3'd7),
         .rnr_retry_count(3'd7),
+        // dcqcn
+        .dcqcn_en            (ctrl_dcqcn_en),
+        .dcqcn_par_g         (ctrl_dcqcn_par_g),
+        .dcqcn_alpha_min     (ctrl_dcqcn_alpha_min),
+        .dcqcn_alpha_upd_time(ctrl_dcqcn_alpha_upd_time),
+        .dcqcn_rate_decr_min (ctrl_dcqcn_rate_decr_min),
+        .dcqcn_rate_min      (ctrl_dcqcn_rate_min),
+        .dcqcn_upd_time      (ctrl_dcqcn_upd_time),
+        .dcqcn_rate_ai_time  (ctrl_dcqcn_rate_ai_time),
+        .dcqcn_rate_hai_time (ctrl_dcqcn_rate_hai_time),
+        .dcqcn_rate_incr_ai  (ctrl_dcqcn_rate_incr_ai),
+        .dcqcn_rate_incr_hai (ctrl_dcqcn_rate_incr_hai),
 
-        .cfg_latency_avg_po2      (cfg_latency_avg_po2),
-        .monitor_loc_qpn          (monitor_loc_qpn),
-        .transfer_time_avg        (transfer_time_avg),
-        .cfg_throughput_avg_po2   (cfg_throughput_avg_po2),
-        .transfer_time_moving_avg (transfer_time_moving_avg),
-        .latency_avg              (latency_avg),
-        .latency_moving_avg       (latency_moving_avg),
-        .psn_diff                 (psn_diff),
-        .n_retransmit_triggers    (n_retransmit_triggers),
-        .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers)
+        .cfg_latency_avg_po2      (perf_cfg_latency_avg_po2),
+        .monitor_loc_qpn          (perf_monitor_loc_qpn),
+        .transfer_time_avg        (perf_transfer_time_avg),
+        .cfg_throughput_avg_po2   (perf_cfg_throughput_avg_po2),
+        .transfer_time_moving_avg (perf_transfer_time_moving_avg),
+        .latency_max              (perf_latency_max),
+        .latency_avg              (perf_latency_avg),
+        .latency_moving_avg       (perf_latency_moving_avg),
+        .psn_diff                 (perf_psn_diff),
+        .psn_diff_max             (perf_psn_diff_max),
+        .n_retransmit_triggers    (perf_n_retransmit_triggers),
+        .n_rnr_retransmit_triggers(perf_n_rnr_retransmit_triggers),
+        .n_total_psn_seq_errors   (perf_n_total_psn_seq_errors),
+        .n_total_timeout_errors   (perf_n_total_timeout_errors),
+
+        .lat_histo_reset_counts(perf_lat_histo_reset_counts),
+        .lat_histo_trgg_readout(perf_lat_histo_trgg_readout),
+        .lat_histo_index       (perf_lat_histo_index),
+        .lat_histo_valid       (perf_lat_histo_valid),
+        .lat_histo_counts      (perf_lat_histo_counts),
+        .lat_histo_rst_done    (perf_lat_histo_rst_done),
+        .lat_histo_ovflw       (perf_lat_histo_ovflw),
+
+        .adj_ack_histo_reset_counts(perf_adj_ack_histo_reset_counts),
+        .adj_ack_histo_trgg_readout(perf_adj_ack_histo_trgg_readout),
+        .adj_ack_histo_index       (perf_adj_ack_histo_index),
+        .adj_ack_histo_valid       (perf_adj_ack_histo_valid),
+        .adj_ack_histo_counts      (perf_adj_ack_histo_counts),
+        .adj_ack_histo_rst_done    (perf_adj_ack_histo_rst_done),
+        .adj_ack_histo_ovflw       (perf_adj_ack_histo_ovflw)
+
 
     );
 

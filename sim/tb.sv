@@ -2,6 +2,7 @@
 `timescale 1ns / 1ps
 
 module tb #(
+    parameter SPEED_PRESET = 400,
     parameter max_recvpkt = 100000,
     parameter nPreamble = 8,
     parameter nIFG = 12
@@ -16,19 +17,25 @@ module tb #(
     // Simulation MAC speed
     // 64b Simulation MAC datapath width
     // either 25G or 10G (390.625MHz or 156.25MHz)
-    parameter SIM_MAC_SPEED = 10; // in Gbps
+    parameter SIM_MAC_SPEED = 25; // in Gbps
     parameter SIM_MAC_DATAPATH_WIDTH = 64; //dont change! 
     parameter SIM_MAC_FREQ = SIM_MAC_SPEED*1000.0/SIM_MAC_DATAPATH_WIDTH; //in MHz 
 
     // MAC to simulate
-    parameter MAC_SPEED = 400;
-    parameter MAC_DATAPATH_WIDTH = 1024;
+    parameter MAC_SPEED = 100;
+    parameter MAC_DATAPATH_WIDTH = 512;
     parameter MAC_FREQ = MAC_SPEED*1000.0/MAC_DATAPATH_WIDTH; //in MHz 
 
     // stack to simulate, with effective throughput, 
-    parameter STACK_DATAPATH_WIDTH = 1024;
-    parameter STACK_FREQ  = 400.000;
+    parameter STACK_DATAPATH_WIDTH = 512;
+    parameter STACK_FREQ  = 322;
     parameter STACK_SPEED = STACK_DATAPATH_WIDTH*STACK_FREQ/1000.0;
+
+    // roce engine to simulate, with effective throughput, 
+    parameter ROCE_ENG_DATAPATH_WIDTH = 512;
+    parameter ROCE_ENG_FREQ  = 322;
+    parameter N_TX_ROCE_ENGINES = 1;
+    parameter N_QUEUE_PAIRS = 8;
 
     // now we need do reduce/increase the mac frequency to match the speed of the simulation MAC
     // eg for a 100G MAC it has to go 10 times slower than the sim MAC
@@ -36,13 +43,15 @@ module tb #(
 
     parameter MAC_FREQ_REAL   = MAC_FREQ/SCALE_UP_FACT;
     parameter STACK_FREQ_REAL = STACK_FREQ/SCALE_UP_FACT;
+    parameter ROCE_ENG_FREQ_REAL = ROCE_ENG_FREQ/SCALE_UP_FACT;
 
     // in ns
-    parameter SIM_MAC_PERIOD      = 1000/SIM_MAC_FREQ;
+    parameter SIM_MAC_PERIOD  = 1000/SIM_MAC_FREQ;
     parameter MAC_PERIOD      = 1000/MAC_FREQ_REAL;
     parameter STACK_PERIOD    = 1000/STACK_FREQ_REAL;
+    parameter ROCE_ENG_PERIOD = 1000/ROCE_ENG_FREQ_REAL;
 
-    logic clk_mac_sim, clk_mac, clk_stack;
+    logic clk_mac_sim, clk_mac, clk_roce_eng, clk_stack;
     logic extRst;
     logic clk25;
     logic rst25;
@@ -59,6 +68,7 @@ module tb #(
     initial begin
         clk_mac_sim <= 0;
         clk_mac <= 0;
+        clk_roce_eng <= 0;
         clk_stack  <= 0;
         c0_sys_clk_p <= 0;
         c0_sys_clk_n <= 0;
@@ -87,6 +97,12 @@ module tb #(
 
     always
     begin
+        #(ROCE_ENG_PERIOD/2) clk_roce_eng <= 1;
+        #(ROCE_ENG_PERIOD/2) clk_roce_eng <= 0 ;
+    end
+
+    always
+    begin
         #2;
         c0_sys_clk_p <= 1;
         c0_sys_clk_n <= 0;
@@ -109,12 +125,21 @@ module tb #(
 
 
     top #(
+        .MAC_PERIOD(MAC_PERIOD),
+        .STACK_PERIOD(STACK_PERIOD),
+        .ROCE_ENG_PERIOD(ROCE_ENG_PERIOD),
         .MAC_DATA_WIDTH(MAC_DATAPATH_WIDTH),
-        .STACK_DATA_WIDTH(STACK_DATAPATH_WIDTH)
+        .STACK_DATA_WIDTH(STACK_DATAPATH_WIDTH),
+        .ROCE_ENG_DATA_WIDTH(ROCE_ENG_DATAPATH_WIDTH),
+        .QP_CH_DATA_WIDTH(ROCE_ENG_DATAPATH_WIDTH),
+        .N_ROCE_TX_ENGINES(N_TX_ROCE_ENGINES),
+        .N_QUEUE_PAIRS(N_QUEUE_PAIRS),
+        .MAC_AXI_SEG_INPUT(0)
     ) top0 (
         .clk_mac_sim(clk_mac_sim),
         .clk_mac(clk_mac),
         .clk_stack(clk_stack),
+        .clk_roce_eng(clk_roce_eng),
         .rst(extRst),
 
         .clk_mem(clk_mac),

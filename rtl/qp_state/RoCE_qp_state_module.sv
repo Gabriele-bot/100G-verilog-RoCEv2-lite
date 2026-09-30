@@ -56,20 +56,20 @@ module RoCE_qp_state_module #(
   output wire [63:0] m_qp_context_req_rem_addr,
 
   // SPY QP state
-  input wire         qp_context_spy,
-  input wire [23:0]  qp_local_qpn_spy,
+  input wire         m_qp_spy_context,
+  input wire [23:0]  m_qp_spy_loc_qpn,
 
-  output wire        qp_spy_context_valid,
-  output wire [2 :0] qp_spy_state,
-  output wire [31:0] qp_spy_r_key,
-  output wire [23:0] qp_spy_rem_qpn,
-  output wire [23:0] qp_spy_loc_qpn,
-  output wire [23:0] qp_spy_rem_psn,
-  output wire [23:0] qp_spy_rem_acked_psn,
-  output wire [23:0] qp_spy_loc_psn,
-  output wire [31:0] qp_spy_rem_ip_addr,
-  output wire [63:0] qp_spy_rem_addr,
-  output wire [7 :0] qp_spy_syndrome,
+  output wire        s_qp_spy_context_valid,
+  output wire [2 :0] s_qp_spy_state,
+  output wire [31:0] s_qp_spy_r_key,
+  output wire [23:0] s_qp_spy_rem_qpn,
+  output wire [23:0] s_qp_spy_loc_qpn,
+  output wire [23:0] s_qp_spy_rem_psn,
+  output wire [23:0] s_qp_spy_rem_acked_psn,
+  output wire [23:0] s_qp_spy_loc_psn,
+  output wire [31:0] s_qp_spy_rem_ip_addr,
+  output wire [63:0] s_qp_spy_rem_addr,
+  output wire [7 :0] s_qp_spy_syndrome,
 
   // update qp state input
   input  wire        s_qp_update_context_valid,
@@ -77,19 +77,13 @@ module RoCE_qp_state_module #(
   input  wire [23:0] s_qp_update_loc_qpn,
   input  wire [23:0] s_qp_update_rem_psn,
 
-  // RX BTH
-  input  wire        s_roce_rx_bth_valid,
-  //output wire        s_roce_rx_bth_ready,
-  input  wire [ 7:0] s_roce_rx_bth_op_code,
-  input  wire [15:0] s_roce_rx_bth_p_key,
-  input  wire [23:0] s_roce_rx_bth_psn,
-  input  wire [23:0] s_roce_rx_bth_dest_qp,
-  input  wire        s_roce_rx_bth_ack_req,
-  // RX AETH                  
+  // RX AETH
   input  wire        s_roce_rx_aeth_valid,
-  //output wire        s_roce_rx_aeth_ready,
+  //output wire        s_roce_rx_bth_ready,
+  input  wire [23:0] s_roce_rx_aeth_psn,
+  input  wire [23:0] s_roce_rx_aeth_dest_qp,
+  // RX AETH                  
   input  wire [ 7:0] s_roce_rx_aeth_syndrome,
-  input  wire [23:0] s_roce_rx_aeth_msn,
 
 
   output wire [23:0] last_acked_psn,
@@ -169,7 +163,7 @@ module RoCE_qp_state_module #(
   STATE_UPDATE_CONTEXT = 3'd6,
   STATE_READ_CONTEXT   = 3'd7;
 
-  localparam N_QUEUE_PAIRS_WIDTH = $clog2(N_QUEUE_PAIRS);
+  localparam N_QUEUE_PAIRS_WIDTH = (N_QUEUE_PAIRS > 1) ? $clog2(N_QUEUE_PAIRS) : 1;
   
 
   reg [QP_CONTEXT_LENGTH*8-1 :0] qp_contex [N_QUEUE_PAIRS-1:0];
@@ -344,13 +338,13 @@ module RoCE_qp_state_module #(
           end
         end
 
-        if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
+        if (s_roce_rx_aeth_valid & s_roce_rx_aeth_valid) begin
           // recieved an ACK packet
-          if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+          if (s_roce_rx_aeth_dest_qp[23:8] == 16'd1 && s_roce_rx_aeth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
             // QP goes to error state if a NAK is received, but not a PSN sequence error (the latter will trigger retransmission)
-            if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b11 && s_roce_rx_aeth_syndrome[4:0] != 5'b00000) begin
+            if (s_roce_rx_aeth_syndrome[6:5] == 2'b11 && s_roce_rx_aeth_syndrome[4:0] != 5'b00000) begin
               qp_aeth_syndrome_next = s_roce_rx_aeth_syndrome;
-              qp_close_ptr_next = s_roce_rx_bth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0];
+              qp_close_ptr_next = s_roce_rx_aeth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0];
               state_next = STATE_ERROR_QP;
             end
           end
@@ -391,19 +385,19 @@ module RoCE_qp_state_module #(
   always @(posedge clk) begin
 
     // write first, else read
-    if (s_roce_rx_bth_valid & s_roce_rx_aeth_valid) begin
+    if (s_roce_rx_aeth_valid & s_roce_rx_aeth_valid) begin
       // local qp must be between 256 and 256+N_QUEUE_PAIRS
-      if (s_roce_rx_bth_dest_qp[23:8] == 16'd1 && s_roce_rx_bth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
-        if (s_roce_rx_bth_op_code == RC_RDMA_ACK &&  s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin // ACK
-          qp_rem_acked_psn_mem[s_roce_rx_bth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0]] <= s_roce_rx_bth_psn;
+      if (s_roce_rx_aeth_dest_qp[23:8] == 16'd1 && s_roce_rx_aeth_dest_qp[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        if (s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin // ACK
+          qp_rem_acked_psn_mem[s_roce_rx_aeth_dest_qp[N_QUEUE_PAIRS_WIDTH-1:0]] <= s_roce_rx_aeth_psn;
         end
       end
       // if reset QP put it to 0  
     end else if (state_reg == STATE_OPEN_QP) begin
       qp_rem_acked_psn_mem[cm_qp_ptr_reg] <= 24'd0;
-    end else if (qp_context_spy) begin
-      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_spy_rem_acked_psn_reg <= qp_rem_acked_psn_mem[qp_local_qpn_spy[N_QUEUE_PAIRS_WIDTH-1:0]];
+    end else if (m_qp_spy_context) begin
+      if (m_qp_spy_loc_qpn[23:8] == 16'd1 && m_qp_spy_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_spy_rem_acked_psn_reg <= qp_rem_acked_psn_mem[m_qp_spy_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0]];
       end
     end
   end
@@ -422,11 +416,11 @@ module RoCE_qp_state_module #(
         qp_req_context_valid_pipes[0] <= 1'b0;
         error_invalid_qp_req          <= 1'b1;
       end
-    end else if (qp_context_spy) begin
+    end else if (m_qp_spy_context) begin
       qp_req_context_valid_pipes[0] <= 1'b0;
       error_invalid_qp_req          <= 1'b0;
-      if (qp_local_qpn_spy[23:8] == 16'd1 && qp_local_qpn_spy[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
-        qp_spy_context <= qp_contex[qp_local_qpn_spy[N_QUEUE_PAIRS_WIDTH-1:0]];
+      if (m_qp_spy_loc_qpn[23:8] == 16'd1 && m_qp_spy_loc_qpn[7:N_QUEUE_PAIRS_WIDTH] == 0) begin
+        qp_spy_context <= qp_contex[m_qp_spy_loc_qpn[N_QUEUE_PAIRS_WIDTH-1:0]];
         qp_spy_context_valid_pipes[0] <= 1'b1;
         error_invalid_qp_spy          <= 1'b0;
       end else begin
@@ -631,12 +625,12 @@ module RoCE_qp_state_module #(
       last_acked_psn_reg  <= cm_qp_rem_psn;
       last_nacked_psn_reg <= cm_qp_rem_psn;
     end else begin
-      if (s_roce_rx_bth_valid && s_roce_rx_bth_dest_qp == loc_qpn_reg) begin
-        if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin
-          last_acked_psn_reg <= s_roce_rx_bth_psn;
+      if (s_roce_rx_aeth_valid && s_roce_rx_aeth_dest_qp == loc_qpn_reg) begin
+        if (s_roce_rx_aeth_syndrome[6:5] == 2'b00) begin
+          last_acked_psn_reg <= s_roce_rx_aeth_psn;
           stop_transfer_reg  <= 1'b0;
-        end else if (s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
-          last_nacked_psn_reg <= s_roce_rx_bth_psn;
+        end else if (s_roce_rx_aeth_syndrome[6:5] != 2'b00) begin
+          last_nacked_psn_reg <= s_roce_rx_aeth_psn;
           stop_transfer_reg   <= 1'b1;
         end
       end else begin
@@ -666,17 +660,17 @@ module RoCE_qp_state_module #(
   assign m_qp_context_req_rem_addr      = qp_req_context_pipe[VADDR_OFFSET      +: 64];
   assign m_qp_context_req_r_key         = qp_req_context_pipe[RKEY_OFFSET       +: 32];
 
-  assign qp_spy_context_valid = qp_spy_context_valid_pipes[1];
-  assign qp_spy_state         = qp_spy_context_pipe[QP_STATE_OFFSET   +: 3 ];
-  assign qp_spy_rem_ip_addr   = qp_spy_context_pipe[REM_IPADDR_OFFSET +: 32];
-  assign qp_spy_rem_qpn       = qp_spy_context_pipe[REM_QPN_OFFSET    +: 24];
-  assign qp_spy_loc_qpn       = qp_spy_context_pipe[LOC_QPN_OFFSET    +: 24];
-  assign qp_spy_rem_psn       = qp_spy_context_pipe[REM_PSN_OFFSET    +: 24];
-  assign qp_spy_rem_acked_psn = qp_spy_rem_acked_psn_reg;
-  assign qp_spy_loc_psn       = qp_spy_context_pipe[LOC_PSN_OFFSET    +: 24];
-  assign qp_spy_rem_addr      = qp_spy_context_pipe[VADDR_OFFSET      +: 64];
-  assign qp_spy_r_key         = qp_spy_context_pipe[RKEY_OFFSET       +: 32];
-  assign qp_spy_syndrome      = qp_spy_context_pipe[SYNDROME_OFFSET   +: 8];
+  assign s_qp_spy_context_valid = qp_spy_context_valid_pipes[1];
+  assign s_qp_spy_state         = qp_spy_context_pipe[QP_STATE_OFFSET   +: 3 ];
+  assign s_qp_spy_rem_ip_addr   = qp_spy_context_pipe[REM_IPADDR_OFFSET +: 32];
+  assign s_qp_spy_rem_qpn       = qp_spy_context_pipe[REM_QPN_OFFSET    +: 24];
+  assign s_qp_spy_loc_qpn       = qp_spy_context_pipe[LOC_QPN_OFFSET    +: 24];
+  assign s_qp_spy_rem_psn       = qp_spy_context_pipe[REM_PSN_OFFSET    +: 24];
+  assign s_qp_spy_rem_acked_psn = qp_spy_rem_acked_psn_reg;
+  assign s_qp_spy_loc_psn       = qp_spy_context_pipe[LOC_PSN_OFFSET    +: 24];
+  assign s_qp_spy_rem_addr      = qp_spy_context_pipe[VADDR_OFFSET      +: 64];
+  assign s_qp_spy_r_key         = qp_spy_context_pipe[RKEY_OFFSET       +: 32];
+  assign s_qp_spy_syndrome      = qp_spy_context_pipe[SYNDROME_OFFSET   +: 8];
 
   //assign s_roce_rx_bth_ready  = 1'b1;
   //assign s_roce_rx_aeth_ready = 1'b1;

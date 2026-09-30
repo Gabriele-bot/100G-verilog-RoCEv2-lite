@@ -452,7 +452,22 @@ module udp_RoCE_connection_manager #(
 
                                         state_next = STATE_MODIFY_QP;
                                     end else begin
+                                        // Swap loc with rem
+                                        qp_info_loc_r_key_next     = 32'd0;
+                                        qp_info_loc_qpn_next       = 24'hCAFE_DEAD_BEEF;
+                                        qp_info_loc_psn_next       = 24'h0F0F_0E0E_0D0D;
+                                        qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
+                                        qp_info_loc_base_addr_next = 64'd0;
+
                                         // Failed to open qp
+                                        qp_info_rem_r_key_next      = m_qp_info_loc_r_key;
+                                        qp_info_rem_qpn_next        = m_qp_info_loc_qpn;
+                                        qp_info_rem_psn_next        = m_qp_info_loc_psn;
+                                        qp_info_rem_ip_addr_next    = m_qp_info_loc_ip_addr;
+                                        qp_info_rem_base_addr_next  = m_qp_info_loc_base_addr;
+                                        qp_info_udp_dest_port_next  = m_qp_info_listening_port;
+
+                                        udp_dest_port_next    = m_qp_info_listening_port;
                                         qp_info_ack_type_next = ACK_NO_QP;
                                         state_next = STATE_SEND_ERROR;
                                     end
@@ -529,6 +544,23 @@ module udp_RoCE_connection_manager #(
                                         state_next = STATE_MODIFY_QP;
                                     end else begin
                                         // Try to close a QP that is not in the suitable range
+                                        // Swap loc with rem
+                                        qp_info_loc_r_key_next     = 32'd0;
+                                        qp_info_loc_qpn_next       = 24'hCAFE_DEAD_BEEF;
+                                        qp_info_loc_psn_next       = 24'h0F0F_0E0E_0D0D;
+                                        qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
+                                        qp_info_loc_base_addr_next = 64'd0;
+
+                                        // Failed to open qp
+                                        qp_info_rem_r_key_next      = m_qp_info_loc_r_key;
+                                        qp_info_rem_qpn_next        = m_qp_info_loc_qpn;
+                                        qp_info_rem_psn_next        = m_qp_info_loc_psn;
+                                        qp_info_rem_ip_addr_next    = m_qp_info_loc_ip_addr;
+                                        qp_info_rem_base_addr_next  = m_qp_info_loc_base_addr;
+                                        qp_info_udp_dest_port_next  = m_qp_info_listening_port;
+
+                                        udp_dest_port_next    = m_qp_info_listening_port;
+
                                         qp_info_ack_type_next = ACK_NAK;
                                         state_next = STATE_SEND_ERROR;
                                     end
@@ -567,6 +599,7 @@ module udp_RoCE_connection_manager #(
                                 // Failed to open/modify, QP in the wrong state
                                 qp_info_valid_next     = 1'b0;
                                 qp_info_ack_valid_next = 1'b0;
+                                
                                 qp_info_ack_type_next = ACK_ERROR;
                                 state_next = STATE_SEND_ERROR;
                             end
@@ -769,7 +802,7 @@ module udp_RoCE_connection_manager #(
                         if (cm_timout_counter > 0) begin
                             if (m_qp_info_valid && m_qp_info_loc_ip_addr == qp_info_rem_ip_addr_reg && m_qp_info_rem_ip_addr == cfg_loc_ip_addr) begin // got a reply from the server
                                 if (m_qp_info_ack_valid && (m_qp_info_ack_type == ACK_ACK || m_qp_info_ack_type == ACK_NO_QP)) begin // server ack'ed the request or close qp request, but no qp is present on the receiver (server) side
-                                    
+
                                     cm_qp_valid_next = 1'b1;
                                     // store remote qp parameters into table (and change local qp according to the request made)
                                     // swap loc with rem
@@ -939,7 +972,7 @@ module udp_RoCE_connection_manager #(
             qp_info_rem_ip_addr_reg   <= 0;
             qp_info_rem_base_addr_reg <= 0;
 
-            udp_dest_port_reg         <= CM_DEST_UDP_PORT; 
+            udp_dest_port_reg         <= CM_DEST_UDP_PORT;
 
             cm_qp_valid_reg          <= 1'b0;
             cm_qp_req_type_reg       <= 0;
@@ -978,7 +1011,7 @@ module udp_RoCE_connection_manager #(
 
             qp_info_udp_dest_port_reg <= qp_info_udp_dest_port_next;
 
-            udp_dest_port_reg         <= MODULE_DIRECTION == "Master" ? CM_DEST_UDP_PORT : udp_dest_port_next; 
+            udp_dest_port_reg         <= MODULE_DIRECTION == "Master" ? CM_DEST_UDP_PORT : udp_dest_port_next;
 
             cm_qp_valid_reg <= cm_qp_valid_next;
 

@@ -325,7 +325,7 @@ module axis_RoCE_icrc_insert #
     wire        crc_out_fifo_re;
 
     axis_fifo #(
-        .DEPTH(8), // store up to 8 values
+        .DEPTH(CRC_COMP_LATENCY),
         .DATA_WIDTH(32),
         .KEEP_ENABLE(0),
         .ID_ENABLE(0),
@@ -437,9 +437,12 @@ module axis_RoCE_icrc_insert #
     always @* begin
         if (icrc_s_tkeep == {DATA_WIDTH/32{4'hF}}) begin // Need a new cycle to accomodate the ICRC
             icrc_m_tdata_1[31:0] =  ~crc_out_fifo;
-            icrc_m_tdata_1[DATA_WIDTH-1:32] = {DATA_WIDTH-32{1'b0}};
             icrc_m_tkeep_1[3:0] = 4'hF;
-            icrc_m_tkeep_1[DATA_WIDTH/8-1:4] = {DATA_WIDTH/8-4{1'b0}};
+            if (DATA_WIDTH> 32) begin
+                icrc_m_tdata_1[DATA_WIDTH-1:32] = {DATA_WIDTH-32{1'b0}};
+                icrc_m_tkeep_1[DATA_WIDTH/8-1:4] = {DATA_WIDTH/8-4{1'b0}};
+            end
+            
         end else begin
             icrc_m_tdata_1 = {DATA_WIDTH{1'b0}};
             icrc_m_tkeep_1 = {DATA_WIDTH/8{1'b0}};

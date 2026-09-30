@@ -29,7 +29,7 @@ module qpn_fifo_init #
   Local QP number starts from 2**8 and goes up to 2**8 + MAX_QUEUE_PAIRS
   */
 
-    localparam MAX_QUEUE_PAIRS_FIFO_WIDTH = $clog2(MAX_QUEUE_PAIRS_FIFO);
+    localparam MAX_QUEUE_PAIRS_FIFO_WIDTH = (MAX_QUEUE_PAIRS_FIFO > 1) ? $clog2(MAX_QUEUE_PAIRS_FIFO) : 1;
 
     localparam [0:0]
     STATE_IDLE = 1'd0,
@@ -93,7 +93,7 @@ module qpn_fifo_init #
             for (i = 0; i < MAX_QUEUE_PAIRS_FIFO; i = i + 1) begin
                 qpn_mem[i] <= BASE_QPN_FIFO + i;
             end
-            fifo_wr_ptr_reg <= {1'b1, {MAX_QUEUE_PAIRS_FIFO_WIDTH{1'b0}}}; // initialize fifo full
+            fifo_wr_ptr_reg <= (MAX_QUEUE_PAIRS_FIFO_WIDTH+1)'(MAX_QUEUE_PAIRS_FIFO); // initialize fifo full
         end else begin
             fifo_wr_ptr_reg <= fifo_wr_ptr_next;
         end

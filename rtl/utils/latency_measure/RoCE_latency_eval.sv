@@ -102,10 +102,10 @@ module RoCE_latency_eval #(
       s_roce_rx_bth_psn_pipe       <= '{default:0};
       s_roce_rx_bth_dest_qp_pipe   <= '{default:0};
       s_roce_rx_aeth_syndrome_pipe <= '{default:0};
-      s_roce_tx_bth_valid_pipe     <= 0;   
-      s_roce_tx_bth_op_code_pipe   <= '{default:0}; 
-      s_roce_tx_bth_psn_pipe       <= '{default:0};     
-      s_roce_tx_bth_src_qp_pipe    <= '{default:0};  
+      s_roce_tx_bth_valid_pipe     <= 0;
+      s_roce_tx_bth_op_code_pipe   <= '{default:0};
+      s_roce_tx_bth_psn_pipe       <= '{default:0};
+      s_roce_tx_bth_src_qp_pipe    <= '{default:0};
       s_axis_tx_payload_valid_pipe <= 0;
       s_axis_tx_payload_last_pipe  <= 0;
     end else begin
@@ -118,10 +118,10 @@ module RoCE_latency_eval #(
       s_roce_rx_bth_psn_pipe[N_PIPES-1:0]       <= {s_roce_rx_bth_psn_pipe[N_PIPES-2:0],       s_roce_rx_bth_psn};
       s_roce_rx_bth_dest_qp_pipe[N_PIPES-1:0]   <= {s_roce_rx_bth_dest_qp_pipe[N_PIPES-2:0],   s_roce_rx_bth_dest_qp};
       s_roce_rx_aeth_syndrome_pipe[N_PIPES-1:0] <= {s_roce_rx_aeth_syndrome_pipe[N_PIPES-2:0], s_roce_rx_aeth_syndrome};
-      s_roce_tx_bth_valid_pipe[N_PIPES-1:0]     <= {s_roce_tx_bth_valid_pipe[N_PIPES-2:0],     s_roce_tx_bth_valid};   
-      s_roce_tx_bth_op_code_pipe[N_PIPES-1:0]   <= {s_roce_tx_bth_op_code_pipe[N_PIPES-2:0],   s_roce_tx_bth_op_code}; 
-      s_roce_tx_bth_psn_pipe[N_PIPES-1:0]       <= {s_roce_tx_bth_psn_pipe[N_PIPES-2:0],       s_roce_tx_bth_psn};     
-      s_roce_tx_bth_src_qp_pipe[N_PIPES-1:0]    <= {s_roce_tx_bth_src_qp_pipe[N_PIPES-2:0],    s_roce_tx_bth_src_qp};  
+      s_roce_tx_bth_valid_pipe[N_PIPES-1:0]     <= {s_roce_tx_bth_valid_pipe[N_PIPES-2:0],     s_roce_tx_bth_valid};
+      s_roce_tx_bth_op_code_pipe[N_PIPES-1:0]   <= {s_roce_tx_bth_op_code_pipe[N_PIPES-2:0],   s_roce_tx_bth_op_code};
+      s_roce_tx_bth_psn_pipe[N_PIPES-1:0]       <= {s_roce_tx_bth_psn_pipe[N_PIPES-2:0],       s_roce_tx_bth_psn};
+      s_roce_tx_bth_src_qp_pipe[N_PIPES-1:0]    <= {s_roce_tx_bth_src_qp_pipe[N_PIPES-2:0],    s_roce_tx_bth_src_qp};
       s_axis_tx_payload_valid_pipe[N_PIPES-1:0] <= {s_axis_tx_payload_valid_pipe[N_PIPES-2:0], s_axis_tx_payload_valid};
       s_axis_tx_payload_last_pipe[N_PIPES-1:0]  <= {s_axis_tx_payload_last_pipe[N_PIPES-2:0],  s_axis_tx_payload_last};
     end
@@ -225,23 +225,15 @@ module RoCE_latency_eval #(
 
   // moving averages
 
-  reg [31:0] srl_trpt_ctr [7:0];
-  reg [31:0] srl_lat_ctr [7:0];
+  reg latency_avg_valid_del;
+  reg throughput_avg_valid_del;
 
-  reg [34:0] srl_lat_ctr_moving_avg_reg, srl_lat_ctr_moving_avg_next;
-  reg [34:0] srl_trpt_ctr_moving_avg_reg, srl_trpt_ctr_moving_avg_next;
+  reg [31:0] srl_trpt_ctr [8:0];
+  reg [31:0] srl_lat_ctr  [8:0];
 
-  always @(*) begin
+  reg [34:0] srl_lat_ctr_moving_avg_reg;
+  reg [34:0] srl_trpt_ctr_moving_avg_reg;
 
-    srl_lat_ctr_moving_avg_next = 35'd0;
-    srl_trpt_ctr_moving_avg_next = 35'd0;
-
-    for (i=0; i<8; i=i+1) begin
-      srl_lat_ctr_moving_avg_next = srl_lat_ctr_moving_avg_next + srl_lat_ctr[i];
-      srl_trpt_ctr_moving_avg_next = srl_trpt_ctr_moving_avg_next + srl_trpt_ctr[i];
-    end
-
-  end
 
 
   always @(posedge clk) begin
@@ -250,18 +242,31 @@ module RoCE_latency_eval #(
         srl_lat_ctr[i]  <= 35'd0;
         srl_trpt_ctr[i] <= 35'd0;
       end
+      latency_avg_valid_del    <= 1'b0;
+      throughput_avg_valid_del <= 1'b0;
+
+      srl_lat_ctr_moving_avg_reg  <= 'd0;
+      srl_trpt_ctr_moving_avg_reg <= 'd0;
 
     end else begin
-      srl_lat_ctr_moving_avg_reg <= srl_lat_ctr_moving_avg_next;
-      srl_trpt_ctr_moving_avg_reg <= srl_trpt_ctr_moving_avg_next;
       if (latency_avg_valid) begin
         srl_lat_ctr[0] <= latency_out_sum_reg;
-        srl_lat_ctr[7:1] <= srl_lat_ctr[6:0];
+        srl_lat_ctr[8:1] <= srl_lat_ctr[7:0];
       end
+      latency_avg_valid_del    <= latency_avg_valid;
+      if (latency_avg_valid_del) begin
+        srl_lat_ctr_moving_avg_reg <= srl_lat_ctr_moving_avg_reg + srl_lat_ctr[0] - srl_lat_ctr[8];
+      end
+
       if (throughput_avg_valid) begin
-        srl_trpt_ctr[0] <= throughput_out_sum_reg;
-        srl_trpt_ctr[7:1] <= srl_trpt_ctr[6:0];
+        srl_trpt_ctr[0]   <= throughput_out_sum_reg;
+        srl_trpt_ctr[8:1] <= srl_trpt_ctr[7:0];
       end
+      throughput_avg_valid_del <= throughput_avg_valid;
+      if (throughput_avg_valid_del) begin
+        srl_trpt_ctr_moving_avg_reg <= srl_trpt_ctr_moving_avg_reg + srl_trpt_ctr[0] - srl_trpt_ctr[8];
+      end
+
     end
   end
 

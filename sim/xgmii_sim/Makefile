@@ -114,6 +114,7 @@ RoCE-stack: crc-pkg
 
 simlog: dirs xpm
 	$(info Using simulator: $(SIMULATOR))
+	$(VLOG) -work work $(VLOG_SV_OPT) $(ROCE_DIR_SIM)/fake_mac.sv
 	$(VLOG) -work work $(VLOG_SV_OPT) $(ROCE_DIR_SIM)/fpga_core_10g_generic_with_roce_sim.sv
 	$(VDPI) $(TARGET_DPI).c
 	$(VLOG) -work work $(VLOG_SV_OPT) $(ROCE_DIR_SIM)/tb.sv
@@ -130,9 +131,9 @@ tap: tapdev
 	
 sim: 
 ifeq ($(SIMULATOR), VIVADO)
-	sudo env "PATH=$(PATH)" "LM_LICENSE_FILE=$(LICENCE_SERVER)" $(VSIM) $(VOPTARGS) work.$(TARGET_TB)#glbl.glbl -gui
+	$(VSIM) $(VOPTARGS) work.$(TARGET_TB)#glbl.glbl -gui
 else
-	sudo env "PATH=$(PATH)" "LM_LICENSE_FILE=$(LICENCE_SERVER)" $(VSIM) $(VOPTARGS) work.$(TARGET_TB) 
+	$(VSIM) $(VOPTARGS) work.$(TARGET_TB) 
 endif
 
 

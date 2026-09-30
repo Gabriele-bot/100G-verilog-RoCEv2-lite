@@ -2,9 +2,10 @@
 
 /*
 8 AXI segmented to 1 AXI Stream, minimum frame length is supposed to be 64 Bytes or 4 segments.axi_seg_2_axis
-This means that up to 2 frames can be sent in the same clock cycles  
+This means that up to 2 frames can be sent in the same clock cycles
  */
-module axi_seg_2_axis #(
+module axi_seg_2_axis_v2 #(
+    parameter SEGMENT_FIFO_DEPTH = 2048,
     parameter AXIS_FIFO_DEPTH    = 8192,
     parameter ASYNC_FIFO = 1'b1,
     // input axis register
@@ -47,7 +48,7 @@ module axi_seg_2_axis #(
 
     reg [2:0][128*8-1:0] axis_seg_tdata_frame_reg , axis_seg_tdata_frame_next ;
     reg [2:0]            axis_seg_tvalid_frame_reg, axis_seg_tvalid_frame_next;
-    //reg [2:0]            axis_seg_tready_frame_reg, axis_seg_tready_frame_next;
+    reg [2:0]            axis_seg_tready_frame_reg, axis_seg_tready_frame_next;
     reg [2:0][7:0]       ena_frame_reg            , ena_frame_next            ;
     reg [2:0][7:0]       sop_frame_reg            , sop_frame_next            ;
     reg [2:0][7:0]       eop_frame_reg            , eop_frame_next            ;
@@ -154,7 +155,6 @@ module axi_seg_2_axis #(
                 .m_axis_tdata (fifo_tdata[128*i+:128]),
                 .m_axis_tkeep (),
                 .m_axis_tvalid(fifo_tvalid[i]),
-                //.m_axis_tready(fifo_tready[i]),
                 .m_axis_tready(1'b1),
                 .m_axis_tlast (),
                 .m_axis_tid   (),
@@ -177,8 +177,6 @@ module axi_seg_2_axis #(
 
         axis_seg_tdata_frame_next   = {fifo_tdata, fifo_tdata, fifo_tdata};
 
-
-        //axis_seg_tdata_frame_next[0]  = {128*8{1'b0}};
         axis_seg_tvalid_frame_next[0] = 1'b0;
         ena_frame_next[0]             = 8'h0;
         sop_frame_next[0]             = 8'h0;
@@ -186,7 +184,6 @@ module axi_seg_2_axis #(
         err_frame_next[0]             = 8'h0;
         mty_frame_next[0]             = 32'h00000000;
 
-        //axis_seg_tdata_frame_next[1]  = {128*8{1'b0}};
         axis_seg_tvalid_frame_next[1] = 1'b0;
         ena_frame_next[1]             = 8'h0;
         sop_frame_next[1]             = 8'h0;
@@ -194,7 +191,6 @@ module axi_seg_2_axis #(
         err_frame_next[1]             = 8'h0;
         mty_frame_next[1]             = 32'h00000000;
 
-        //axis_seg_tdata_frame_next[2]  = {128*8{1'b0}};
         axis_seg_tvalid_frame_next[2] = 1'b0;
         ena_frame_next[2]             = 8'h0;
         sop_frame_next[2]             = 8'h0;
@@ -206,20 +202,14 @@ module axi_seg_2_axis #(
 
         case({active_frame_reg})
             3'b000: begin // no active frames
-                // no active frame
-                //active_frame_next[2] = 1'b0; // cannot have 3 frames active at time
-                active_frame_next = 3'b000;
-                if (fifo_ena[0] & fifo_sop[0] & fifo_tvalid[0]) begin // start of frame on the first segment (always true if no active frames)
-                    last_active_frame_next = next_active_frame_reg;
+                active_frame_next[2] = 1'b0; // cannot have 3 frames active at time, 64 Byte min length
+                if (fifo_ena[0] & fifo_sop[0] & fifo_tvalid[0]) begin // start of frame on the first segment
                     if (|(fifo_ena[7:3] & fifo_eop[7:3] & fifo_tvalid[7:3])) begin // end of frame already on the first clock cycle
-                        active_frame_next[next_active_frame_reg] = 1'b0; // start and finish, no need to have next frame active
-                        //last_active_frame_next = next_active_frame_reg;
-                        // frame 0 is completed already here
+                        active_frame_next[next_active_frame_reg] = 1'b0;
+                        last_active_frame_next = next_active_frame_reg;
 
                         casez(fifo_eop[7:3])
                             5'bZZZZ1: begin
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*4-1:0]      = fifo_tdata[128*4-1:0];
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*8-1:128*4]  = {128*4{1'b0}};
                                 axis_seg_tvalid_frame_next[next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_active_frame_reg]             = {4'h0, fifo_ena[3:0]};
                                 sop_frame_next[next_active_frame_reg]             = {4'h0, fifo_sop[3:0]};
@@ -228,8 +218,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_active_frame_reg]             = {16'h0000, fifo_mty[4*4-1:0]};
                             end
                             5'bZZZ10: begin
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*5-1:0]      = fifo_tdata[128*5-1:0];
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*8-1:128*5]  = {128*3{1'b0}};
                                 axis_seg_tvalid_frame_next[next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_active_frame_reg]             = {3'h0, fifo_ena[4:0]};
                                 sop_frame_next[next_active_frame_reg]             = {3'h0, fifo_sop[4:0]};
@@ -238,8 +226,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_active_frame_reg]             = {12'h000, fifo_mty[5*4-1:0]};
                             end
                             5'bZZ100: begin
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*6-1:0]      = fifo_tdata[128*6-1:0];
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*8-1:128*6]  = {128*2{1'b0}};
                                 axis_seg_tvalid_frame_next[next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_active_frame_reg]             = {2'h0, fifo_ena[5:0]};
                                 sop_frame_next[next_active_frame_reg]             = {2'h0, fifo_sop[5:0]};
@@ -248,8 +234,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_active_frame_reg]             = {8'h0, fifo_mty[6*4-1:0]};
                             end
                             5'bZ1000: begin
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*7-1:0]      = fifo_tdata[128*7-1:0];
-                                //axis_seg_tdata_frame_next [next_active_frame_reg][128*8-1:128*7]  = {128*1{1'b0}};
                                 axis_seg_tvalid_frame_next[next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_active_frame_reg]             = {1'b0, fifo_ena[6:0]};
                                 sop_frame_next[next_active_frame_reg]             = {1'b0, fifo_sop[6:0]};
@@ -258,7 +242,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_active_frame_reg]             = {4'h0, fifo_mty[7*4-1:0]};
                             end
                             5'b10000: begin
-                                //axis_seg_tdata_frame_next [next_active_frame_reg]  = fifo_tdata;
                                 axis_seg_tvalid_frame_next[next_active_frame_reg] = |(fifo_ena & fifo_tvalid);
                                 ena_frame_next[next_active_frame_reg]             = fifo_ena & fifo_tvalid;
                                 sop_frame_next[next_active_frame_reg]             = fifo_sop & fifo_tvalid;
@@ -274,7 +257,6 @@ module axi_seg_2_axis #(
                             2'd2:    active_frame_next   = 3'b001;
                             default: active_frame_next   = 3'b001;
                         endcase
-                        //axis_seg_tdata_frame_next [next_active_frame_reg]  = fifo_tdata;
                         axis_seg_tvalid_frame_next[next_active_frame_reg] = |(fifo_ena  & fifo_tvalid);
                         ena_frame_next[next_active_frame_reg]             = fifo_ena & fifo_tvalid;
                         sop_frame_next[next_active_frame_reg]             = fifo_sop & fifo_tvalid;
@@ -284,15 +266,9 @@ module axi_seg_2_axis #(
                     end
                 end
 
-                //now check if other frames are present
                 if (|(fifo_ena[7:4] & fifo_sop[7:4] & fifo_tvalid[7:4])) begin // a second packet can only start on last four segments
-                    last_active_frame_next = next_next_active_frame_reg;
                     if ((fifo_ena[4] & fifo_sop[4] & fifo_tvalid[4]) & (fifo_ena[7] & fifo_eop[7] & fifo_tvalid[7])) begin // end of frame 1 already on the first clock cycle
-                        // frame 1 is completed already here as well
-                        active_frame_next[next_next_active_frame_reg] = 1'b0; // start and finish, no need to have next-next frame active
-                        //last_active_frame_next = next_next_active_frame_reg;
-                        //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*8-1:128*4]      = fifo_tdata[128*8-1:128*4];
-                        //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*4-1:0]  = {128*4{1'b0}};
+                        active_frame_next[next_next_active_frame_reg] = 1'b0;
                         axis_seg_tvalid_frame_next[next_next_active_frame_reg] = 1'b1;
                         ena_frame_next[next_next_active_frame_reg]             = {fifo_ena[7:4], 4'h0};
                         sop_frame_next[next_next_active_frame_reg]             = {fifo_sop[7:4], 4'h0};
@@ -303,8 +279,6 @@ module axi_seg_2_axis #(
                         active_frame_next[next_next_active_frame_reg] = 1'b1;
                         casez(fifo_sop[7:4])
                             4'bZZZ1: begin
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*8-1:128*4]      = fifo_tdata[128*8-1:128*4];
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*4-1:0]  = {128*4{1'b0}};
                                 axis_seg_tvalid_frame_next[next_next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_next_active_frame_reg]             = {fifo_ena[7:4], 4'h0};
                                 sop_frame_next[next_next_active_frame_reg]             = {fifo_sop[7:4], 4'h0};
@@ -313,8 +287,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_next_active_frame_reg]             = {fifo_mty[8*4-1:4*4], 16'h0000};
                             end
                             4'bZZ10: begin
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*8-1:128*5]      = fifo_tdata[128*8-1:128*5];
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*5-1:0]  = {128*5{1'b0}};
                                 axis_seg_tvalid_frame_next[next_next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_next_active_frame_reg]             = {fifo_ena[7:5], 5'h00};
                                 sop_frame_next[next_next_active_frame_reg]             = {fifo_sop[7:5], 5'h00};
@@ -323,8 +295,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_next_active_frame_reg]             = {fifo_mty[8*4-1:5*4], 20'h00000};
                             end
                             4'bZ100: begin
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*8-1:128*6]      = fifo_tdata[128*8-1:128*6];
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*6-1:0]  = {128*6{1'b0}};
                                 axis_seg_tvalid_frame_next[next_next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_next_active_frame_reg]             = {fifo_ena[7:6], 6'h00};
                                 sop_frame_next[next_next_active_frame_reg]             = {fifo_sop[7:6], 6'h00};
@@ -333,8 +303,6 @@ module axi_seg_2_axis #(
                                 mty_frame_next[next_next_active_frame_reg]             = {fifo_mty[8*4-1:6*4], 24'h000000};
                             end
                             4'b1000: begin
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*8-1:128*7]      = fifo_tdata[128*8-1:128*7];
-                                //axis_seg_tdata_frame_next [next_next_active_frame_reg][128*7-1:0]  = {128*7{1'b0}};
                                 axis_seg_tvalid_frame_next[next_next_active_frame_reg] = 1'b1;
                                 ena_frame_next[next_next_active_frame_reg]             = {fifo_ena[7:7], 7'h00};
                                 sop_frame_next[next_next_active_frame_reg]             = {fifo_sop[7:7], 7'h00};
@@ -350,7 +318,6 @@ module axi_seg_2_axis #(
 
                 last_active_frame_next = 2'd0;
 
-                //axis_seg_tdata_frame_next[0]  = fifo_tdata;
                 axis_seg_tvalid_frame_next[0] = |(fifo_ena & fifo_tvalid);
                 ena_frame_next[0]             = fifo_ena  & fifo_tvalid;
                 sop_frame_next[0]             = fifo_sop  & fifo_tvalid;
@@ -358,7 +325,6 @@ module axi_seg_2_axis #(
                 err_frame_next[0]             = fifo_err  & fifo_tvalid;
                 mty_frame_next[0]             = fifo_mty;
 
-                //axis_seg_tdata_frame_next[1]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[1] = 1'b0;
                 ena_frame_next[1]             = 8'h0;
                 sop_frame_next[1]             = 8'h0;
@@ -366,7 +332,6 @@ module axi_seg_2_axis #(
                 err_frame_next[1]             = 8'h0;
                 mty_frame_next[1]             = 32'h00000000;
 
-                //axis_seg_tdata_frame_next[2]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[2] = 1'b0;
                 ena_frame_next[2]             = 8'h0;
                 sop_frame_next[2]             = 8'h0;
@@ -376,43 +341,33 @@ module axi_seg_2_axis #(
 
                 if (|(fifo_ena & fifo_eop & fifo_tvalid)) begin // end of frame on any position
                     active_frame_next[0] = 1'b0;
-                    // frame 0 is completed
                 end
 
-                if (|(fifo_ena[7:1] & fifo_sop[7:1] & fifo_tvalid[7:1])) begin // new frame, need to put it on frame 1 (cannot happen on segment 0, because a frame was still active)
+                if (|(fifo_ena[7:1] & fifo_sop[7:1] & fifo_tvalid[7:1])) begin // new frame, need to put it on frame 1 (cannot happen on segment 0)
                     last_active_frame_next = 2'd1;
-                    //now check if two frames are ending in the same beat
                     if (|(fifo_ena[3:0] & fifo_eop[3:0] & fifo_tvalid[3:0]) & |(fifo_ena[7:4] & fifo_eop[7:4] & fifo_tvalid[7:4])) begin // two end of frame values, no new active frames as they both stop here
-                        // frame 0 and frame 1 finish here
                         active_frame_next[1] = 1'b0;
-                        // frame 1 is completed as well
-                    end else begin // frame 1 is now active, not ending on this beat
-                        // only frame 0 finishes here
+                    end else begin // frame 1 is now active
                         active_frame_next[1] = 1'b1;
                     end
 
-                    // now check if the new frame is starting on this beat
-                    casez(fifo_sop[7:1])
-                        7'bZZZZZZ1: begin // start in segment 1, frame 1
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*1]  = {128*7{1'b0}};
-                            // tie to zero frame 0 values form segment 1 onwards, as they are now part of frame 1 
+                    casez(fifo_sop[7:1])
+                        7'bZZZZZZ1: begin
+
                             ena_frame_next[0][7:1]             = 7'h00;
                             sop_frame_next[0][7:1]             = 7'h00;
                             eop_frame_next[0][7:1]             = 7'h00;
                             err_frame_next[0][7:1]             = 7'h00;
                             mty_frame_next[0][8*4-1:1*4]       = 28'h0000000;
 
-                            if (|(fifo_sop[7:5])) begin // start in segment 5-7, frame 1
+                            if (|(fifo_sop[7:5])) begin
                                 active_frame_next[2] = 1'b1;
-                                last_active_frame_next = 2'd2; // TODO check this, maybe should be 1
-                                // should be this one
-                                //last_active_frame_next = 2'd1;
+                                last_active_frame_next = 2'd2;
                             end
 
                             casez(fifo_sop[7:5])
-                                3'b000: begin // no new start of frame, frame 1 is completely active, fill its values
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*1]  = fifo_tdata[128*8-1:128*1] ;
+                                3'b000: begin
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:1]             = fifo_ena[7:1] & fifo_tvalid[7:1];
                                     sop_frame_next[1][7:1]             = fifo_sop[7:1] & fifo_tvalid[7:1];
@@ -420,9 +375,8 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][7:1]             = fifo_err[7:1] & fifo_tvalid[7:1];
                                     mty_frame_next[1][8*4-1:1*4]       = fifo_mty[8*4-1:1*4];
                                 end
-                                3'bZZ1: begin // start of frame present on segment 5, frame 2 is active from segment 5 onwards, frame 1 is active from segments 1-4
+                                3'bZZ1: begin
 
-                                    //axis_seg_tdata_frame_next[1][128*5-1:128*1]  = fifo_tdata[128*5-1:128*1] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][4:1]             = fifo_ena[4:1] & fifo_tvalid[4:1];
                                     sop_frame_next[1][4:1]             = fifo_sop[4:1] & fifo_tvalid[4:1];
@@ -430,7 +384,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][4:1]             = fifo_err[4:1] & fifo_tvalid[4:1];
                                     mty_frame_next[1][5*4-1:1*4]       = fifo_mty[5*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                                     sop_frame_next[2][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -439,9 +392,8 @@ module axi_seg_2_axis #(
                                     mty_frame_next[2][8*4-1:5*4]       = fifo_mty[8*4-1:5*4];
 
                                 end
-                                3'bZ10: begin // start of frame present on segment 6, frame 2 is active from segment 6 onwards, frame 1 is active from segments 1-5
+                                3'bZ10: begin
 
-                                    //axis_seg_tdata_frame_next[1][128*6-1:128*1]  = fifo_tdata[128*6-1:128*1] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][5:1]             = fifo_ena[5:1] & fifo_tvalid[5:1];
                                     sop_frame_next[1][5:1]             = fifo_sop[5:1] & fifo_tvalid[5:1];
@@ -449,7 +401,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][5:1]             = fifo_err[5:1] & fifo_tvalid[5:1];
                                     mty_frame_next[1][6*4-1:1*4]       = fifo_mty[6*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[2][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -459,9 +410,8 @@ module axi_seg_2_axis #(
 
 
                                 end
-                                3'b100: begin // start of frame present on segment 7, frame 2 is active from segment 7 onwards, frame 1 is active from segments 1-6
+                                3'b100: begin
 
-                                    //axis_seg_tdata_frame_next[1][128*7-1:128*1]  = fifo_tdata[128*7-1:128*1] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][6:1]             = fifo_ena[6:1] & fifo_tvalid[6:1];
                                     sop_frame_next[1][6:1]             = fifo_sop[6:1] & fifo_tvalid[6:1];
@@ -469,7 +419,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][6:1]             = fifo_err[6:1] & fifo_tvalid[6:1];
                                     mty_frame_next[1][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[2][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -481,9 +430,8 @@ module axi_seg_2_axis #(
                             endcase
 
                         end
-                        7'bZZZZZ10: begin // start in segment 2, frame 1
+                        7'bZZZZZ10: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*2]  = {128*6{1'b0}};
                             ena_frame_next[0][7:2]             = 6'h00;
                             sop_frame_next[0][7:2]             = 6'h00;
                             eop_frame_next[0][7:2]             = 6'h00;
@@ -492,14 +440,11 @@ module axi_seg_2_axis #(
 
                             if (|(fifo_sop[7:6])) begin
                                 active_frame_next[2] = 1'b1;
-                                last_active_frame_next = 2'd2;// TODO check this, maybe should be 1
-                                // should be this one
-                                //last_active_frame_next = 2'd1;
+                                last_active_frame_next = 2'd2;
                             end
 
                             casez(fifo_sop[7:6])
                                 2'b00: begin
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*2]  = fifo_tdata[128*8-1:128*2] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:2]             = fifo_ena[7:2] & fifo_tvalid[7:2];
                                     sop_frame_next[1][7:2]             = fifo_sop[7:2] & fifo_tvalid[7:2];
@@ -509,7 +454,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'bZ1: begin
 
-                                    //axis_seg_tdata_frame_next[1][128*6-1:128*2]  = fifo_tdata[128*6-1:128*2] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][5:2]             = fifo_ena[5:2] & fifo_tvalid[5:2];
                                     sop_frame_next[1][5:2]             = fifo_sop[5:2] & fifo_tvalid[5:2];
@@ -517,7 +461,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][5:2]             = fifo_err[5:2] & fifo_tvalid[5:2];
                                     mty_frame_next[1][6*4-1:2*4]       = fifo_mty[6*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[2][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -528,7 +471,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'b10: begin
 
-                                    //axis_seg_tdata_frame_next[1][128*7-1:128*2]  = fifo_tdata[128*7-1:128*2] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][6:2]             = fifo_ena[6:2] & fifo_tvalid[6:2];
                                     sop_frame_next[1][6:2]             = fifo_sop[6:2] & fifo_tvalid[6:2];
@@ -536,7 +478,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[1][6:2]             = fifo_err[6:2] & fifo_tvalid[6:2];
                                     mty_frame_next[1][7*4-1:2*4]       = fifo_mty[7*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[2][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -550,7 +491,6 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZZ100: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*3]  = {128*5{1'b0}};
                             ena_frame_next[0][7:3]             = 5'h00;
                             sop_frame_next[0][7:3]             = 5'h00;
                             eop_frame_next[0][7:3]             = 5'h00;
@@ -562,11 +502,8 @@ module axi_seg_2_axis #(
                             if (fifo_sop[7]) begin
 
                                 active_frame_next[2] = 1'b1;
-                                last_active_frame_next = 2'd2;// TODO check this, maybe should be 1
-                                // should be this one
-                                //last_active_frame_next = 2'd1;
+                                last_active_frame_next = 2'd2;
 
-                                //axis_seg_tdata_frame_next[1][128*7-1:128*3]  = fifo_tdata[128*7-1:128*3] ;
                                 axis_seg_tvalid_frame_next[1]      = 1'b1;
                                 ena_frame_next[1][6:3]             = fifo_ena[6:3] & fifo_tvalid[6:3];
                                 sop_frame_next[1][6:3]             = fifo_sop[6:3] & fifo_tvalid[6:3];
@@ -574,7 +511,6 @@ module axi_seg_2_axis #(
                                 err_frame_next[1][6:3]             = fifo_err[6:3] & fifo_tvalid[6:3];
                                 mty_frame_next[1][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                //axis_seg_tdata_frame_next[2][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                 axis_seg_tvalid_frame_next[2]      = 1'b1;
                                 ena_frame_next[2][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                 sop_frame_next[2][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -584,7 +520,6 @@ module axi_seg_2_axis #(
 
                             end else begin
 
-                                //axis_seg_tdata_frame_next[1][128*8-1:128*3]  = fifo_tdata[128*8-1:128*3] ;
                                 axis_seg_tvalid_frame_next[1]      = 1'b1;
                                 ena_frame_next[1][7:3]             = fifo_ena[7:3] & fifo_tvalid[7:3];
                                 sop_frame_next[1][7:3]             = fifo_sop[7:3] & fifo_tvalid[7:3];
@@ -596,14 +531,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZ1000: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*4]  = {128*4{1'b0}};
                             ena_frame_next[0][7:4]             = 4'h0;
                             sop_frame_next[0][7:4]             = 4'h0;
                             eop_frame_next[0][7:4]             = 4'h0;
                             err_frame_next[0][7:4]             = 4'h0;
                             mty_frame_next[0][8*4-1:4*4]       = 16'h0000;
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*4]  = fifo_tdata[128*8-1:128*4] ;
                             axis_seg_tvalid_frame_next[1]      = 1'b1;
                             ena_frame_next[1][7:4]             = fifo_ena[7:4] & fifo_tvalid[7:4];
                             sop_frame_next[1][7:4]             = fifo_sop[7:4] & fifo_tvalid[7:4];
@@ -614,14 +547,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZ10000: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*5]  = {128*3{1'b0}};
                             ena_frame_next[0][7:5]             = 3'h0;
                             sop_frame_next[0][7:5]             = 3'h0;
                             eop_frame_next[0][7:5]             = 3'h0;
                             err_frame_next[0][7:5]             = 3'h0;
                             mty_frame_next[0][8*4-1:5*4]       = 12'h000;
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                             axis_seg_tvalid_frame_next[1]      = 1'b1;
                             ena_frame_next[1][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                             sop_frame_next[1][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -632,14 +563,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZ100000: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*6]  = {128*2{1'b0}};
                             ena_frame_next[0][7:6]             = 2'h0;
                             sop_frame_next[0][7:6]             = 2'h0;
                             eop_frame_next[0][7:6]             = 2'h0;
                             err_frame_next[0][7:6]             = 2'h0;
                             mty_frame_next[0][8*4-1:6*4]       = 8'h00;
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                             axis_seg_tvalid_frame_next[1]      = 1'b1;
                             ena_frame_next[1][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                             sop_frame_next[1][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -650,14 +579,12 @@ module axi_seg_2_axis #(
                         end
                         7'b1000000: begin
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*7]  = {128*1{1'b0}};
                             ena_frame_next[0][7:7]             = 1'h0;
                             sop_frame_next[0][7:7]             = 1'h0;
                             eop_frame_next[0][7:7]             = 1'h0;
                             err_frame_next[0][7:7]             = 1'h0;
                             mty_frame_next[0][8*4-1:7*4]       = 4'h0;
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                             axis_seg_tvalid_frame_next[1]      = 1'b1;
                             ena_frame_next[1][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                             sop_frame_next[1][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -673,7 +600,6 @@ module axi_seg_2_axis #(
 
                 last_active_frame_next = 2'd1;
 
-                //axis_seg_tdata_frame_next[1]  = fifo_tdata;
                 axis_seg_tvalid_frame_next[1] = |(fifo_ena & fifo_tvalid);
                 ena_frame_next[1]             = fifo_ena & fifo_tvalid;
                 sop_frame_next[1]             = fifo_sop & fifo_tvalid;
@@ -681,7 +607,6 @@ module axi_seg_2_axis #(
                 err_frame_next[1]             = fifo_err & fifo_tvalid;
                 mty_frame_next[1]             = fifo_mty;
 
-                //axis_seg_tdata_frame_next[0]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[0] = 1'b0;
                 ena_frame_next[0]             = 8'h0;
                 sop_frame_next[0]             = 8'h0;
@@ -689,7 +614,6 @@ module axi_seg_2_axis #(
                 err_frame_next[0]             = 8'h0;
                 mty_frame_next[0]             = 32'h00000000;
 
-                //axis_seg_tdata_frame_next[2]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[2] = 1'b0;
                 ena_frame_next[2]             = 8'h0;
                 sop_frame_next[2]             = 8'h0;
@@ -699,14 +623,12 @@ module axi_seg_2_axis #(
 
                 if (|(fifo_ena & fifo_eop & fifo_tvalid)) begin // end of frame on any position
                     active_frame_next[1] = 1'b0;
-                    // frame 1 is completed
                 end
 
-                if (|(fifo_ena[7:1] & fifo_sop[7:1] & fifo_tvalid[7:1])) begin // new frame
+                if (|(fifo_ena & fifo_sop & fifo_tvalid)) begin // new frame, need to put it on frame 0
                     last_active_frame_next      = 2'd2;
                     if (|(fifo_ena[3:0] & fifo_eop[3:0] & fifo_tvalid[3:0]) & |(fifo_ena[7:4] & fifo_eop[7:4] & fifo_tvalid[7:4])) begin // two end of frame values, no new active frames as they both stop here
                         active_frame_next[2] = 1'b0;
-                        // frame 2 is completed as well
                     end else begin // frame 0 is now active
                         active_frame_next[2] = 1'b1;
                     end
@@ -714,7 +636,6 @@ module axi_seg_2_axis #(
                     casez(fifo_sop[7:1])
                         7'bZZZZZZ1: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*1]  = {128*7{1'b0}};
                             ena_frame_next[1][7:1]             = 7'h00;
                             sop_frame_next[1][7:1]             = 7'h00;
                             eop_frame_next[1][7:1]             = 7'h00;
@@ -728,7 +649,6 @@ module axi_seg_2_axis #(
 
                             casez(fifo_sop[7:5])
                                 3'b000: begin
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*1]  = fifo_tdata[128*8-1:128*1] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:1]             = fifo_ena[7:1] & fifo_tvalid[7:1];
                                     sop_frame_next[2][7:1]             = fifo_sop[7:1] & fifo_tvalid[7:1];
@@ -738,7 +658,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'bZZ1: begin
 
-                                    //axis_seg_tdata_frame_next[2][128*5-1:128*1]  = fifo_tdata[128*5-1:128*1] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][4:1]             = fifo_ena[4:1] & fifo_tvalid[4:1];
                                     sop_frame_next[2][4:1]             = fifo_sop[4:1] & fifo_tvalid[4:1];
@@ -746,7 +665,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[2][4:1]             = fifo_err[4:1] & fifo_tvalid[4:1];
                                     mty_frame_next[2][5*4-1:1*4]       = fifo_mty[5*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                                     sop_frame_next[0][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -757,7 +675,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'bZ10: begin
 
-                                    //axis_seg_tdata_frame_next[2][128*6-1:128*1]  = fifo_tdata[128*6-1:128*1] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][5:1]             = fifo_ena[5:1] & fifo_tvalid[5:1];
                                     sop_frame_next[2][5:1]             = fifo_sop[5:1] & fifo_tvalid[5:1];
@@ -765,7 +682,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[2][5:1]             = fifo_err[5:1] & fifo_tvalid[5:1];
                                     mty_frame_next[2][6*4-1:1*4]       = fifo_mty[6*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[0][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -777,7 +693,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'b100: begin
 
-                                    //axis_seg_tdata_frame_next[2][128*7-1:128*1]  = fifo_tdata[128*7-1:128*1] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][6:1]             = fifo_ena[6:1] & fifo_tvalid[6:1];
                                     sop_frame_next[2][6:1]             = fifo_sop[6:1] & fifo_tvalid[6:1];
@@ -785,7 +700,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[2][6:1]             = fifo_err[6:1] & fifo_tvalid[6:1];
                                     mty_frame_next[2][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[0][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -799,7 +713,6 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZZZ10: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*2]  = {128*6{1'b0}};
                             ena_frame_next[1][7:2]             = 6'h00;
                             sop_frame_next[1][7:2]             = 6'h00;
                             eop_frame_next[1][7:2]             = 6'h00;
@@ -813,7 +726,6 @@ module axi_seg_2_axis #(
 
                             casez(fifo_sop[7:6])
                                 2'b00: begin
-                                    //axis_seg_tdata_frame_next[2][128*8-1:128*2]  = fifo_tdata[128*8-1:128*2] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][7:2]             = fifo_ena[7:2] & fifo_tvalid[7:2];
                                     sop_frame_next[2][7:2]             = fifo_sop[7:2] & fifo_tvalid[7:2];
@@ -823,7 +735,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'bZ1: begin
 
-                                    //axis_seg_tdata_frame_next[2][128*6-1:128*2]  = fifo_tdata[128*6-1:128*2] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][5:2]             = fifo_ena[5:2] & fifo_tvalid[5:2];
                                     sop_frame_next[2][5:2]             = fifo_sop[5:2] & fifo_tvalid[5:2];
@@ -831,7 +742,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[2][5:2]             = fifo_err[5:2] & fifo_tvalid[5:2];
                                     mty_frame_next[2][6*4-1:2*4]       = fifo_mty[6*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[0][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -842,7 +752,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'b10: begin
 
-                                    //axis_seg_tdata_frame_next[2][128*7-1:128*2]  = fifo_tdata[128*7-1:128*2] ;
                                     axis_seg_tvalid_frame_next[2]      = 1'b1;
                                     ena_frame_next[2][6:2]             = fifo_ena[6:2] & fifo_tvalid[6:2];
                                     sop_frame_next[2][6:2]             = fifo_sop[6:2] & fifo_tvalid[6:2];
@@ -850,7 +759,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[2][6:2]             = fifo_err[6:2] & fifo_tvalid[6:2];
                                     mty_frame_next[2][7*4-1:2*4]       = fifo_mty[7*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[0][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -864,7 +772,6 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZZ100: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*3]  = {128*5{1'b0}};
                             ena_frame_next[1][7:3]             = 5'h00;
                             sop_frame_next[1][7:3]             = 5'h00;
                             eop_frame_next[1][7:3]             = 5'h00;
@@ -876,7 +783,6 @@ module axi_seg_2_axis #(
                                 active_frame_next[0] = 1'b1;
                                 last_active_frame_next      = 2'd0;
 
-                                //axis_seg_tdata_frame_next[2][128*7-1:128*3]  = fifo_tdata[128*7-1:128*3] ;
                                 axis_seg_tvalid_frame_next[2]      = 1'b1;
                                 ena_frame_next[2][6:3]             = fifo_ena[6:3] & fifo_tvalid[6:3];
                                 sop_frame_next[2][6:3]             = fifo_sop[6:3] & fifo_tvalid[6:3];
@@ -884,7 +790,6 @@ module axi_seg_2_axis #(
                                 err_frame_next[2][6:3]             = fifo_err[6:3] & fifo_tvalid[6:3];
                                 mty_frame_next[2][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                //axis_seg_tdata_frame_next[0][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                 axis_seg_tvalid_frame_next[0]      = 1'b1;
                                 ena_frame_next[0][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                 sop_frame_next[0][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -894,7 +799,6 @@ module axi_seg_2_axis #(
 
                             end else begin
 
-                                //axis_seg_tdata_frame_next[2][128*8-1:128*3]  = fifo_tdata[128*8-1:128*3] ;
                                 axis_seg_tvalid_frame_next[2]      = 1'b1;
                                 ena_frame_next[2][7:3]             = fifo_ena[7:3] & fifo_tvalid[7:3];
                                 sop_frame_next[2][7:3]             = fifo_sop[7:3] & fifo_tvalid[7:3];
@@ -906,14 +810,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZ1000: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*4]  = {128*4{1'b0}};
                             ena_frame_next[1][7:4]             = 4'h0;
                             sop_frame_next[1][7:4]             = 4'h0;
                             eop_frame_next[1][7:4]             = 4'h0;
                             err_frame_next[1][7:4]             = 4'h0;
                             mty_frame_next[1][8*4-1:4*4]       = 16'h0000;
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*4]  = fifo_tdata[128*8-1:128*4] ;
                             axis_seg_tvalid_frame_next[2]      = 1'b1;
                             ena_frame_next[2][7:4]             = fifo_ena[7:4] & fifo_tvalid[7:4];
                             sop_frame_next[2][7:4]             = fifo_sop[7:4] & fifo_tvalid[7:4];
@@ -924,14 +826,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZ10000: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*5]  = {128*3{1'b0}};
                             ena_frame_next[1][7:5]             = 3'h0;
                             sop_frame_next[1][7:5]             = 3'h0;
                             eop_frame_next[1][7:5]             = 3'h0;
                             err_frame_next[1][7:5]             = 3'h0;
                             mty_frame_next[1][8*4-1:5*4]       = 12'h000;
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                             axis_seg_tvalid_frame_next[2]      = 1'b1;
                             ena_frame_next[2][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                             sop_frame_next[2][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -942,14 +842,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZ100000: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*6]  = {128*2{1'b0}};
                             ena_frame_next[1][7:6]             = 2'h0;
                             sop_frame_next[1][7:6]             = 2'h0;
                             eop_frame_next[1][7:6]             = 2'h0;
                             err_frame_next[1][7:6]             = 2'h0;
                             mty_frame_next[1][8*4-1:6*4]       = 8'h00;
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                             axis_seg_tvalid_frame_next[2]      = 1'b1;
                             ena_frame_next[2][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                             sop_frame_next[2][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -960,14 +858,12 @@ module axi_seg_2_axis #(
                         end
                         7'b1000000: begin
 
-                            //axis_seg_tdata_frame_next[1][128*8-1:128*7]  = {128*1{1'b0}};
                             ena_frame_next[1][7:7]             = 1'h0;
                             sop_frame_next[1][7:7]             = 1'h0;
                             eop_frame_next[1][7:7]             = 1'h0;
                             err_frame_next[1][7:7]             = 1'h0;
                             mty_frame_next[1][8*4-1:7*4]       = 4'h0;
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                             axis_seg_tvalid_frame_next[2]      = 1'b1;
                             ena_frame_next[2][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                             sop_frame_next[2][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -985,7 +881,6 @@ module axi_seg_2_axis #(
 
                 last_active_frame_next      = 2'd2;
 
-                //axis_seg_tdata_frame_next[2]  = fifo_tdata;
                 axis_seg_tvalid_frame_next[2] = |(fifo_ena & fifo_tvalid);
                 ena_frame_next[2]             = fifo_ena & fifo_tvalid;
                 sop_frame_next[2]             = fifo_sop & fifo_tvalid;
@@ -993,7 +888,6 @@ module axi_seg_2_axis #(
                 err_frame_next[2]             = fifo_err & fifo_tvalid;
                 mty_frame_next[2]             = fifo_mty;
 
-                //axis_seg_tdata_frame_next[0]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[0] = 1'b0;
                 ena_frame_next[0]             = 8'h0;
                 sop_frame_next[0]             = 8'h0;
@@ -1001,7 +895,6 @@ module axi_seg_2_axis #(
                 err_frame_next[0]             = 8'h0;
                 mty_frame_next[0]             = 32'h00000000;
 
-                //axis_seg_tdata_frame_next[1]  = {128*8{1'b0}};
                 axis_seg_tvalid_frame_next[1] = 1'b0;
                 ena_frame_next[1]             = 8'h0;
                 sop_frame_next[1]             = 8'h0;
@@ -1011,14 +904,12 @@ module axi_seg_2_axis #(
 
                 if (|(fifo_ena & fifo_eop & fifo_tvalid)) begin // end of frame on any position
                     active_frame_next[2] = 1'b0;
-                    // frame 2 is completed
                 end
 
-                if (|(fifo_ena[7:1] & fifo_sop[7:1] & fifo_tvalid[7:1])) begin // new frame, need to put it on frame 0
+                if (|(fifo_ena & fifo_sop & fifo_tvalid)) begin // new frame, need to put it on frame 0
                     last_active_frame_next      = 2'd0;
                     if (|(fifo_ena[3:0] & fifo_eop[3:0] & fifo_tvalid[3:0]) & |(fifo_ena[7:4] & fifo_eop[7:4] & fifo_tvalid[7:4])) begin // two end of frame values, no new active frames as they both stop here
                         active_frame_next[0] = 1'b0;
-                        // frame 0 is completed as well
                     end else begin // frame 0 is now active
                         active_frame_next[0] = 1'b1;
                     end
@@ -1026,7 +917,6 @@ module axi_seg_2_axis #(
                     casez(fifo_sop[7:1])
                         7'bZZZZZZ1: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*1]  = {128*7{1'b0}};
                             ena_frame_next[2][7:1]             = 7'h00;
                             sop_frame_next[2][7:1]             = 7'h00;
                             eop_frame_next[2][7:1]             = 7'h00;
@@ -1040,7 +930,6 @@ module axi_seg_2_axis #(
 
                             casez(fifo_sop[7:5])
                                 3'b000: begin
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*1]  = fifo_tdata[128*8-1:128*1] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:1]             = fifo_ena[7:1] & fifo_tvalid[7:1];
                                     sop_frame_next[0][7:1]             = fifo_sop[7:1] & fifo_tvalid[7:1];
@@ -1050,7 +939,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'bZZ1: begin
 
-                                    //axis_seg_tdata_frame_next[0][128*5-1:128*1]  = fifo_tdata[128*5-1:128*1] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][4:1]             = fifo_ena[4:1] & fifo_tvalid[4:1];
                                     sop_frame_next[0][4:1]             = fifo_sop[4:1] & fifo_tvalid[4:1];
@@ -1058,7 +946,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[0][4:1]             = fifo_err[4:1] & fifo_tvalid[4:1];
                                     mty_frame_next[0][5*4-1:1*4]       = fifo_mty[5*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                                     sop_frame_next[1][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -1069,7 +956,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'bZ10: begin
 
-                                    //axis_seg_tdata_frame_next[0][128*6-1:128*1]  = fifo_tdata[128*6-1:128*1] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][5:1]             = fifo_ena[5:1] & fifo_tvalid[5:1];
                                     sop_frame_next[0][5:1]             = fifo_sop[5:1] & fifo_tvalid[5:1];
@@ -1077,7 +963,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[0][5:1]             = fifo_err[5:1] & fifo_tvalid[5:1];
                                     mty_frame_next[0][6*4-1:1*4]       = fifo_mty[6*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[1][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -1089,7 +974,6 @@ module axi_seg_2_axis #(
                                 end
                                 3'b100: begin
 
-                                    //axis_seg_tdata_frame_next[0][128*7-1:128*1]  = fifo_tdata[128*7-1:128*1] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][6:1]             = fifo_ena[6:1] & fifo_tvalid[6:1];
                                     sop_frame_next[0][6:1]             = fifo_sop[6:1] & fifo_tvalid[6:1];
@@ -1097,7 +981,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[0][6:1]             = fifo_err[6:1] & fifo_tvalid[6:1];
                                     mty_frame_next[0][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[1][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -1111,7 +994,6 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZZZ10: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*2]  = {128*6{1'b0}};
                             ena_frame_next[2][7:2]             = 6'h00;
                             sop_frame_next[2][7:2]             = 6'h00;
                             eop_frame_next[2][7:2]             = 6'h00;
@@ -1125,7 +1007,6 @@ module axi_seg_2_axis #(
 
                             casez(fifo_sop[7:6])
                                 2'b00: begin
-                                    //axis_seg_tdata_frame_next[0][128*8-1:128*2]  = fifo_tdata[128*8-1:128*2] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][7:2]             = fifo_ena[7:2] & fifo_tvalid[7:2];
                                     sop_frame_next[0][7:2]             = fifo_sop[7:2] & fifo_tvalid[7:2];
@@ -1135,7 +1016,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'bZ1: begin
 
-                                    //axis_seg_tdata_frame_next[0][128*6-1:128*2]  = fifo_tdata[128*6-1:128*2] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][5:2]             = fifo_ena[5:2] & fifo_tvalid[5:2];
                                     sop_frame_next[0][5:2]             = fifo_sop[5:2] & fifo_tvalid[5:2];
@@ -1143,7 +1023,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[0][5:2]             = fifo_err[5:2] & fifo_tvalid[5:2];
                                     mty_frame_next[0][6*4-1:2*4]       = fifo_mty[6*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                                     sop_frame_next[1][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -1154,7 +1033,6 @@ module axi_seg_2_axis #(
                                 end
                                 2'b10: begin
 
-                                    //axis_seg_tdata_frame_next[0][128*7-1:128*2]  = fifo_tdata[128*7-1:128*2] ;
                                     axis_seg_tvalid_frame_next[0]      = 1'b1;
                                     ena_frame_next[0][6:2]             = fifo_ena[6:2] & fifo_tvalid[6:2];
                                     sop_frame_next[0][6:2]             = fifo_sop[6:2] & fifo_tvalid[6:2];
@@ -1162,7 +1040,6 @@ module axi_seg_2_axis #(
                                     err_frame_next[0][6:2]             = fifo_err[6:2] & fifo_tvalid[6:2];
                                     mty_frame_next[0][7*4-1:2*4]       = fifo_mty[7*4-1:2*4];
 
-                                    //axis_seg_tdata_frame_next[1][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                     axis_seg_tvalid_frame_next[1]      = 1'b1;
                                     ena_frame_next[1][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                     sop_frame_next[1][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -1176,7 +1053,6 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZZ100: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*3]  = {128*5{1'b0}};
                             ena_frame_next[2][7:3]             = 5'h00;
                             sop_frame_next[2][7:3]             = 5'h00;
                             eop_frame_next[2][7:3]             = 5'h00;
@@ -1188,7 +1064,6 @@ module axi_seg_2_axis #(
                                 active_frame_next[1] = 1'b1;
                                 last_active_frame_next      = 2'd1;
 
-                                //axis_seg_tdata_frame_next[0][128*7-1:128*3]  = fifo_tdata[128*7-1:128*3] ;
                                 axis_seg_tvalid_frame_next[0]      = 1'b1;
                                 ena_frame_next[0][6:3]             = fifo_ena[6:3] & fifo_tvalid[6:3];
                                 sop_frame_next[0][6:3]             = fifo_sop[6:3] & fifo_tvalid[6:3];
@@ -1196,7 +1071,6 @@ module axi_seg_2_axis #(
                                 err_frame_next[0][6:3]             = fifo_err[6:3] & fifo_tvalid[6:3];
                                 mty_frame_next[0][7*4-1:1*4]       = fifo_mty[7*4-1:1*4];
 
-                                //axis_seg_tdata_frame_next[1][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                                 axis_seg_tvalid_frame_next[1]      = 1'b1;
                                 ena_frame_next[1][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                                 sop_frame_next[1][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -1206,7 +1080,6 @@ module axi_seg_2_axis #(
 
                             end else begin
 
-                                //axis_seg_tdata_frame_next[0][128*8-1:128*3]  = fifo_tdata[128*8-1:128*3] ;
                                 axis_seg_tvalid_frame_next[0]      = 1'b1;
                                 ena_frame_next[0][7:3]             = fifo_ena[7:3] & fifo_tvalid[7:3];
                                 sop_frame_next[0][7:3]             = fifo_sop[7:3] & fifo_tvalid[7:3];
@@ -1218,14 +1091,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZZ1000: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*4]  = {128*4{1'b0}};
                             ena_frame_next[2][7:4]             = 4'h0;
                             sop_frame_next[2][7:4]             = 4'h0;
                             eop_frame_next[2][7:4]             = 4'h0;
                             err_frame_next[2][7:4]             = 4'h0;
                             mty_frame_next[2][8*4-1:4*4]       = 16'h0000;
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*4]  = fifo_tdata[128*8-1:128*4] ;
                             axis_seg_tvalid_frame_next[0]      = 1'b1;
                             ena_frame_next[0][7:4]             = fifo_ena[7:4] & fifo_tvalid[7:4];
                             sop_frame_next[0][7:4]             = fifo_sop[7:4] & fifo_tvalid[7:4];
@@ -1236,14 +1107,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZZ10000: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*5]  = {128*3{1'b0}};
                             ena_frame_next[2][7:5]             = 3'h0;
                             sop_frame_next[2][7:5]             = 3'h0;
                             eop_frame_next[2][7:5]             = 3'h0;
                             err_frame_next[2][7:5]             = 3'h0;
                             mty_frame_next[2][8*4-1:5*4]       = 12'h000;
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*5]  = fifo_tdata[128*8-1:128*5] ;
                             axis_seg_tvalid_frame_next[0]      = 1'b1;
                             ena_frame_next[0][7:5]             = fifo_ena[7:5] & fifo_tvalid[7:5];
                             sop_frame_next[0][7:5]             = fifo_sop[7:5] & fifo_tvalid[7:5];
@@ -1254,14 +1123,12 @@ module axi_seg_2_axis #(
                         end
                         7'bZ100000: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*6]  = {128*2{1'b0}};
                             ena_frame_next[2][7:6]             = 2'h0;
                             sop_frame_next[2][7:6]             = 2'h0;
                             eop_frame_next[2][7:6]             = 2'h0;
                             err_frame_next[2][7:6]             = 2'h0;
                             mty_frame_next[2][8*4-1:6*4]       = 8'h00;
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*6]  = fifo_tdata[128*8-1:128*6] ;
                             axis_seg_tvalid_frame_next[0]      = 1'b1;
                             ena_frame_next[0][7:6]             = fifo_ena[7:6] & fifo_tvalid[7:6];
                             sop_frame_next[0][7:6]             = fifo_sop[7:6] & fifo_tvalid[7:6];
@@ -1272,14 +1139,12 @@ module axi_seg_2_axis #(
                         end
                         7'b1000000: begin
 
-                            //axis_seg_tdata_frame_next[2][128*8-1:128*7]  = {128*1{1'b0}};
                             ena_frame_next[2][7:7]             = 1'h0;
                             sop_frame_next[2][7:7]             = 1'h0;
                             eop_frame_next[2][7:7]             = 1'h0;
                             err_frame_next[2][7:7]             = 1'h0;
                             mty_frame_next[2][8*4-1:7*4]       = 4'h0;
 
-                            //axis_seg_tdata_frame_next[0][128*8-1:128*7]  = fifo_tdata[128*8-1:128*7] ;
                             axis_seg_tvalid_frame_next[0]      = 1'b1;
                             ena_frame_next[0][7:7]             = fifo_ena[7:7] & fifo_tvalid[7:7];
                             sop_frame_next[0][7:7]             = fifo_sop[7:7] & fifo_tvalid[7:7];
@@ -1353,19 +1218,21 @@ module axi_seg_2_axis #(
             mty_frame_reg[2] <= 32'd0;
 
         end else begin
-            last_active_frame_reg      <= last_active_frame_next;
-            next_active_frame_reg      <= next_active_frame_next;
+            last_active_frame_reg <= last_active_frame_next;
+            next_active_frame_reg <= next_active_frame_next;
             next_next_active_frame_reg <= next_next_active_frame_next;
-            active_frame_reg           <= active_frame_next;
-            
-            axis_seg_tdata_frame_reg  <= axis_seg_tdata_frame_next;
+            active_frame_reg <= active_frame_next;
+
+            axis_seg_tdata_frame_reg <= axis_seg_tdata_frame_next;
             axis_seg_tvalid_frame_reg <= axis_seg_tvalid_frame_next;
 
-            ena_frame_reg       <= ena_frame_next;
-            sop_frame_reg       <= sop_frame_next;
-            eop_frame_reg       <= eop_frame_next;
-            err_frame_reg       <= err_frame_next;
-            mty_frame_reg       <= mty_frame_next;
+            ena_frame_reg<= ena_frame_next;
+            sop_frame_reg<= sop_frame_next;
+            eop_frame_reg<= eop_frame_next;
+            err_frame_reg<= err_frame_next;
+            mty_frame_reg<= mty_frame_next;
+
+
         end
 
     end
@@ -1463,6 +1330,14 @@ module axi_seg_2_axis #(
     endgenerate
 
 
+
+
+    wire [1023:0] axis_0_tdata, axis_1_tdata, axis_2_tdata;
+    wire [127:0]  axis_0_tkeep, axis_1_tkeep, axis_2_tkeep;
+    wire          axis_0_tvalid, axis_1_tvalid, axis_2_tvalid;
+    wire          axis_0_tlast, axis_1_tlast, axis_2_tlast;
+    wire          axis_0_tuser, axis_1_tuser, axis_2_tuser;
+
     unaligned_axi_seg_2_axis  #(
         .FIFO_DEPTH(AXIS_FIFO_DEPTH),
         .ASYNC_FIFO(ASYNC_FIFO)
@@ -1538,19 +1413,38 @@ module axi_seg_2_axis #(
         .m_axis_tuser (s_axis_2_tuser)
     );
 
+    // next_frame_sel tracks which output FIFO slot to consume next.
+    // Frames are always written to slots in a fixed rotation (0→1→2→0…),
+    // so reading in the same order guarantees packet ordering.
+    reg [1:0] next_frame_sel;
 
-    axis_arb_mux #(
+    always @(posedge m_clk) begin
+        if (m_rst) begin
+            next_frame_sel <= 2'd0;
+        end else begin
+            case(next_frame_sel)
+                2'd0: if (s_axis_0_tvalid && s_axis_0_tready && s_axis_0_tlast) next_frame_sel <= 2'd1;
+                2'd1: if (s_axis_1_tvalid && s_axis_1_tready && s_axis_1_tlast) next_frame_sel <= 2'd2;
+                2'd2: if (s_axis_2_tvalid && s_axis_2_tready && s_axis_2_tlast) next_frame_sel <= 2'd0;
+                default: next_frame_sel <= 2'd0;
+            endcase
+        end
+    end
+
+    // axis_mux enforces in-order output: it latches 'select' at the start of
+    // each frame and holds it until tlast, then allows select to change.
+    // It will stall (not assert valid) until the selected slot has data.
+    axis_mux #(
         .S_COUNT(3),
         .DATA_WIDTH(1024),
         .KEEP_ENABLE(1),
         .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .ID_ENABLE(1),
-        .UPDATE_TID(1),
-        .ARB_TYPE_ROUND_ROBIN(1)
+        .USER_WIDTH(1)
     ) axis_mux_instance (
         .clk(m_clk),
         .rst(m_rst),
+        .enable(1'b1),
+        .select(next_frame_sel),
         .s_axis_tdata ({s_axis_2_tdata , s_axis_1_tdata , s_axis_0_tdata }),
         .s_axis_tkeep ({s_axis_2_tkeep , s_axis_1_tkeep , s_axis_0_tkeep }),
         .s_axis_tvalid({s_axis_2_tvalid, s_axis_1_tvalid, s_axis_0_tvalid}),
@@ -1568,9 +1462,5 @@ module axi_seg_2_axis #(
         .m_axis_tuser(m_axis_tuser)
     );
 
-    
 
 endmodule
-
-
-`resetall

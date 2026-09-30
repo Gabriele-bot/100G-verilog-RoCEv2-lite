@@ -6,35 +6,25 @@ This module buffers a packet and stores its length
 
 
 module axis_packet_framer #(
-    parameter DATA_WIDTH             = 64,
-    parameter FIFO_DEPTH             = 8192-DATA_WIDTH/8,
-    parameter ENABLE_OUTPUT_FIFO     = 1,
-    // Register to achieve better timings, enable them if you want to trade some flops with better timings
-    parameter ENABLE_TIMING_OPT_REGS = 0
+    parameter DATA_WIDTH         = 64,
+    parameter FIFO_DEPTH         = 4096,
+    parameter ENABLE_OUTPUT_FIFO = 1
 ) (
 
     input wire clk,
     input wire rst,
 
-    /*
-     * Input request
-     */
-    input  wire                         s_wr_req_valid,
-    output wire                         s_wr_req_ready,
-    input  wire [23:0]                  s_wr_req_loc_qp,
-    input  wire [31:0]                  s_wr_req_dma_length,
-    input  wire [63:0]                  s_wr_req_addr_offset,
-    input  wire                         s_wr_req_is_immediate,
-    input  wire [31:0]                  s_wr_req_immediate_data,
-    input  wire                         s_wr_req_tx_type,
-
-    // axis stream
+    // axis stream (merged: metadata in tuser/tdest on first beat of each packet)
+    // tuser layout: [0]=bad_frame, [32:1]=dma_length, [96:33]=addr_offset,
+    //               [128:97]=immediate_data, [129]=is_immediate, [130]=tx_type
+    // tdest layout: [23:0]=loc_qp
     input   wire [DATA_WIDTH   - 1 :0]  s_axis_tdata,
     input   wire [DATA_WIDTH/8 - 1 :0]  s_axis_tkeep,
     input   wire                        s_axis_tvalid,
     output  wire                        s_axis_tready,
     input   wire                        s_axis_tlast,
-    input   wire                        s_axis_tuser,
+    input   wire [130              :0]  s_axis_tuser,
+    input   wire [23               :0]  s_axis_tdest,
 
     /*
      * Output request
@@ -99,9 +89,7 @@ module axis_packet_framer #(
     reg last_frame;
 
     wire [153:0] s_wr_req, m_wr_req;
-    reg  s_wr_req_reg_ready, s_wr_req_reg_valid;
-
-    reg  s_wr_req_ready_reg = 1'b0, s_wr_req_ready_next;
+    wire s_wr_req_reg_ready, s_wr_req_reg_valid;
 
     wire [DATA_WIDTH   - 1 : 0] s_axis_fifo_tdata;
     wire [DATA_WIDTH/8 - 1 : 0] s_axis_fifo_tkeep;
@@ -168,24 +156,20 @@ module axis_packet_framer #(
     always @(*) begin
         state_next = STATE_GET_METADATA;
 
-        s_wr_req_ready_next         = 1'b0;
-
         case (state_reg)
             STATE_GET_METADATA: begin
-                s_wr_req_ready_next               = s_wr_req_reg_ready;
-                if (s_wr_req_ready & s_wr_req_valid) begin
-                    state_next = STATE_GET_DATA;
-                    s_wr_req_ready_next         = 1'b0;
+                if (s_axis_tvalid && s_axis_tready) begin
+                    if (s_axis_tlast)
+                        state_next = STATE_GET_METADATA;
+                    else
+                        state_next = STATE_GET_DATA;
                 end
             end
             STATE_GET_DATA: begin
-                if (s_axis_tvalid && s_axis_tready && s_axis_tlast) begin
-                    s_wr_req_ready_next  = s_wr_req_reg_ready;
+                if (s_axis_tvalid && s_axis_tready && s_axis_tlast)
                     state_next = STATE_GET_METADATA;
-                end else begin
-                    s_wr_req_ready_next         = 1'b0;
+                else
                     state_next = STATE_GET_DATA;
-                end
             end
         endcase
     end
@@ -195,10 +179,8 @@ module axis_packet_framer #(
             word_counter      <= 0;
             transfer_ongoing  <= 1'b0;
             state_reg <= STATE_GET_METADATA;
-            s_wr_req_ready_reg <= 1'b0;
         end else begin
             state_reg <= state_next;
-            s_wr_req_ready_reg <= s_wr_req_ready_next;
             if (m_axis_fifo_tvalid && m_axis_fifo_tready) begin
                 if (m_axis_fifo_tlast) begin
                     transfer_ongoing <= 1'b0;
@@ -241,16 +223,17 @@ module axis_packet_framer #(
         end
     end
 
-    assign s_axis_fifo_tdata       = s_axis_tdata;
-    assign s_axis_fifo_tkeep       = s_axis_tkeep;
-    assign s_axis_fifo_tvalid      = s_axis_tvalid;
-    assign s_axis_tready           = s_axis_fifo_tready;
-    assign s_axis_fifo_tlast       = ((word_counter + WORD_WIDTH == (1 << pmtu_shift)) ? 1'b1 : 1'b0) | s_axis_tlast;
-    assign s_axis_fifo_tuser[0]    = s_axis_tuser;
-    assign s_axis_fifo_tuser[1]    = s_axis_tlast;
+    assign s_axis_fifo_tdata    = s_axis_tdata;
+    assign s_axis_fifo_tkeep    = s_axis_tkeep;
+    // In STATE_GET_METADATA gate valid on meta FIFO ready so both FIFOs accept together
+    assign s_axis_fifo_tvalid   = (state_reg == STATE_GET_METADATA) ? (s_axis_tvalid && s_wr_req_reg_ready) : s_axis_tvalid;
+    assign s_axis_tready        = (state_reg == STATE_GET_METADATA) ? (s_axis_fifo_tready && s_wr_req_reg_ready) : s_axis_fifo_tready;
+    assign s_axis_fifo_tlast    = ((word_counter + WORD_WIDTH == (1 << pmtu_shift)) ? 1'b1 : 1'b0) | s_axis_tlast;
+    assign s_axis_fifo_tuser[0] = s_axis_tuser[0];
+    assign s_axis_fifo_tuser[1] = s_axis_tlast;
 
     axis_fifo #(
-        .DEPTH(FIFO_DEPTH),
+        .DEPTH(8192-DATA_WIDTH/8),
         .DATA_WIDTH(DATA_WIDTH),
         .KEEP_ENABLE(1),
         .KEEP_WIDTH(DATA_WIDTH/8),
@@ -258,7 +241,7 @@ module axis_packet_framer #(
         .DEST_ENABLE(0),
         .USER_ENABLE(1),
         .USER_WIDTH(2),
-        .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 2 : 1),
+        .RAM_PIPELINE(2),
         .FRAME_FIFO(1)
     ) framer_axis_fifo (
         .clk(clk),
@@ -335,7 +318,7 @@ module axis_packet_framer #(
         .ID_ENABLE(0),
         .DEST_ENABLE(0),
         .USER_ENABLE(0),
-        .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0),
+        .RAM_PIPELINE(1),
         .FRAME_FIFO(0)
     ) length_fifo (
         .clk(clk),
@@ -358,17 +341,16 @@ module axis_packet_framer #(
         .m_axis_tready(m_axis_fifo_tvalid && m_axis_fifo_tready && m_axis_fifo_tlast)
     );
 
-    assign s_wr_req_reg_valid = s_wr_req_valid;
-    assign s_wr_req_ready     = s_wr_req_ready_reg;
+    assign s_wr_req_reg_valid = s_axis_tvalid && (state_reg == STATE_GET_METADATA);
 
+    // DMA meta fifo
     axis_fifo #(
-        .DEPTH       (16),
-        .DATA_WIDTH  (154),
-        .KEEP_ENABLE (0),
-        .LAST_ENABLE (0),
-        .DEST_ENABLE (0),
-        .USER_ENABLE (0),
-        .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0)
+        .DEPTH(16),
+        .DATA_WIDTH(154),
+        .KEEP_ENABLE(0),
+        .LAST_ENABLE(0),
+        .DEST_ENABLE(0),
+        .USER_ENABLE(0)
     ) input_wr_req_fifo (
         .clk(clk),
         .rst(rst),
@@ -390,12 +372,14 @@ module axis_packet_framer #(
     );
 
 
-    assign s_wr_req = { s_wr_req_loc_qp,
-    s_wr_req_dma_length,
-    s_wr_req_addr_offset,
-    s_wr_req_immediate_data,
-    s_wr_req_is_immediate,
-    s_wr_req_tx_type};
+    assign s_wr_req = {
+        s_axis_tdest[23:0],    // loc_qp        [153:130]
+        s_axis_tuser[32:1],    // dma_length     [129:98]
+        s_axis_tuser[96:33],   // addr_offset     [97:34]
+        s_axis_tuser[128:97],  // immediate_data  [33:2]
+        s_axis_tuser[129],     // is_immediate      [1]
+        s_axis_tuser[130]      // tx_type           [0]
+    };
 
     assign m_wr_req_tx_type        = m_wr_req[0];
     assign m_wr_req_is_immediate   = m_wr_req[1];
@@ -426,7 +410,7 @@ module axis_packet_framer #(
                 .DEST_ENABLE(0),
                 .USER_ENABLE(1),
                 .USER_WIDTH(15),
-                .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0),
+                .RAM_PIPELINE(2),
                 .FRAME_FIFO(0)
             ) output_axis_fifo (
                 .clk(clk),

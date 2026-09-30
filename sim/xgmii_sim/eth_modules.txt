@@ -60,6 +60,8 @@ rtl/udp_checksum_gen_test.v
 rtl/udp_test.v
 rtl/udp_ip_rx_test.v
 rtl/udp_ip_tx_test.v
+rtl/udp_mux.v
+rtl/udp_complete_opt.v
 rtl/ip_fifo.v
 rtl/ip_complete_test.v
 rtl/ip_test.v

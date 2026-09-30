@@ -4,7 +4,6 @@
 module RoCE_realign_frame_fifo #(
     parameter S_DATA_WIDTH = 64,
     parameter M_DATA_WIDTH = 64,
-    parameter HAS_ADAPTER = 0,
     parameter IS_ASYNC = 0,
     parameter FIFO_DEPTH = 1024,
     parameter RAM_PIPELINE = 1,
@@ -722,8 +721,8 @@ module RoCE_realign_frame_fifo #(
             m_ip_source_ip_reg <= 0;
             m_ip_dest_ip_reg <= 0;
 
-            m_udp_source_port_reg <= ROCE_UDP_PORT;
-            m_udp_dest_port_reg <= 16'd0;
+            m_udp_source_port_reg <= 16'd8765;
+            m_udp_dest_port_reg <= ROCE_UDP_PORT;
             m_udp_length_reg <= 16'd0;
             m_udp_checksum_reg <= 16'd0;
 

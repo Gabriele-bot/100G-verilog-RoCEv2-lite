@@ -1,34 +1,59 @@
-# Scalable SystemVerilog-RoCEv2-lite
+# Scalable SystemVerilog RoCEv2-Lite
 
-TX only RoCEv2. Super stripped down version of a RoCEv2 endpoint.
-Up to now only RC RDMA WRITE (with and without IMMEDIATE) RC SEND(with and without IMMEDIATE) are supported . RX part is there only to read ACKs and NAKs.
+TX-only RoCEv2 implementation. This is a highly stripped-down RoCEv2 endpoint.
 
-## TX diagram
-RoCE stack simplified diagrams. Supports a given number of QP, to keep it simple this number cannot exeed 16 (bettor to stay with 8).
-An arbiter (round robin) will merge the various qp streams.
+Currently, only RC RDMA WRITE operations with and without IMMEDIATE and RC SEND operations with and without IMMEDIATE are supported. The RX path is present only to receive ACKs, NAKs, and CNPs for congestion control.
+
+## Examples
+
+Examples have been removed from this repository, but similar examples can be found [here](https://gitlab.cern.ch/matteomi/roce400g-firmware/-/tree/develop?ref_type=heads).
+
+The following boards are supported:
+
+- VCU118: 10G, 25G, and 100G, with a URAM retransmission buffer;
+- VPK180: 400G, with a URAM retransmission buffer;
+- VHK158: 400G, with URAM and HBM retransmission buffers.
+
+## Limitations
+
+- Slow control is IPbus-based, but the registers are exposed in the top-level file. In principle, you should be able to use your own slow-control module.
+- The Versal examples require IPbus to be installed on the processors used to access the slow-control registers.
+- Versal HBM throughput is limited to 4 × 69 Gbps due to a limitation of the HBM slave port in the NoC. The required solution is still under investigation.
+- The HBM buffer size is currently limited to 26 bits (address). Work is in progress to increase this to at least 28-30 bits.
+- Only a single MAC is supported per example design.
+
+## TX Diagram
+
+The following diagram shows a simplified RoCE stack. A configurable number of QPs is supported. To keep the design simple, this number should not exceed 16.
+
+A round-robin arbiter merges the streams from the different QPs.
+
 <center>
-    <img src="img/RoCE_stack.png" alt="Drawing" style="width: 500px"/>
+    <img src="img/RoCE_stack.png" alt="RoCE stack diagram" style="width: 500px"/>
 </center>
 
-Verilog wrapper structure
-```
+### Verilog Wrapper Structure
+
+```systemverilog
 RoCE_stack_wrapper #(
-    .QP_CH_DATA_WIDTH                (QP_CH_DATA_WIDTH),   // TX QP data width               
-    .QP_CH_KEEP_ENABLE               (1),                
-    .QP_CH_KEEP_WIDTH                (QP_CH_DATA_WIDTH/8),                 
-    .OUT_DATA_WIDTH                  (STACK_DATA_WIDTH),   // Stack data width (e.g. for 100G is 512)                  
-    .OUT_KEEP_ENABLE                 (1),                  
-    .OUT_KEEP_WIDTH                  (STACK_DATA_WIDTH/8),                   
-    .CLOCK_PERIOD                    (RoCE_CLOCK_PERIOD),                     
-    .DEBUG                           (DEBUG), 
-    .REFRESH_CACHE_TICKS             (32767),              // TX queue qp info cache refresh timer (in clk cycles)                         
-    .RETRANSMISSION                  (1),                   
-    .RETRANSMISSION_ADDR_BUFFER_WIDTH(22), 
-    .N_QUEUE_PAIRS                   (MAX_QUEUE_PAIRS)     // total number of parallel QPs                
-) RoCE_stack_wrapper_instance (
-// connections
-);
+        .QP_CH_DATA_WIDTH                 (QP_CH_DATA_WIDTH),
+        .ROCE_ENG_DATA_WIDTH              (ROCE_ENG_DATA_WIDTH),
+        .OUT_DATA_WIDTH                   (STACK_DATA_WIDTH),
+        .CLOCK_PERIOD                     (ROCE_ENG_CLK_PERIOD),
+        .ASYNC_OUTPUT                     (ROCE_ENG_CLK_PERIOD != STACK_CLK_PERIOD),
+        .DEBUG                            (DEBUG),                    // Enable debug options, e.g. latency histogramming
+        .REFRESH_CACHE_TICKS              (32767),                    // Number of clock cycles between QP status-cache refreshes
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH (RETRANSMISSION_ADDR_BUFFER_WIDTH),
+        .N_ROCE_TX_ENGINES                (N_ROCE_TX_ENGINES),        // Number of RoCE engines; must be a power of two
+        .N_QUEUE_PAIRS                    (N_QUEUE_PAIRS),            // Must be a power of two
+        .EN_DCQCN_LOGIC                   (0),                        // Enable DCQCN logic for Layer 4 congestion control
+        .ENABLE_TIMING_OPT_REGS           (ENABLE_TIMING_OPT_REGS)    // Enable if the RoCE engine frequency is too high
+    ) RoCE_stack_wrapper_instance (
+        // Connections
+    );
 ```
+An example wrapper is provided in `rtl/utils/network_wrapper_roce_generic.sv`.
+The UDP/IP and RoCE stacks are instantiated there. PFC logic, connection registers for timing closure, and an asynchronous FIFO for crossing the clock domains between the stack and the MAC are also implemented in this wrapper.
 
 ### TX Queue
 Each queue data stream is split in PMTU smaller packets, then the qp infos are fetched strarting from the local qp and finally the RoCE headers are produced.
@@ -50,7 +75,7 @@ A Connection Manager (CM) is implemented via UDP packets. The structure of the U
 
 ## QP state 
 A QP state table is implemented in LUTRAM (few QPs..). Request are sent via the connection manager.
-TODO: transition to error state if qp is in the INIT state, but it failed dto move to RTS state.
+TODO: transition to error state if qp is in the INIT state, but it failed to move to RTS state.
 
 <center>
     <img src="img/QP_State.png" alt="Drawing" style="width: 250px"/>
@@ -105,10 +130,6 @@ Generally the receiver closes its QPs cleanly on exit. Use `close-qp` only when 
 
 On success the log shows `CloseQP acknowledged`.
 
-## TODO list
-
-Still Work In Progress, many things need to be adjusted:
-- [ ] QP state module need to be updated
-- [ ] Add UDP checksum checker and producer for the CM path 
-- [ ] Migth be useful to add UC RDMA WRITE
-- [ ] Optimize code for 400G, now it takes too many resources
+## Contacts
+- [**Gabriele Bortolato**](mailto:gabriele.bortolato@cern.ch)
+- [**Matteo Migliorini**](mailto:matteo.migliorini@cern.ch)

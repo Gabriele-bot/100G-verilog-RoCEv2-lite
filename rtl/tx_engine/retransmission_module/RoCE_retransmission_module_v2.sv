@@ -6,26 +6,35 @@ module RoCE_retransmission_module_v2 #(
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter BASE_LOC_QPN = 256,
     parameter MAX_QPS = 4,
+    parameter MAX_QPS_WIDTH = (MAX_QPS > 1) ? $clog2(MAX_QPS) : 1,
+    parameter EN_DCQCN_LOGIC = 1,
     parameter CLOCK_PERIOD = 6.4,
     parameter USE_XILINX_XPM_SDPRAM = 1,
+    parameter WR_CMD_FIFO_DEPTH = 8,
+    parameter RD_CMD_FIFO_DEPTH = 8,
+    parameter WR_AXIS_DATAMOVER_FIFO_DEPTH = 4096,
+    parameter RD_AXIS_DATAMOVER_FIFO_DEPTH = 4096,
     parameter OUTPUT_AXI_FIFO_DEPTH = 0
 ) (
     input wire clk,
     input wire rst,
-    
+
     input wire flow_ctrl_pause, // halt timeout counter when pause is active
     /*
      * RoCE RX ACKed PSNs
      */
-    input  wire         s_roce_rx_bth_valid,
-    output wire         s_roce_rx_bth_ready,
-    input  wire [ 23:0] s_roce_rx_bth_psn,
-    input  wire [ 7 :0] s_roce_rx_bth_op_code,
-    input  wire [ 23:0] s_roce_rx_bth_dest_qp,
     input  wire         s_roce_rx_aeth_valid,
     output wire         s_roce_rx_aeth_ready,
     input  wire [ 7 :0] s_roce_rx_aeth_syndrome,
-    input  wire [ 23:0] s_roce_rx_last_not_acked_psn,
+    input  wire [ 23:0] s_roce_rx_aeth_psn,
+    input  wire [ 23:0] s_roce_rx_aeth_dest_qp,
+
+    /*
+     * RoCE RX CNP
+     */
+    input  wire         s_roce_rx_cnp_valid,
+    output wire         s_roce_rx_cnp_ready,
+    input  wire [ 23:0] s_roce_rx_cnp_dest_qp,
     /*
      * RoCE TX frame input
      */
@@ -185,16 +194,30 @@ module RoCE_retransmission_module_v2 #(
     output  wire [23:0]  m_qp_close_loc_qpn,
     output  wire [23:0]  m_qp_close_rem_psn,
 
-    output wire [MAX_QPS-1:0]            stall_qp,
+    output wire [MAX_QPS-1:0]  stall_qp,
+    output wire [MAX_QPS-1:0]  throttle_qp,
     /*
     Configuration
     */
     input wire        cfg_valid,
-    input wire [63:0] timeout_period,
+    input wire [31:0] timeout_period,
     input wire [2 :0] retry_count,
     input wire [2 :0] rnr_retry_count,
     input wire [31:0] loc_ip_addr,
     input wire [2 :0] pmtu,
+
+    // dcqcn
+    input wire        dcqcn_en,
+    input wire [9:0]  dcqcn_par_g,
+    input wire [9:0]  dcqcn_alpha_min,
+    input wire [31:0] dcqcn_alpha_upd_time,
+    input wire [9:0]  dcqcn_rate_decr_min,
+    input wire [10:0] dcqcn_rate_min,
+    input wire [31:0] dcqcn_upd_time,
+    input wire [31:0] dcqcn_rate_ai_time,
+    input wire [31:0] dcqcn_rate_hai_time,
+    input wire [9:0]  dcqcn_rate_incr_ai,
+    input wire [9:0]  dcqcn_rate_incr_hai,
 
     /*
     QP Status
@@ -202,6 +225,8 @@ module RoCE_retransmission_module_v2 #(
     input  wire [23:0]  monitor_qpn,
     output wire [31:0]  n_retransmit_triggers,
     output wire [31:0]  n_rnr_retransmit_triggers,
+    output wire [31:0]  n_total_psn_seq_errors,
+    output wire [31:0]  n_total_timeout_errors,
     output wire [23:0]  psn_diff // WR - CPL psn difference   
 );
 
@@ -210,6 +235,8 @@ module RoCE_retransmission_module_v2 #(
     localparam AXI_MAX_BURST_LEN_COMP = 4096/(DATA_WIDTH/8);
     localparam AXI_MAX_BURST_LEN = 256 <= AXI_MAX_BURST_LEN_COMP ? 256 : AXI_MAX_BURST_LEN_COMP;
     localparam BURST_SIZE = AXI_MAX_BURST_LEN * 8;
+
+    localparam QP_MEMORY_SIZE = 2**(BUFFER_ADDR_WIDTH)/MAX_QPS;
 
     localparam RAM_OP_CODE_OFFSET   = 0;
     localparam RAM_PSN_OFFSET       = RAM_OP_CODE_OFFSET   + 8;
@@ -259,63 +286,83 @@ module RoCE_retransmission_module_v2 #(
     reg [3:0] hdr_ram_dout_valid_pipes;
 
     wire                       m_rd_table_we;
-    wire [$clog2(MAX_QPS)-1:0] m_rd_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   m_rd_table_qpn;
     wire [24-1:0]              m_rd_table_psn;
 
     wire                       s_rd_table_re;
-    wire [$clog2(MAX_QPS)-1:0] s_rd_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   s_rd_table_qpn;
     wire [24-1:0]              s_rd_table_psn;
 
     wire                       m_wr_table_we;
-    wire [$clog2(MAX_QPS)-1:0] m_wr_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   m_wr_table_qpn;
     wire [24-1:0]              m_wr_table_psn;
 
     wire                       s_wr_table_re;
-    wire [$clog2(MAX_QPS)-1:0] s_wr_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   s_wr_table_qpn;
     wire [24-1:0]              s_wr_table_psn;
 
     wire                       m_cpl_table_we;
-    wire [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   m_cpl_table_qpn;
     wire [24-1:0]              m_cpl_table_psn;
 
     wire                       s_cpl_table_re;
-    wire [$clog2(MAX_QPS)-1:0] s_cpl_table_qpn;
+    wire [MAX_QPS_WIDTH-1:0]   s_cpl_table_qpn;
     wire [24-1:0]              s_cpl_table_psn;
 
     wire                       m_rd_table_we_rtr;
-    wire [$clog2(MAX_QPS)-1:0] m_rd_table_qpn_rtr;
+    wire [MAX_QPS_WIDTH-1:0]   m_rd_table_qpn_rtr;
     wire [24-1:0]              m_rd_table_psn_rtr;
 
     wire                       m_wr_table_we_rtr;
-    wire [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_rtr;
+    wire [MAX_QPS_WIDTH-1:0]   m_wr_table_qpn_rtr;
     wire [24-1:0]              m_wr_table_psn_rtr;
 
     wire                       m_cpl_table_we_rtr;
-    wire [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn_rtr;
+    wire [MAX_QPS_WIDTH-1:0]   m_cpl_table_qpn_rtr;
     wire [24-1:0]              m_cpl_table_psn_rtr;
+
+    // read port of duplicate tables
+    wire [BUFFER_ADDR_WIDTH-8-1:0] s_cpl_duplicate_table_psn;
+    wire [BUFFER_ADDR_WIDTH-8-1:0] s_wr_duplicate_table_psn;
+    reg  [MAX_QPS_WIDTH-1:0]       round_robin_stall_check;
+    reg  [MAX_QPS_WIDTH-1:0]       round_robin_stall_check_slr [1:0];
+    reg  [24-1:0]                  psn_diff_reg;
+    reg  [MAX_QPS-1:0] stall_qp_reg;
+    reg  [MAX_QPS-1:0] throttle_qp_reg;
 
     wire         rtr_wr_qp_close_valid   = (m_qp_close_valid && m_qp_close_ready) | (cm_qp_valid && cm_qp_req_type == REQ_CLOSE_QP);
     wire  [23:0] rtr_wr_qp_close_loc_qpn = (m_qp_close_valid && m_qp_close_ready) ? m_qp_close_loc_qpn : cm_qp_loc_qpn;
 
     reg                       m_rd_table_we_rst;
-    reg [$clog2(MAX_QPS)-1:0] m_rd_table_qpn_rst;
+    reg [MAX_QPS_WIDTH-1:0] m_rd_table_qpn_rst;
     reg [24-1:0]              m_rd_table_psn_rst;
 
     reg                       m_wr_table_we_rst;
-    reg [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_rst;
+    reg [MAX_QPS_WIDTH-1:0] m_wr_table_qpn_rst;
     reg [24-1:0]              m_wr_table_psn_rst;
 
     reg                       m_cpl_table_we_rst;
-    reg [$clog2(MAX_QPS)-1:0] m_cpl_table_qpn_rst;
+    reg [MAX_QPS_WIDTH-1:0] m_cpl_table_qpn_rst;
     reg [24-1:0]              m_cpl_table_psn_rst;
 
     reg flow_ctrl_pause_reg;
 
-    wire roce_rx_aeth_ready;
+    reg [3:0]    memory_steps;
+    reg [12:0]   pmtu_val;
+    reg [24-1:0] psn_stall_thr_stop; // threshold for qp stall
+    reg [24-1:0] psn_stall_thr_release; // threshold for realease after stalling
+    reg [24-1:0] psn_throttle_thr;
 
 
-    assign  s_roce_rx_bth_ready  = roce_rx_aeth_ready;
-    assign  s_roce_rx_aeth_ready = roce_rx_aeth_ready;
+    always @(posedge clk) begin
+        memory_steps          <= 4'd8 + pmtu;
+        pmtu_val              <= 13'd1 << ( pmtu + 13'd8);
+        psn_stall_thr_stop    <= (QP_MEMORY_SIZE >> (4'd8 + pmtu)) - ((MAX_QPS+1)); 
+        psn_stall_thr_release <= (psn_stall_thr_stop >> 1) + (psn_stall_thr_stop >> 2); // 3/4 of the stop thr
+        psn_throttle_thr      <= ((QP_MEMORY_SIZE >> (4'd8 + pmtu)) >> 1) + ((QP_MEMORY_SIZE >> (4'd8 + pmtu)) >> 2); // 3/4 of the buffer
+    end
+
+    //assign  s_roce_rx_bth_ready  = s_roce_rx_aeth_ready;
 
     // when qp_close reset all table to same psn (24'hff_ffff)
     always @(posedge clk) begin
@@ -336,27 +383,27 @@ module RoCE_retransmission_module_v2 #(
         end else begin
             if (rtr_wr_qp_close_valid) begin
                 m_rd_table_we_rst  <= 1'b1;
-                m_rd_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_rd_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_rd_table_psn_rst <= 24'hFF_FFFF;
 
                 m_wr_table_we_rst  <= 1'b1;
-                m_wr_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_wr_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_wr_table_psn_rst <= 24'hFF_FFFF;
 
                 m_cpl_table_we_rst  <= 1'b1;
-                m_cpl_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_cpl_table_qpn_rst <= rtr_wr_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_cpl_table_psn_rst <= 24'hFF_FFFF;
             end else if (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP) begin
                 m_rd_table_we_rst  <= 1'b1;
-                m_rd_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_rd_table_qpn_rst <= cm_qp_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_rd_table_psn_rst <= cm_qp_rem_psn - 24'd1;
 
                 m_wr_table_we_rst  <= 1'b1;
-                m_wr_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_wr_table_qpn_rst <= cm_qp_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_wr_table_psn_rst <= cm_qp_rem_psn - 24'd1;
 
                 m_cpl_table_we_rst  <= 1'b1;
-                m_cpl_table_qpn_rst <= cm_qp_loc_qpn[$clog2(MAX_QPS)-1:0];
+                m_cpl_table_qpn_rst <= cm_qp_loc_qpn[MAX_QPS_WIDTH-1:0];
                 m_cpl_table_psn_rst <= cm_qp_rem_psn - 24'd1;
             end else begin
                 m_rd_table_we_rst  <= 1'b0;
@@ -388,7 +435,9 @@ module RoCE_retransmission_module_v2 #(
         .DATA_WIDTH(DATA_WIDTH),
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .BASE_LOC_QPN(BASE_LOC_QPN),
-        .MAX_QPS(MAX_QPS)
+        .MAX_QPS(MAX_QPS),
+        .WR_CMD_FIFO_DEPTH(WR_CMD_FIFO_DEPTH),
+        .WR_AXIS_DATAMOVER_FIFO_DEPTH(WR_AXIS_DATAMOVER_FIFO_DEPTH)
     ) RoCE_rtr_write_module_instance (
         .clk(clk),
         .rst(rst),
@@ -474,18 +523,23 @@ module RoCE_retransmission_module_v2 #(
         .BUFFER_ADDR_WIDTH(BUFFER_ADDR_WIDTH),
         .BASE_LOC_QPN(BASE_LOC_QPN),
         .CLOCK_PERIOD(CLOCK_PERIOD),
-        .MAX_QPS(MAX_QPS)
+        .MAX_QPS(MAX_QPS),
+        .EN_DCQCN_LOGIC(EN_DCQCN_LOGIC),
+        .RD_CMD_FIFO_DEPTH(RD_CMD_FIFO_DEPTH),
+        .RD_AXIS_DATAMOVER_FIFO_DEPTH(RD_AXIS_DATAMOVER_FIFO_DEPTH)
     ) RoCE_rtr_read_module_instance (
         .clk(clk),
         .rst(rst),
-        .s_roce_rx_aeth_valid        (s_roce_rx_aeth_valid),
-        .s_roce_rx_aeth_ready        (roce_rx_aeth_ready),
-        .s_roce_rx_aeth_syndrome     (s_roce_rx_aeth_syndrome),
-        .s_roce_rx_bth_psn           (s_roce_rx_bth_psn),
-        .s_roce_rx_bth_op_code       (s_roce_rx_bth_op_code),
-        .s_roce_rx_bth_dest_qp       (s_roce_rx_bth_dest_qp),
 
-        .s_roce_rx_last_not_acked_psn(0),
+        .s_roce_rx_aeth_valid   (s_roce_rx_aeth_valid),
+        .s_roce_rx_aeth_ready   (s_roce_rx_aeth_ready),
+        .s_roce_rx_aeth_syndrome(s_roce_rx_aeth_syndrome),
+        .s_roce_rx_aeth_psn     (s_roce_rx_aeth_psn),
+        .s_roce_rx_aeth_dest_qp (s_roce_rx_aeth_dest_qp),
+
+        .s_roce_rx_cnp_valid  (s_roce_rx_cnp_valid),
+        .s_roce_rx_cnp_ready  (s_roce_rx_cnp_ready),
+        .s_roce_rx_cnp_dest_qp(s_roce_rx_cnp_dest_qp),
 
         .flow_ctrl_pause(flow_ctrl_pause_reg),
 
@@ -557,6 +611,7 @@ module RoCE_retransmission_module_v2 #(
         .s_qp_open_valid      (cm_qp_valid && cm_qp_req_type == REQ_OPEN_QP),
         .s_qp_open_loc_qpn    (cm_qp_loc_qpn),
         .s_qp_open_rem_qpn    (cm_qp_rem_qpn),
+        .s_qp_open_r_key      (cm_qp_r_key),
         .s_qp_open_rem_ip_addr(cm_qp_rem_ip_addr),
 
         .hdr_ram_re        (hdr_ram_re),
@@ -580,17 +635,30 @@ module RoCE_retransmission_module_v2 #(
         .s_cpl_table_qpn(s_cpl_table_qpn),
         .s_cpl_table_psn(s_cpl_table_psn),
 
-        .stall_qp(stall_qp),
         .loc_ip_addr(loc_ip_addr),
         .pmtu(pmtu),
         .timeout_period(timeout_period),
         .retry_count(retry_count),
         .rnr_retry_count(rnr_retry_count),
 
+        // dcqcn
+        .dcqcn_en            (dcqcn_en),
+        .dcqcn_par_g         (dcqcn_par_g),
+        .dcqcn_alpha_min     (dcqcn_alpha_min),
+        .dcqcn_alpha_upd_time(dcqcn_alpha_upd_time),
+        .dcqcn_rate_decr_min (dcqcn_rate_decr_min),
+        .dcqcn_rate_min      (dcqcn_rate_min),
+        .dcqcn_upd_time      (dcqcn_upd_time),
+        .dcqcn_rate_ai_time  (dcqcn_rate_ai_time),
+        .dcqcn_rate_hai_time (dcqcn_rate_hai_time),
+        .dcqcn_rate_incr_ai  (dcqcn_rate_incr_ai),
+        .dcqcn_rate_incr_hai (dcqcn_rate_incr_hai),
+
         .monitor_qpn(monitor_qpn),
         .n_retransmit_triggers(n_retransmit_triggers),
         .n_rnr_retransmit_triggers(n_rnr_retransmit_triggers),
-        .psn_diff(psn_diff)
+        .n_total_psn_seq_errors(n_total_psn_seq_errors),
+        .n_total_timeout_errors(n_total_timeout_errors)
     );
 
 
@@ -652,7 +720,7 @@ module RoCE_retransmission_module_v2 #(
                 .ADDR_WIDTH(BUFFER_ADDR_WIDTH-8),
                 .DATA_WIDTH(HDR_DATA_WIDTH),
                 .STRB_WIDTH(1),
-                .NPIPES(2),
+                .NPIPES(6),
                 .STYLE("ultra")
             ) hdr_ram_instance (
                 .clk(clk),
@@ -677,7 +745,7 @@ module RoCE_retransmission_module_v2 #(
     assign hdr_ram_dout_valid = hdr_ram_dout_valid_pipes[3];
 
     simple_dpram #(
-        .ADDR_WIDTH($clog2(MAX_QPS)),
+        .ADDR_WIDTH(MAX_QPS_WIDTH),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -696,8 +764,9 @@ module RoCE_retransmission_module_v2 #(
         .wen(m_wr_table_we)
     );
 
+
     simple_dpram #(
-        .ADDR_WIDTH($clog2(MAX_QPS)),
+        .ADDR_WIDTH(MAX_QPS_WIDTH),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -716,12 +785,12 @@ module RoCE_retransmission_module_v2 #(
         .wen   (m_rd_table_we)
     );
 
-    assign m_cpl_table_we  = (s_roce_rx_aeth_valid & s_roce_rx_aeth_ready && s_roce_rx_bth_op_code == RC_RDMA_ACK && s_roce_rx_aeth_syndrome[6:5] == 2'b00) | m_cpl_table_we_rst;
-    assign m_cpl_table_qpn = m_cpl_table_we_rst ? m_cpl_table_qpn_rst : s_roce_rx_bth_dest_qp;
-    assign m_cpl_table_psn = m_cpl_table_we_rst ? m_cpl_table_psn_rst : s_roce_rx_bth_psn;
+    assign m_cpl_table_we  = (s_roce_rx_aeth_valid & s_roce_rx_aeth_ready && s_roce_rx_aeth_syndrome[6:5] == 2'b00) | m_cpl_table_we_rst;
+    assign m_cpl_table_qpn = m_cpl_table_we_rst ? m_cpl_table_qpn_rst : s_roce_rx_aeth_dest_qp;
+    assign m_cpl_table_psn = m_cpl_table_we_rst ? m_cpl_table_psn_rst : s_roce_rx_aeth_psn;
 
     simple_dpram #(
-        .ADDR_WIDTH($clog2(MAX_QPS)),
+        .ADDR_WIDTH(MAX_QPS_WIDTH),
         .DATA_WIDTH(24),
         .STRB_WIDTH(1),
         .NPIPES(-1),
@@ -739,6 +808,87 @@ module RoCE_retransmission_module_v2 #(
         .ren   (s_cpl_table_re),
         .wen   (m_cpl_table_we)
     );
+
+    // Compute if QP needs to be stalled, need WR and CPL dulicatets tables
+    simple_dpram #(
+        .ADDR_WIDTH(MAX_QPS_WIDTH),
+        .DATA_WIDTH(BUFFER_ADDR_WIDTH-8),
+        .STRB_WIDTH(1),
+        .NPIPES(-1),
+        .INIT_VALUE({BUFFER_ADDR_WIDTH-8{1'b1}}),
+        .STYLE("auto")
+    ) wr_table_duplicate_instance (
+        .clk(clk),
+        .rst(rst),
+        .waddr(m_wr_table_qpn),
+        .raddr(round_robin_stall_check),
+        .din (m_wr_table_psn),
+        .dout(s_wr_duplicate_table_psn),
+        .strb(1),
+        .ena(1'b1),
+        .ren(1'b1),
+        .wen(m_wr_table_we)
+    );
+
+    simple_dpram #(
+        .ADDR_WIDTH(MAX_QPS_WIDTH),
+        .DATA_WIDTH(BUFFER_ADDR_WIDTH-8),
+        .STRB_WIDTH(1),
+        .NPIPES(-1),
+        .INIT_VALUE({BUFFER_ADDR_WIDTH-8{1'b1}}),
+        .STYLE("auto")
+    ) cpl_table_duplicate_instance (
+        .clk(clk),
+        .rst(rst),
+        .waddr (m_cpl_table_qpn),
+        .raddr (round_robin_stall_check),
+        .din   (m_cpl_table_psn),
+        .dout  (s_cpl_duplicate_table_psn),
+        .strb  (1),
+        .ena   (1'b1),
+        .ren   (1'b1),
+        .wen   (m_cpl_table_we)
+    );
+
+    always @(posedge clk) begin
+        if (rst) begin
+            round_robin_stall_check     <= 'd0;
+            round_robin_stall_check_slr <= {default:'d0};
+            psn_diff_reg                <= 'd0;
+            stall_qp_reg                <= 'd0;
+            throttle_qp_reg             <= 'd0;
+        end else begin
+            round_robin_stall_check <= round_robin_stall_check + 1;
+            round_robin_stall_check_slr <= {round_robin_stall_check_slr[0], round_robin_stall_check};
+            if (round_robin_stall_check_slr[0] == (monitor_qpn-BASE_LOC_QPN)) begin
+                psn_diff_reg[BUFFER_ADDR_WIDTH-8-1:0] <= s_wr_duplicate_table_psn - s_cpl_duplicate_table_psn;
+                psn_diff_reg[23:BUFFER_ADDR_WIDTH-8] <= 'd0;
+            end
+
+            // check if qp needs to be stalled
+            if ((s_wr_duplicate_table_psn - s_cpl_duplicate_table_psn) > psn_stall_thr_stop) begin
+                // wr pointer and cpl pointer diff too big, stall that QP
+                stall_qp_reg[round_robin_stall_check_slr[0]] = 1'b1;
+            end else if (stall_qp_reg[round_robin_stall_check_slr[0]]) begin
+                if ((s_wr_duplicate_table_psn - s_cpl_duplicate_table_psn) <= psn_stall_thr_release) begin
+                    // isteresis
+                    stall_qp_reg[round_robin_stall_check_slr[0]] = 1'b0;
+                end else begin
+                    stall_qp_reg[round_robin_stall_check_slr[0]] = 1'b1;
+                end
+            end
+
+            // check if qp needs to be throttled
+            if ((s_wr_duplicate_table_psn - s_cpl_duplicate_table_psn) > psn_throttle_thr) begin
+                // wr pointer and cpl pointer diff too big, throttle that QP
+                throttle_qp_reg[round_robin_stall_check_slr[0]] = 1'b1;
+            end else begin
+                throttle_qp_reg[round_robin_stall_check_slr[0]] = 1'b0;
+            end
+        end
+    end
+
+
 
     /*
     AXI fifo INTERFACE
@@ -1026,7 +1176,8 @@ module RoCE_retransmission_module_v2 #(
     endgenerate
 
 
-
-
+    assign psn_diff    = psn_diff_reg;
+    assign stall_qp    = stall_qp_reg;
+    assign throttle_qp = throttle_qp_reg;
 
 endmodule

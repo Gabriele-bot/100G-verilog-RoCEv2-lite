@@ -46,6 +46,7 @@ module unaligned_axi_seg_2_axis #(
     wire          m_axis_fifo_tready;
 
     reg [2:0] current_align_reg, current_align_next;
+    reg [2:0] current_align_reg_del;
 
     reg [128*8-1:0] prev_tdata_reg, prev_tdata_next;
     reg [7:0] prev_ena_reg, prev_ena_next;
@@ -147,21 +148,19 @@ module unaligned_axi_seg_2_axis #(
             current_align_next = current_align_reg;
         end
 
-        case(current_align_reg)
-            4'd0: begin
-
-                // passthrough if no overlap
-                shift_axi_seg_tdata   = s_axis_seg_tdata_del;
-                shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
-                shift_axi_seg_ena     = s_ena_del;
-                shift_axi_seg_sop     = s_sop_del;
-                shift_axi_seg_eop     = s_eop_del;
-                shift_axi_seg_err     = s_err_del;
-                shift_axi_seg_mty     = s_mty_del;
-
-            end
-            4'd1: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
+        if (shift_axi_seg_extra_cycle_reg) begin
+            case(current_align_reg_del)
+                4'd0: begin
+                    // passthrough if no overlap
+                    shift_axi_seg_tdata   = s_axis_seg_tdata_del;
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = s_ena_del;
+                    shift_axi_seg_sop     = s_sop_del;
+                    shift_axi_seg_eop     = s_eop_del;
+                    shift_axi_seg_err     = s_err_del;
+                    shift_axi_seg_mty     = s_mty_del;
+                end
+                4'd1: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> 128;
                     shift_axi_seg_tvalid  = 1'b1;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 1;
@@ -169,7 +168,75 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 1;
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 1;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (1*4);
-                end else begin
+                end
+                4'd2: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (2*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 2;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 2;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 2;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 2;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (2*4);
+                end
+                4'd3: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (3*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 3;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 3;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 3;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 3;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (3*4);
+                end
+                4'd4: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (4*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 4;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 4;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 4;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 4;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (4*4);
+                end
+                4'd5: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (5*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 5;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 5;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 5;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 5;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (5*4);
+                end
+                4'd6: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (6*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 6;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 6;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 6;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 6;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (6*4);
+                end
+                4'd7: begin
+                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (7*128);
+                    shift_axi_seg_tvalid  = 1'b1;
+                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 7;
+                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 7;
+                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 7;
+                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 7;
+                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (7*4);
+                end
+            endcase
+        end else begin
+            case(current_align_reg)
+                4'd0: begin
+                    // passthrough if no overlap
+                    shift_axi_seg_tdata   = s_axis_seg_tdata_del;
+                    shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
+                    shift_axi_seg_ena     = s_ena_del;
+                    shift_axi_seg_sop     = s_sop_del;
+                    shift_axi_seg_eop     = s_eop_del;
+                    shift_axi_seg_err     = s_err_del;
+                    shift_axi_seg_mty     = s_mty_del;
+                end
+                4'd1: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> 128;
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 1;
@@ -178,17 +245,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 1;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (1*4);
                 end
-            end
-            4'd2: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (2*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 2;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 2;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 2;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 2;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (2*4);
-                end else begin
+                4'd2: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (2*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 2;
@@ -197,17 +254,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 2;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (2*4);
                 end
-            end
-            4'd3: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (3*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 3;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 3;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 3;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 3;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (3*4);
-                end else begin
+                4'd3: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (3*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 3;
@@ -216,17 +263,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 3;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (3*4);
                 end
-            end
-            4'd4: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (4*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 4;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 4;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 4;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 4;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (4*4);
-                end else begin
+                4'd4: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (4*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 4;
@@ -235,17 +272,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 4;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (4*4);
                 end
-            end
-            4'd5: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (5*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 5;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 5;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 5;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 5;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (5*4);
-                end else begin
+                4'd5: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (5*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 5;
@@ -254,17 +281,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 5;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (5*4);
                 end
-            end
-            4'd6: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (6*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 6;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 6;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 6;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 6;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (6*4);
-                end else begin
+                4'd6: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (6*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 6;
@@ -273,17 +290,7 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 6;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (6*4);
                 end
-            end
-            4'd7: begin
-                if (shift_axi_seg_extra_cycle_reg) begin
-                    shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (7*128);
-                    shift_axi_seg_tvalid  = 1'b1;
-                    shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 7;
-                    shift_axi_seg_sop     = {s_sop_del, save_axi_seg_sop_reg} >> 7;
-                    shift_axi_seg_eop     = {s_eop_del, save_axi_seg_eop_reg} >> 7;
-                    shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 7;
-                    shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (7*4);
-                end else begin
+                4'd7: begin
                     shift_axi_seg_tdata   = {s_axis_seg_tdata_del, save_axi_seg_tdata_reg} >> (7*128);
                     shift_axi_seg_tvalid  = s_axis_seg_tvalid_del;
                     shift_axi_seg_ena     = {s_ena_del, save_axi_seg_ena_reg} >> 7;
@@ -292,8 +299,10 @@ module unaligned_axi_seg_2_axis #(
                     shift_axi_seg_err     = {s_err_del, save_axi_seg_err_reg} >> 7;
                     shift_axi_seg_mty     = {s_mty_del, save_axi_seg_mty_reg} >> (7*4);
                 end
-            end
-        endcase
+            endcase
+        end
+
+
 
         flush_save = 1'b0;
         transfer_in_save = 1'b0;
@@ -306,8 +315,10 @@ module unaligned_axi_seg_2_axis #(
             end
 
             if (|(shift_axi_seg_eop & shift_axi_seg_ena) & shift_axi_seg_tvalid) begin
-                flush_save = 1'b1;
-                enable_read_next = 1'b0;
+                if (!(|(s_sop_del & s_ena_del) & s_axis_seg_tvalid_del)) begin 
+                    flush_save = 1'b1;
+                    enable_read_next = 1'b0;
+                end
             end
 
         end
@@ -352,7 +363,8 @@ module unaligned_axi_seg_2_axis #(
             s_err_del <= 8'h0;
             s_mty_del <= 32'h00000000;
 
-            current_align_reg <= 3'd0;
+            current_align_reg     <= 3'd0;
+            current_align_reg_del <= 3'd0;
 
             save_axi_seg_tdata_reg <= {1024{1'b0}};
             save_axi_seg_ena_reg   <= 8'h0;
@@ -381,7 +393,8 @@ module unaligned_axi_seg_2_axis #(
             enable_read_reg <= enable_read_next;
 
 
-            current_align_reg <= current_align_next;
+            current_align_reg     <= current_align_next;
+            current_align_reg_del <= current_align_reg;
 
             if (transfer_in_save) begin
                 save_axi_seg_tdata_reg <= s_axis_seg_tdata_del;
@@ -418,30 +431,30 @@ module unaligned_axi_seg_2_axis #(
                 .RAM_PIPELINE(1),
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
-                .DROP_WHEN_FULL(1),
-                .FRAME_FIFO(1)
+                .DROP_WHEN_FULL(0),
+                .FRAME_FIFO(0)
             ) axis_fifo_instance (
                 .s_clk(s_clk),
                 .s_rst(s_rst),
-                .s_axis_tdata(m_axis_tdata_reg),
-                .s_axis_tkeep(m_axis_tkeep_reg),
+                .s_axis_tdata (m_axis_tdata_reg),
+                .s_axis_tkeep (m_axis_tkeep_reg),
                 .s_axis_tvalid(m_axis_tvalid_reg),
                 .s_axis_tready(m_axis_fifo_tready),
-                .s_axis_tlast(m_axis_tlast_reg),
-                .s_axis_tid(0),
-                .s_axis_tdest(0),
-                .s_axis_tuser(m_axis_tuser_reg),
+                .s_axis_tlast (m_axis_tlast_reg),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+                .s_axis_tuser (m_axis_tuser_reg),
 
                 .m_clk(m_clk),
                 .m_rst(m_rst),
-                .m_axis_tdata(m_axis_tdata),
-                .m_axis_tkeep(m_axis_tkeep),
+                .m_axis_tdata (m_axis_tdata),
+                .m_axis_tkeep (m_axis_tkeep),
                 .m_axis_tvalid(m_axis_tvalid),
                 .m_axis_tready(m_axis_tready),
-                .m_axis_tlast(m_axis_tlast),
-                .m_axis_tid(),
-                .m_axis_tdest(),
-                .m_axis_tuser(m_axis_tuser)
+                .m_axis_tlast (m_axis_tlast),
+                .m_axis_tid   (),
+                .m_axis_tdest (),
+                .m_axis_tuser (m_axis_tuser)
             );
         end else begin
             axis_fifo #(
@@ -451,8 +464,8 @@ module unaligned_axi_seg_2_axis #(
                 .RAM_PIPELINE(1),
                 .USER_ENABLE(1),
                 .USER_WIDTH(1),
-                .DROP_WHEN_FULL(1),
-                .FRAME_FIFO(1)
+                .DROP_WHEN_FULL(0),
+                .FRAME_FIFO(0)
             ) axis_fifo_instance (
                 .clk(m_clk),
                 .rst(m_rst),

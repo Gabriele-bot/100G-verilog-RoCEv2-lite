@@ -6,7 +6,10 @@ module RoCE_rtr_write_module #(
     parameter BUFFER_ADDR_WIDTH = 24,
     parameter HEADER_ADDR_WIDTH = BUFFER_ADDR_WIDTH - 8,
     parameter BASE_LOC_QPN = 256,
-    parameter MAX_QPS = 4
+    parameter MAX_QPS = 4,
+    parameter MAX_QPS_WIDTH = MAX_QPS > 1 ? $clog2(MAX_QPS) : 1,
+    parameter WR_CMD_FIFO_DEPTH = 8,
+    parameter WR_AXIS_DATAMOVER_FIFO_DEPTH = 4096
 ) (
     input wire clk,
     input wire rst,
@@ -89,7 +92,7 @@ module RoCE_rtr_write_module #(
     Write table interface, update when succesfully write to mem
     */
     output wire                       m_wr_table_we,
-    output wire [$clog2(MAX_QPS)-1:0] m_wr_table_qpn, // used as address
+    output wire [MAX_QPS_WIDTH-1:0] m_wr_table_qpn, // used as address
     output wire [24-1:0]              m_wr_table_psn,
     /*
     Close QP input, when a qp is close flush whatever is left in the queue
@@ -101,10 +104,6 @@ module RoCE_rtr_write_module #(
     */
     input wire        s_qp_open_valid,
     input wire [23:0] s_qp_open_loc_qpn,
-    /*
-    Status
-    */
-    output wire mem_full,
     /*
     Configuration
     */
@@ -146,11 +145,11 @@ module RoCE_rtr_write_module #(
     wire                      wr_table_fifo_ready;
     reg                       wr_table_valid_reg, wr_table_valid_next;
     reg [24-1:0]              wr_table_psn_reg, wr_table_psn_next;
-    reg [$clog2(MAX_QPS)-1:0] wr_table_qpn_reg, wr_table_qpn_next;
+    reg [MAX_QPS_WIDTH-1:0] wr_table_qpn_reg, wr_table_qpn_next;
 
     reg                       m_wr_table_valid_reg;
     reg [24-1:0]              m_wr_table_psn_reg;
-    reg [$clog2(MAX_QPS)-1:0] m_wr_table_qpn_reg;
+    reg [MAX_QPS_WIDTH-1:0] m_wr_table_qpn_reg;
 
 
 
@@ -161,8 +160,8 @@ module RoCE_rtr_write_module #(
     reg [MAX_QPS-1:0]  qp_close_reg;
 
     wire wr_table_fifo_out_valid;
-    wire [$clog2(MAX_QPS)-1:0] wr_table_fifo_out_qpn;
-    wire [23:0]                wr_table_fifo_out_psn;
+    wire [MAX_QPS_WIDTH-1:0] wr_table_fifo_out_qpn;
+    wire [23:0]              wr_table_fifo_out_psn;
 
     always @(posedge clk) begin
         memory_steps <= 4'd8 + pmtu;
@@ -207,18 +206,24 @@ module RoCE_rtr_write_module #(
                         state_next                = STATE_DMA_WAIT_READY;
                     end
                     dma_write_desc_valid_next = 1'b1;
-                    dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  =  (s_roce_bth_psn << memory_steps);
-                    dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] =  s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
-
+                    if (MAX_QPS == 1) begin
+                        dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1:0]  =  (s_roce_bth_psn << memory_steps);
+                    end else begin
+                        dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0]  =  (s_roce_bth_psn << memory_steps);
+                        dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: MAX_QPS_WIDTH] =  s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0];
+                    end
                     // if qp need to be flushed, write to mem, but don't update WR pointer
-                    wr_table_valid_next = !qp_flush_reg[s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0]];
+                    wr_table_valid_next = !qp_flush_reg[s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0]];
                     wr_table_psn_next   = s_roce_bth_psn;
                     wr_table_qpn_next   = s_roce_bth_src_qp;
 
                     hdr_ram_we_next = 1'b1;
-                    hdr_ram_addr_next[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0]  = s_roce_bth_psn[HEADER_ADDR_WIDTH-$clog2(MAX_QPS)-1:0];
-                    hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: $clog2(MAX_QPS)] = s_roce_bth_src_qp[$clog2(MAX_QPS)-1:0];
-
+                    if (MAX_QPS == 1) begin
+                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-1:0]  = s_roce_bth_psn[HEADER_ADDR_WIDTH-1:0];
+                    end else begin
+                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0]  = s_roce_bth_psn[HEADER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0];
+                        hdr_ram_addr_next[HEADER_ADDR_WIDTH-1 -: MAX_QPS_WIDTH] = s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0];
+                    end
                     hdr_ram_data_in_next[RAM_OP_CODE_OFFSET+:8]   = s_roce_bth_op_code;
                     hdr_ram_data_in_next[RAM_PSN_OFFSET+:24]      = s_roce_bth_psn;
                     // RETH Fields
@@ -254,13 +259,6 @@ module RoCE_rtr_write_module #(
                     state_next                = STATE_DMA_WAIT_READY;
                 end
             end
-            //STATE_DMA_WRITE : begin
-            //    if (s_roce_payload_axis_tvalid && s_roce_payload_axis_tlast && s_roce_payload_axis_tready) begin // end of transfer
-            //        state_next = STATE_IDLE;
-            //    end else begin
-            //        state_next = STATE_DMA_WRITE;
-            //    end
-            //end
             default : begin
                 state_next                = STATE_IDLE;
             end
@@ -312,13 +310,13 @@ module RoCE_rtr_write_module #(
             // check if there was a close qp signal
             if (s_qp_close_valid) begin
                 if (s_qp_close_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
-                    qp_close_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b1;
-                    qp_flush_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b1;
+                    qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
+                    qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
                 end
             end else if (s_qp_open_valid) begin
                 if (s_qp_open_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
-                    qp_close_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b0;
-                    qp_flush_reg[s_qp_close_loc_qpn[$clog2(MAX_QPS)-1:0]] <= 1'b0;
+                    qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
+                    qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
                 end
             end
 
@@ -342,60 +340,65 @@ module RoCE_rtr_write_module #(
         end
     end
 
-    /*
+    generate
+        if (WR_AXIS_DATAMOVER_FIFO_DEPTH > 0) begin
+            axis_fifo #(
+                .DEPTH       (WR_AXIS_DATAMOVER_FIFO_DEPTH), // 32 frames
+                .DATA_WIDTH  (DATA_WIDTH),
+                .KEEP_ENABLE (1),
+                .KEEP_WIDTH  (DATA_WIDTH/8),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (1),
+                .USER_WIDTH  (1),
+                .RAM_PIPELINE(0),
+                .FRAME_FIFO  (0)
+            ) dma_write_payload_axis_fifo (
+                .clk(clk),
+                .rst(rst),
+
+                // AXI input
+                .s_axis_tdata (s_roce_payload_axis_tdata),
+                .s_axis_tkeep (s_roce_payload_axis_tkeep),
+                .s_axis_tvalid(s_roce_payload_axis_tvalid),
+                .s_axis_tready(s_roce_payload_axis_tready),
+                .s_axis_tlast (s_roce_payload_axis_tlast),
+                .s_axis_tuser (s_roce_payload_axis_tuser),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+
+                // AXI output
+                .m_axis_tdata (m_dma_write_axis_tdata),
+                .m_axis_tkeep (m_dma_write_axis_tkeep),
+                .m_axis_tvalid(m_dma_write_axis_tvalid),
+                .m_axis_tready(m_dma_write_axis_tready),
+                .m_axis_tlast (m_dma_write_axis_tlast),
+                .m_axis_tuser (m_dma_write_axis_tuser),
+
+                // Status
+                .status_overflow  (),
+                .status_bad_frame (),
+                .status_good_frame()
+            );
+        end else begin
+            assign m_dma_write_axis_tdata     = s_roce_payload_axis_tdata;
+            assign m_dma_write_axis_tkeep     = s_roce_payload_axis_tkeep;
+            assign m_dma_write_axis_tvalid    = s_roce_payload_axis_tvalid;
+            assign s_roce_payload_axis_tready = m_dma_write_axis_tready;
+            assign m_dma_write_axis_tlast     = s_roce_payload_axis_tlast;
+            assign m_dma_write_axis_tuser     = s_roce_payload_axis_tuser;
+        end
+    endgenerate
+
     axis_fifo #(
-        .DEPTH((DATA_WIDTH/8)*8), // 8 frames
-        .DATA_WIDTH(DATA_WIDTH),
-        .KEEP_ENABLE(1),
-        .KEEP_WIDTH(DATA_WIDTH/8),
-        .ID_ENABLE(0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(1),
-        .USER_WIDTH(1),
-        .FRAME_FIFO(0)
-    ) dma_write_payload_axis_fifo (
-        .clk(clk),
-        .rst(rst),
-
-        // AXI input
-        .s_axis_tdata (s_roce_payload_axis_tdata),
-        .s_axis_tkeep (s_roce_payload_axis_tkeep),
-        .s_axis_tvalid(s_roce_payload_axis_tvalid),
-        .s_axis_tready(s_roce_payload_axis_tready),
-        .s_axis_tlast (s_roce_payload_axis_tlast),
-        .s_axis_tuser (s_roce_payload_axis_tuser),
-        .s_axis_tid   (0),
-        .s_axis_tdest (0),
-
-        // AXI output
-        .m_axis_tdata (m_dma_write_axis_tdata),
-        .m_axis_tkeep (m_dma_write_axis_tkeep),
-        .m_axis_tvalid(m_dma_write_axis_tvalid),
-        .m_axis_tready(m_dma_write_axis_tready),
-        .m_axis_tlast (m_dma_write_axis_tlast),
-        .m_axis_tuser (m_dma_write_axis_tuser),
-
-        // Status
-        .status_overflow  (),
-        .status_bad_frame (),
-        .status_good_frame()
-    );
-    */
-    assign m_dma_write_axis_tdata     = s_roce_payload_axis_tdata;
-    assign m_dma_write_axis_tkeep     = s_roce_payload_axis_tkeep;
-    assign m_dma_write_axis_tvalid    = s_roce_payload_axis_tvalid;
-    assign s_roce_payload_axis_tready = m_dma_write_axis_tready; 
-    assign m_dma_write_axis_tlast     = s_roce_payload_axis_tlast;
-    assign m_dma_write_axis_tuser     = s_roce_payload_axis_tuser;
-
-    axis_fifo #(
-        .DEPTH(8),
-        .DATA_WIDTH(BUFFER_ADDR_WIDTH+13),
-        .KEEP_ENABLE(0),
-        .LAST_ENABLE(0),
-        .ID_ENABLE  (0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(0)
+        .DEPTH       (WR_CMD_FIFO_DEPTH),
+        .DATA_WIDTH  (BUFFER_ADDR_WIDTH+13),
+        .KEEP_ENABLE (0),
+        .LAST_ENABLE (0),
+        .ID_ENABLE   (0),
+        .DEST_ENABLE (0),
+        .USER_ENABLE (0),
+        .RAM_PIPELINE(0)
     ) dma_write_command_fifo (
         .clk(clk),
         .rst(rst),
@@ -422,13 +425,14 @@ module RoCE_rtr_write_module #(
     );
 
     axis_fifo #(
-        .DEPTH(8),
-        .DATA_WIDTH($clog2(MAX_QPS)+24), // qpn and psn
-        .KEEP_ENABLE(0),
-        .LAST_ENABLE(0),
-        .ID_ENABLE  (0),
-        .DEST_ENABLE(0),
-        .USER_ENABLE(0)
+        .DEPTH       (WR_CMD_FIFO_DEPTH),
+        .DATA_WIDTH  (MAX_QPS_WIDTH+24), // qpn and psn
+        .KEEP_ENABLE (0),
+        .LAST_ENABLE (0),
+        .ID_ENABLE   (0),
+        .DEST_ENABLE (0),
+        .USER_ENABLE (0),
+        .RAM_PIPELINE(0)
     ) write_table_entry_fifo (
         .clk(clk),
         .rst(rst),
