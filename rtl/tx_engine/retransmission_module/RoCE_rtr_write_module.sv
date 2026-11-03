@@ -91,9 +91,13 @@ module RoCE_rtr_write_module #(
     /*
     Write table interface, update when succesfully write to mem
     */
-    output wire                       m_wr_table_we,
+    output wire                     m_wr_table_we,
     output wire [MAX_QPS_WIDTH-1:0] m_wr_table_qpn, // used as address
-    output wire [24-1:0]              m_wr_table_psn,
+    output wire [24-1:0]            m_wr_table_psn,
+    // psn diff monitor
+    output wire                     m_wr_monitor_table_we,
+    output wire [MAX_QPS_WIDTH-1:0] m_wr_monitor_table_qpn, // used as address
+    output wire [24-1:0]            m_wr_monitor_table_psn,
     /*
     Close QP input, when a qp is close flush whatever is left in the queue
     */
@@ -142,13 +146,13 @@ module RoCE_rtr_write_module #(
     reg [175 :0]                   hdr_ram_data_in_reg, hdr_ram_data_in_next;
 
 
-    wire                      wr_table_fifo_ready;
-    reg                       wr_table_valid_reg, wr_table_valid_next;
-    reg [24-1:0]              wr_table_psn_reg, wr_table_psn_next;
+    wire                    wr_table_fifo_ready;
+    reg                     wr_table_valid_reg, wr_table_valid_next;
+    reg [24-1:0]            wr_table_psn_reg, wr_table_psn_next;
     reg [MAX_QPS_WIDTH-1:0] wr_table_qpn_reg, wr_table_qpn_next;
 
-    reg                       m_wr_table_valid_reg;
-    reg [24-1:0]              m_wr_table_psn_reg;
+    reg                     m_wr_table_valid_reg;
+    reg [24-1:0]            m_wr_table_psn_reg;
     reg [MAX_QPS_WIDTH-1:0] m_wr_table_qpn_reg;
 
 
@@ -159,7 +163,7 @@ module RoCE_rtr_write_module #(
     reg [MAX_QPS-1:0]  qp_flush_reg;
     reg [MAX_QPS-1:0]  qp_close_reg;
 
-    wire wr_table_fifo_out_valid;
+    wire                     wr_table_fifo_out_valid;
     wire [MAX_QPS_WIDTH-1:0] wr_table_fifo_out_qpn;
     wire [23:0]              wr_table_fifo_out_psn;
 
@@ -208,14 +212,18 @@ module RoCE_rtr_write_module #(
                     dma_write_desc_valid_next = 1'b1;
                     if (MAX_QPS == 1) begin
                         dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1:0]  =  (s_roce_bth_psn << memory_steps);
+                        // if qp need to be flushed, write to mem, but don't update WR pointer
+                        wr_table_valid_next = !qp_flush_reg[0];
+                        wr_table_psn_next   = s_roce_bth_psn;
+                        wr_table_qpn_next   = s_roce_bth_src_qp - BASE_LOC_QPN;
                     end else begin
                         dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0]  =  (s_roce_bth_psn << memory_steps);
+                        // if qp need to be flushed, write to mem, but don't update WR pointer
                         dma_write_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: MAX_QPS_WIDTH] =  s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0];
+                        wr_table_valid_next = !qp_flush_reg[s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0]];
+                        wr_table_psn_next   = s_roce_bth_psn;
+                        wr_table_qpn_next   = s_roce_bth_src_qp - BASE_LOC_QPN;
                     end
-                    // if qp need to be flushed, write to mem, but don't update WR pointer
-                    wr_table_valid_next = !qp_flush_reg[s_roce_bth_src_qp[MAX_QPS_WIDTH-1:0]];
-                    wr_table_psn_next   = s_roce_bth_psn;
-                    wr_table_qpn_next   = s_roce_bth_src_qp;
 
                     hdr_ram_we_next = 1'b1;
                     if (MAX_QPS == 1) begin
@@ -308,15 +316,29 @@ module RoCE_rtr_write_module #(
             hdr_ram_data_in_reg <= hdr_ram_data_in_next;
 
             // check if there was a close qp signal
-            if (s_qp_close_valid) begin
-                if (s_qp_close_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
-                    qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
-                    qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
+            if (MAX_QPS == 1) begin
+                if (s_qp_close_valid) begin
+                    if (s_qp_close_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
+                        qp_close_reg[0] <= 1'b1;
+                        qp_flush_reg[0] <= 1'b1;
+                    end
+                end else if (s_qp_open_valid) begin
+                    if (s_qp_open_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
+                        qp_close_reg[0] <= 1'b0;
+                        qp_flush_reg[0] <= 1'b0;
+                    end
                 end
-            end else if (s_qp_open_valid) begin
-                if (s_qp_open_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
-                    qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
-                    qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
+            end else begin
+                if (s_qp_close_valid) begin
+                    if (s_qp_close_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
+                        qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
+                        qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b1;
+                    end
+                end else if (s_qp_open_valid) begin
+                    if (s_qp_open_loc_qpn - BASE_LOC_QPN < MAX_QPS) begin
+                        qp_close_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
+                        qp_flush_reg[s_qp_close_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 1'b0;
+                    end
                 end
             end
 
@@ -424,6 +446,10 @@ module RoCE_rtr_write_module #(
         .status_good_frame()
     );
 
+    // two write table entry here
+    // 1) Used to monitor the Buffer occupancy, it doesn't wait for status valid befoe write the write pointer --  with monitor in the name
+    // 2) Used to decide if the read can happen, this one waits fot the dma write status before updateing the pointer, avoid read of memory region 
+    //    that is not properly written yet -- the other one
     axis_fifo #(
         .DEPTH       (WR_CMD_FIFO_DEPTH),
         .DATA_WIDTH  (MAX_QPS_WIDTH+24), // qpn and psn
@@ -461,10 +487,14 @@ module RoCE_rtr_write_module #(
     assign s_roce_bth_ready   = s_roce_bth_ready_reg;
     assign s_roce_reth_ready  = s_roce_bth_ready_reg;
     assign s_roce_immdh_ready = s_roce_bth_ready_reg;
-
+    
     assign m_wr_table_we  = m_wr_table_valid_reg;
     assign m_wr_table_qpn = m_wr_table_qpn_reg;
     assign m_wr_table_psn = m_wr_table_psn_reg;
+    // bypass fifo
+    assign m_wr_monitor_table_we  = wr_table_valid_reg;
+    assign m_wr_monitor_table_qpn = wr_table_qpn_reg;
+    assign m_wr_monitor_table_psn = wr_table_psn_reg;
 
     assign hdr_ram_we   = hdr_ram_we_reg;
     assign hdr_ram_addr = hdr_ram_addr_reg;

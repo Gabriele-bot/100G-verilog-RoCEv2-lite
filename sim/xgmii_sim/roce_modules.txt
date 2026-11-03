@@ -1,9 +1,7 @@
-header_files/Board_parameters.sv
 header_files/RoCE_parameters.sv
 utils/network_wrapper_roce_generic.sv
 utils/generic_arb_mux.v
 utils/generic_mux.v
-utils/generic_hdr_payload_fifo.v
 utils/dcmac_pad.v
 utils/RoCE_dcqcn.sv
 utils/AXIseg_2_AXIs/axis_2_axi_seg.sv
@@ -15,7 +13,8 @@ utils/AXIseg_2_AXIs/axi_seg_2_axis.sv
 utils/AXIseg_2_AXIs/unaligned_axi_seg_2_axis.sv
 utils/sync_bit_array.v
 icrc_insert/axis_mask_fields_icrc.v
-icrc_insert/axis_RoCE_icrc_insert.v
+icrc_insert/axis_RoCE_icrc_insert.sv
+icrc_insert/eth_icrc_insert.sv
 data_gen/RoCE_data_generator.sv
 data_gen/axis_data_generator.sv
 tx_engine/axis_packet_framer.sv
@@ -26,7 +25,7 @@ tx_engine/RoCE_udp_tx.sv
 tx_engine/RoCE_tx_header_producer.sv
 tx_engine/retransmission_module/RoCE_rtr_write_module.sv
 tx_engine/retransmission_module/RoCE_rtr_read_module.sv
-tx_engine/retransmission_module/RoCE_retransmission_module_v2.sv
+tx_engine/retransmission_module/RoCE_retransmission_module.sv
 rx_engine/RoCE_bth_udp_rx.sv
 rx_engine/RoCE_aeth_bth_rx.sv
 rx_engine/RoCE_cnp_bth_rx.sv
@@ -42,12 +41,11 @@ utils/latency_measure/RoCE_latency_eval.sv
 utils/latency_measure/RoCE_adj_ack_time_eval.sv
 utils/latency_measure/histogrammer.sv
 utils/latency_measure/window_max.sv
-utils/axis_handshake_monitor.vhd
 tx_engine/RoCE_simple_work_queue.sv
 utils/RoCE_packet_dropper.sv
-utils/simple_dpram.v
-utils/true_dpram.v
-utils/axi_ram_mod.v	
+utils/simple_dpram.sv
+utils/true_dpram.sv
+utils/axi_ram_mod.sv	
 utils/axi_ram_xpm.sv
 tx_engine/RoCE_tx_queue.sv
 tx_engine/RoCE_realign_frame_fifo.sv

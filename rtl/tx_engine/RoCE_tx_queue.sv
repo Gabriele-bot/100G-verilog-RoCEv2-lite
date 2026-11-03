@@ -143,7 +143,7 @@ module RoCE_tx_queue #(
     // work request metadata
     wire         m_wr_req_valid;
     wire         m_wr_req_ready;
-    wire         m_wr_req_tx_type; // 0 WRITE, 1 SEND
+    wire         m_wr_req_tx_type; // 0 SEND, 1 RDMA WRITE
     wire         m_wr_req_is_immediate;
     wire [31:0]  m_wr_req_immediate_data;
     wire [23:0]  m_wr_req_loc_qp;

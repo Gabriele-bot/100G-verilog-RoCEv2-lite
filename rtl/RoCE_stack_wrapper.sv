@@ -21,7 +21,8 @@ module RoCE_stack_wrapper #(
     parameter N_QUEUE_PAIRS                    = 2,
     parameter EN_DCQCN_LOGIC                   = 1,
     // Register to achieve better timings, enable them if you want to trade some flops with better timings
-    parameter ENABLE_TIMING_OPT_REGS           = 0
+    parameter ENABLE_TIMING_OUT_OPT_REGS       = 0,
+    parameter CONST_PMTU_4096 = 0
 ) (
     input wire clk_stack,
     input wire rst_stack,
@@ -48,6 +49,8 @@ module RoCE_stack_wrapper #(
     output wire                            s_axis_tready [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tlast  [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tuser  [N_QUEUE_PAIRS-1:0],
+
+    output wire [N_QUEUE_PAIRS-1:0] qp_buffer_almost_full,
 
     /*
      * UDP frame input
@@ -377,6 +380,7 @@ module RoCE_stack_wrapper #(
     wire                          roce_arb_payload_axis_tready;
 
     wire        cm_qp_valid;
+    wire        cm_qp_ready;
     wire [2 :0] cm_qp_req_type;
     wire [31:0] cm_qp_dma_transfer_length;
     wire [23:0] cm_qp_rem_qpn;
@@ -390,6 +394,7 @@ module RoCE_stack_wrapper #(
     wire        qp_tx_type;
 
     wire        cm_qp_valid_roce;
+    wire        cm_qp_ready_roce;
     wire [2 :0] cm_qp_req_type_roce;
     wire [31:0] cm_qp_dma_transfer_length_roce;
     wire [23:0] cm_qp_rem_qpn_roce;
@@ -649,7 +654,9 @@ module RoCE_stack_wrapper #(
     wire [24-1:0] m_qp_close_loc_qpn;
     wire [24-1:0] m_qp_close_rem_psn;
 
-    wire [N_QUEUE_PAIRS-1:0]     stall_qp;
+    wire        m_cm_next_qp_available_valid;
+    wire        m_cm_next_qp_available_ready;
+    wire [23:0] m_cm_next_qp_available_qpn;
 
     // Arbiter output (between QPs)
     wire roce_bth_hdr_t m_roce_qp_arb_bth = m_roce_qp_arb_hdr[(ARB_HEADER_LENGTH)*8-1 -: 12*8];
@@ -765,8 +772,6 @@ module RoCE_stack_wrapper #(
     wire        wr_error_qp_not_rts [N_QUEUE_PAIRS-1:0];
     wire [23:0] wr_error_loc_qpn [N_QUEUE_PAIRS-1:0];
 
-
-
     // clock stack domain (faster one)
 
 
@@ -811,6 +816,7 @@ module RoCE_stack_wrapper #(
         .m_udp_payload_axis_tuser (tx_udp_cm_payload_axis_tuser),
 
         .cm_qp_valid        (cm_qp_valid),
+        .cm_qp_ready        (cm_qp_ready),
         .cm_qp_req_type     (cm_qp_req_type),
         .cm_qp_r_key        (cm_qp_r_key),
         .cm_qp_rem_qpn      (cm_qp_rem_qpn),
@@ -822,6 +828,10 @@ module RoCE_stack_wrapper #(
 
         .cm_qp_status_valid (cm_qp_status_valid),
         .cm_qp_status       (cm_qp_status),
+
+        .s_cm_next_qp_available_valid(m_cm_next_qp_available_valid),
+        .s_cm_next_qp_available_ready(m_cm_next_qp_available_ready),
+        .s_cm_next_qp_available_qpn(m_cm_next_qp_available_qpn),
 
         .m_metadata_valid     (txmeta_valid),
         .m_start_transfer     (txmeta_start_transfer),
@@ -1158,6 +1168,10 @@ module RoCE_stack_wrapper #(
     +-------------------------------------+
     */
 
+    wire        m_cm_next_qp_available_valid_cdc;
+    wire        m_cm_next_qp_available_ready_cdc;
+    wire [23:0] m_cm_next_qp_available_qpn_cdc;
+
     wire [N_ROCE_TX_ENGINES-1:0] rx_roce_aeth_tx_eng_valid    ;
     wire [N_ROCE_TX_ENGINES-1:0] rx_roce_aeth_tx_eng_ready    ;
     wire [23:0]                  rx_roce_aeth_tx_eng_dest_qp  [N_ROCE_TX_ENGINES-1:0];
@@ -1246,6 +1260,8 @@ module RoCE_stack_wrapper #(
     wire [63:0] s_qp_spy_rem_addr_cdc;
     wire [31:0] s_qp_spy_rem_ip_addr_cdc;
     wire [7:0]  s_qp_spy_syndrome_cdc;
+
+    wire rst_roce_eng_to_stack;
 
     generate
         if (ASYNC_OUTPUT) begin
@@ -1543,16 +1559,25 @@ module RoCE_stack_wrapper #(
                 .dest_out({s_qp_spy_context_valid, s_qp_spy_state,s_qp_spy_rem_qpn,s_qp_spy_loc_qpn,s_qp_spy_rem_psn,s_qp_spy_rem_acked_psn,s_qp_spy_loc_psn,s_qp_spy_r_key,s_qp_spy_rem_addr,s_qp_spy_rem_ip_addr,s_qp_spy_syndrome})
             );
 
+            // used to reset next qp anvailable async fifo 
+            sync_reset #(
+                .N(2)
+            ) sync_reset_roce_eng_to_stack_instance (
+                .clk(clk_stack),
+                .rst(rst_roce_eng),
+                .out(rst_roce_eng_to_stack)
+            );
+
 
             axis_async_fifo #(
-                .DEPTH(16),
-                .DATA_WIDTH((3+3+1)*8), // QPN PSN SYNDROME
-                .KEEP_ENABLE(0),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(0),
-                .LAST_ENABLE(0),
-                .RAM_PIPELINE(1)
+                .DEPTH       (N_QUEUE_PAIRS),
+                .DATA_WIDTH  ((3+3+1)*8), // QPN PSN SYNDROME
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
             ) rx_roce_aeth_axis_async_fifo_qp_state (
                 .s_clk(clk_stack),
                 .s_rst(rst_stack),
@@ -1582,14 +1607,14 @@ module RoCE_stack_wrapper #(
 
 
             axis_async_fifo #(
-                .DEPTH(4),
-                .DATA_WIDTH(24+1+1+32+32+32+1),
-                .KEEP_ENABLE(0),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(0),
-                .LAST_ENABLE(0),
-                .RAM_PIPELINE(1)
+                .DEPTH       (2),
+                .DATA_WIDTH  (24+1+1+32+32+32+1),
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
             ) txmeta_async_fifo (
                 .s_clk(clk_stack),
                 .s_rst(rst_stack),
@@ -1619,14 +1644,14 @@ module RoCE_stack_wrapper #(
             );
 
             axis_async_fifo #(
-                .DEPTH(3),
-                .DATA_WIDTH(3+32+24+24+24+24+32+64+32+1+1),
-                .KEEP_ENABLE(0),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(0),
-                .LAST_ENABLE(0),
-                .RAM_PIPELINE(1)
+                .DEPTH       (2),
+                .DATA_WIDTH  (3+32+24+24+24+24+32+64+32+1+1),
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
             ) cm_qp_async_fifo (
                 .s_clk(clk_stack),
                 .s_rst(rst_stack),
@@ -1635,7 +1660,7 @@ module RoCE_stack_wrapper #(
                 .s_axis_tdata ({cm_qp_req_type, cm_qp_dma_transfer_length, cm_qp_rem_qpn, cm_qp_loc_qpn, cm_qp_rem_psn, cm_qp_loc_psn, cm_qp_r_key, cm_qp_rem_addr, cm_qp_rem_ip_addr, qp_is_immediate, qp_tx_type}),
                 .s_axis_tkeep (0),
                 .s_axis_tvalid(cm_qp_valid),
-                .s_axis_tready(),
+                .s_axis_tready(cm_qp_ready),
                 .s_axis_tlast (0),
                 .s_axis_tid   (0),
                 .s_axis_tdest (0),
@@ -1644,11 +1669,10 @@ module RoCE_stack_wrapper #(
                 .m_clk(clk_roce_eng),
                 .m_rst(rst_roce_eng),
 
-                // AXI output
                 .m_axis_tdata ({cm_qp_req_type_roce, cm_qp_dma_transfer_length_roce, cm_qp_rem_qpn_roce, cm_qp_loc_qpn_roce, cm_qp_rem_psn_roce, cm_qp_loc_psn_roce, cm_qp_r_key_roce, cm_qp_rem_addr_roce, cm_qp_rem_ip_addr_roce, qp_is_immediate_roce, qp_tx_type_roce}),
                 .m_axis_tkeep (),
                 .m_axis_tvalid(cm_qp_valid_roce),
-                .m_axis_tready(1'b1),
+                .m_axis_tready(cm_qp_ready_roce),
                 .m_axis_tlast (),
                 .m_axis_tid   (),
                 .m_axis_tdest (),
@@ -1656,14 +1680,14 @@ module RoCE_stack_wrapper #(
             );
 
             axis_async_fifo #(
-                .DEPTH(4),
-                .DATA_WIDTH(2),
-                .KEEP_ENABLE(0),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(0),
-                .LAST_ENABLE(0),
-                .RAM_PIPELINE(1)
+                .DEPTH       (2),
+                .DATA_WIDTH  (2),
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(ENABLE_TIMING_OUT_OPT_REGS ? 1 : 0)
             ) cm_qp_status_async_fifo (
                 .s_clk(clk_roce_eng),
                 .s_rst(rst_roce_eng),
@@ -1681,11 +1705,46 @@ module RoCE_stack_wrapper #(
                 .m_clk(clk_stack),
                 .m_rst(rst_stack),
 
-                // AXI output
                 .m_axis_tdata (cm_qp_status),
                 .m_axis_tkeep (),
                 .m_axis_tvalid(cm_qp_status_valid),
                 .m_axis_tready(1'b1),
+                .m_axis_tlast (),
+                .m_axis_tid   (),
+                .m_axis_tdest (),
+                .m_axis_tuser ()
+            );
+
+        axis_async_fifo #(
+                .DEPTH       (2),
+                .DATA_WIDTH  (24),
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(ENABLE_TIMING_OUT_OPT_REGS ? 1 : 0)
+            ) cm_next_qp_available_async_fifo (
+                .s_clk(clk_roce_eng),
+                .s_rst(rst_roce_eng),
+
+
+                .s_axis_tdata (m_cm_next_qp_available_qpn_cdc),
+                .s_axis_tkeep (0),
+                .s_axis_tvalid(m_cm_next_qp_available_valid_cdc),
+                .s_axis_tready(m_cm_next_qp_available_ready_cdc),
+                .s_axis_tlast (0),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+                .s_axis_tuser (0),
+
+                .m_clk(clk_stack),
+                .m_rst(rst_roce_eng_to_stack),
+
+                .m_axis_tdata (m_cm_next_qp_available_qpn),
+                .m_axis_tkeep (),
+                .m_axis_tvalid(m_cm_next_qp_available_valid),
+                .m_axis_tready(m_cm_next_qp_available_ready),
                 .m_axis_tlast (),
                 .m_axis_tid   (),
                 .m_axis_tdest (),
@@ -1757,37 +1816,58 @@ module RoCE_stack_wrapper #(
             assign txmeta_roce_start_transfer = txmeta_start_transfer;
             assign txmeta_roce_valid = txmeta_valid;
 
-            assign cm_qp_req_type_roce = cm_qp_req_type;
-            assign cm_qp_dma_transfer_length_roce = cm_qp_dma_transfer_length;
-            assign cm_qp_rem_qpn_roce = cm_qp_rem_qpn;
-            assign cm_qp_loc_qpn_roce = cm_qp_loc_qpn;
-            assign cm_qp_rem_psn_roce = cm_qp_rem_psn;
-            assign cm_qp_loc_psn_roce = cm_qp_loc_psn;
-            assign cm_qp_r_key_roce   = cm_qp_r_key;
-            assign cm_qp_rem_addr_roce = cm_qp_rem_addr;
-            assign cm_qp_rem_ip_addr_roce = cm_qp_rem_ip_addr;
-            assign qp_is_immediate_roce   = qp_is_immediate;
-            assign qp_tx_type_roce = qp_tx_type;
-            assign cm_qp_valid_roce = cm_qp_valid;
+            axis_fifo #(
+                .DEPTH       (2),
+                .DATA_WIDTH  (3+32+24+24+24+24+32+64+32+1+1),
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
+            ) cm_qp_fifo (
+                .clk(clk_stack),
+                .rst(rst_stack),
+
+
+                .s_axis_tdata ({cm_qp_req_type, cm_qp_dma_transfer_length, cm_qp_rem_qpn, cm_qp_loc_qpn, cm_qp_rem_psn, cm_qp_loc_psn, cm_qp_r_key, cm_qp_rem_addr, cm_qp_rem_ip_addr, qp_is_immediate, qp_tx_type}),
+                .s_axis_tkeep (0),
+                .s_axis_tvalid(cm_qp_valid),
+                .s_axis_tready(cm_qp_ready),
+                .s_axis_tlast (0),
+                .s_axis_tid   (0),
+                .s_axis_tdest (0),
+                .s_axis_tuser (0),
+
+                .m_axis_tdata ({cm_qp_req_type_roce, cm_qp_dma_transfer_length_roce, cm_qp_rem_qpn_roce, cm_qp_loc_qpn_roce, cm_qp_rem_psn_roce, cm_qp_loc_psn_roce, cm_qp_r_key_roce, cm_qp_rem_addr_roce, cm_qp_rem_ip_addr_roce, qp_is_immediate_roce, qp_tx_type_roce}),
+                .m_axis_tkeep (),
+                .m_axis_tvalid(cm_qp_valid_roce),
+                .m_axis_tready(cm_qp_ready_roce),
+                .m_axis_tlast (),
+                .m_axis_tid   (),
+                .m_axis_tdest (),
+                .m_axis_tuser ()
+            );
 
             assign cm_qp_status = cm_qp_status_roce;
             assign cm_qp_status_valid = cm_qp_status_valid_roce;
 
+            assign m_cm_next_qp_available_qpn       = m_cm_next_qp_available_qpn_cdc;
+            assign m_cm_next_qp_available_valid     = m_cm_next_qp_available_valid_cdc;
+            assign m_cm_next_qp_available_ready_cdc = m_cm_next_qp_available_ready;
+
         end
     endgenerate
-
-
-
 
     RoCE_qp_state_module #(
         .N_QUEUE_PAIRS(N_QUEUE_PAIRS),
         .REM_ADDR_WIDTH(16)
     ) RoCE_qp_state_module_instance (
-        .clk                    (clk_roce_eng),
-        .rst                    (rst_roce_eng),
-        .rst_qp                 (1'b0),
+        .clk                  (clk_roce_eng),
+        .rst                  (rst_roce_eng),
         // open qp
         .cm_qp_valid          (cm_qp_valid_roce),
+        .cm_qp_ready          (cm_qp_ready_roce),
         .cm_qp_req_type       (cm_qp_req_type_roce),
         .cm_qp_r_key          (cm_qp_r_key_roce),
         .cm_qp_rem_qpn        (cm_qp_rem_qpn_roce),
@@ -1799,6 +1879,10 @@ module RoCE_stack_wrapper #(
         //open status
         .cm_qp_status_valid(cm_qp_status_valid_roce),
         .cm_qp_status(cm_qp_status_roce),
+        //next available qp int
+        .m_cm_next_qp_available_valid(m_cm_next_qp_available_valid_cdc),
+        .m_cm_next_qp_available_ready(m_cm_next_qp_available_ready_cdc),
+        .m_cm_next_qp_available_qpn(m_cm_next_qp_available_qpn_cdc),
         // close qp if transfer did not succeed
         .s_qp_close_valid  (m_qp_close_valid),
         .s_qp_close_ready  (m_qp_close_ready),
@@ -1845,9 +1929,9 @@ module RoCE_stack_wrapper #(
         .s_roce_rx_aeth_dest_qp  (rx_roce_aeth_qp_state_dest_qp),
         .s_roce_rx_aeth_syndrome (rx_roce_aeth_qp_state_syndrome),
 
-        .last_acked_psn         (),
-        .stop_transfer          (),
-        .pmtu(pmtu_cdc)
+        .last_acked_psn (),
+        .stop_transfer  (),
+        .pmtu           (pmtu_cdc)
     );
 
 
@@ -2098,14 +2182,14 @@ module RoCE_stack_wrapper #(
             // one fifo async for each TX engine (only for ACKs and CNP)
 
             axis_async_fifo #(
-                .DEPTH(N_QUEUE_PAIRS/N_ROCE_TX_ENGINES > 2 ? N_QUEUE_PAIRS/N_ROCE_TX_ENGINES : 2),
-                .DATA_WIDTH((3+3+1)*8), // QPN PSN SYNDROME
-                .KEEP_ENABLE(0),
-                .ID_ENABLE(0),
-                .DEST_ENABLE(0),
-                .USER_ENABLE(0),
-                .LAST_ENABLE(0),
-                .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0)
+                .DEPTH       (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES > 2 ? N_QUEUE_PAIRS/N_ROCE_TX_ENGINES : 2),
+                .DATA_WIDTH  ((3+3+1)*8), // QPN PSN SYNDROME
+                .KEEP_ENABLE (0),
+                .ID_ENABLE   (0),
+                .DEST_ENABLE (0),
+                .USER_ENABLE (0),
+                .LAST_ENABLE (0),
+                .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
             ) rx_roce_aeth_axis_async_fifo (
                 .s_clk(clk_stack),
                 .s_rst(rst_stack),
@@ -2136,14 +2220,14 @@ module RoCE_stack_wrapper #(
 
             if (EN_DCQCN_LOGIC) begin
                 axis_async_fifo #(
-                    .DEPTH(4),
-                    .DATA_WIDTH((3)*8), // QPN
-                    .KEEP_ENABLE(0),
-                    .ID_ENABLE(0),
-                    .DEST_ENABLE(0),
-                    .USER_ENABLE(0),
-                    .LAST_ENABLE(0),
-                    .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0)
+                    .DEPTH       (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES > 2 ? N_QUEUE_PAIRS/N_ROCE_TX_ENGINES : 2),
+                    .DATA_WIDTH  ((3)*8), // QPN
+                    .KEEP_ENABLE (0),
+                    .ID_ENABLE   (0),
+                    .DEST_ENABLE (0),
+                    .USER_ENABLE (0),
+                    .LAST_ENABLE (0),
+                    .RAM_PIPELINE(CLOCK_PERIOD < 3 ? 1 : 0) // roce stack freq greater than 333 MHz
                 ) rx_roce_cnp_axis_async_fifo (
                     .s_clk(clk_stack),
                     .s_rst(rst_stack),
@@ -2258,20 +2342,22 @@ module RoCE_stack_wrapper #(
 
             // RoCE TX engine wrapper inst
             RoCE_tx_engine_wrapper #(
-                .QP_CH_DATA_WIDTH(QP_CH_DATA_WIDTH),
-                .QP_CH_KEEP_ENABLE(QP_CH_KEEP_ENABLE),
-                .QP_CH_KEEP_WIDTH(QP_CH_KEEP_WIDTH),
-                .OUT_DATA_WIDTH(ROCE_ENG_DATA_WIDTH),
-                .OUT_KEEP_ENABLE(ROCE_ENG_KEEP_ENABLE),
-                .OUT_KEEP_WIDTH(ROCE_ENG_KEEP_WIDTH),
-                .CLOCK_PERIOD(CLOCK_PERIOD),
-                .REFRESH_CACHE_TICKS(REFRESH_CACHE_TICKS),
+                .QP_CH_DATA_WIDTH                (QP_CH_DATA_WIDTH),
+                .QP_CH_KEEP_ENABLE               (QP_CH_KEEP_ENABLE),
+                .QP_CH_KEEP_WIDTH                (QP_CH_KEEP_WIDTH),
+                .OUT_DATA_WIDTH                  (ROCE_ENG_DATA_WIDTH),
+                .OUT_KEEP_ENABLE                 (ROCE_ENG_KEEP_ENABLE),
+                .OUT_KEEP_WIDTH                  (ROCE_ENG_KEEP_WIDTH),
+                .CLOCK_PERIOD                    (CLOCK_PERIOD),
+                .REFRESH_CACHE_TICKS             (REFRESH_CACHE_TICKS),
                 .RETRANSMISSION_ADDR_BUFFER_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH-$clog2(N_ROCE_TX_ENGINES)),
-                .N_QUEUE_PAIRS(N_QUEUE_PAIRS/N_ROCE_TX_ENGINES),
-                .EN_DCQCN_LOGIC(EN_DCQCN_LOGIC),
-                .BASE_LOC_QPN(256 + i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES), //TODO add check MAX_QUEUE_PAIRS >= N_ROCE_TX_ENGINES, both must be power of 2
-                .TARGET_SPEED(TARGET_SPEED/N_ROCE_TX_ENGINES),
-                .DEBUG(DEBUG)
+                .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS/N_ROCE_TX_ENGINES),
+                .EN_DCQCN_LOGIC                  (EN_DCQCN_LOGIC),
+                .BASE_LOC_QPN                    (256 + i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES), //TODO add check MAX_QUEUE_PAIRS >= N_ROCE_TX_ENGINES, both must be power of 2
+                .TARGET_SPEED                    (TARGET_SPEED/N_ROCE_TX_ENGINES),
+                .DEBUG                           (DEBUG),
+                .ENABLE_TIMING_OPT_REGS          (CLOCK_PERIOD < 3 ? 1 : 0), // roce stack freq greater than 333 MHz
+                .CONST_PMTU_4096                 (CONST_PMTU_4096)
             ) RoCE_tx_engine_wrapper_instance (
                 .clk(clk_roce_eng),
                 .rst(rst_roce_eng),
@@ -2302,6 +2388,8 @@ module RoCE_stack_wrapper #(
                 .s_axis_tready          (mux_axis_tready[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
                 .s_axis_tlast           (mux_axis_tlast[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
                 .s_axis_tuser           (mux_axis_tuser[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
+                // buffer almost full signal (3/4) for each qp 
+                .qp_buffer_almost_full(qp_buffer_almost_full[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
 
                 // RoCE data and headers out
                 .m_roce_bth_valid    (m_roce_retrans_bth_valid),
@@ -2345,7 +2433,7 @@ module RoCE_stack_wrapper #(
                 .m_roce_payload_axis_tready(m_roce_retrans_payload_axis_tready),
                 .m_roce_payload_axis_tlast (m_roce_retrans_payload_axis_tlast),
                 .m_roce_payload_axis_tuser (m_roce_retrans_payload_axis_tuser),
-
+                // AXI interface to Buffer
                 .m_axi_awid   (m_axi_reg_awid),
                 .m_axi_awaddr (m_axi_reg_awaddr),
                 .m_axi_awlen  (m_axi_reg_awlen),
@@ -2381,16 +2469,16 @@ module RoCE_stack_wrapper #(
                 .m_axi_rlast  (m_axi_reg_rlast),
                 .m_axi_rvalid (m_axi_reg_rvalid),
                 .m_axi_rready (m_axi_reg_rready),
-
+                // update context request
                 .m_qp_update_context_valid  (qp_update_context_tx_eng_valid[i]),
                 .m_qp_update_context_ready  (qp_update_context_tx_eng_ready[i]),
                 .m_qp_update_context_loc_qpn(qp_update_context_loc_qpn_rem_psn_tx_eng[i*48+:24]), // loc qpn
                 .m_qp_update_context_rem_psn(qp_update_context_loc_qpn_rem_psn_tx_eng[i*48+24+:24]), // rem psn
-
+                // Error to data gen, TODO make it external
                 .wr_error_qp_not_rts_out    (wr_error_qp_not_rts[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
                 .wr_error_loc_qpn_out       (wr_error_loc_qpn[i*N_QUEUE_PAIRS/N_ROCE_TX_ENGINES+:N_QUEUE_PAIRS/N_ROCE_TX_ENGINES]),
-
-                .cm_qp_valid              (cm_qp_valid_roce  & s_selector_cm_reply_tx_eng[i]),
+                // qp state reply used to reset pointer tables, this is not and endpoint, just a tap interface
+                .cm_qp_valid              (cm_qp_valid_roce  & cm_qp_ready_roce & s_selector_cm_reply_tx_eng[i]),
                 .cm_qp_req_type           (cm_qp_req_type_roce),
                 .cm_qp_dma_transfer_length(cm_qp_dma_transfer_length_roce),
                 .cm_qp_rem_qpn            (cm_qp_rem_qpn_roce),
@@ -2402,12 +2490,11 @@ module RoCE_stack_wrapper #(
                 .cm_qp_rem_ip_addr        (cm_qp_rem_ip_addr_roce),
                 .qp_is_immediate          (qp_is_immediate_roce),
                 .qp_tx_type               (qp_tx_type_roce),
-
-
+                // context request to qp state
                 .m_qp_context_req_valid   (qp_context_tx_eng_req_valid[i]),
                 .m_qp_context_req_ready   (qp_context_tx_eng_req_ready[i]),
                 .m_qp_context_loc_qpn_req (qp_context_loc_qpn_tx_eng_req[i*24+:24]),
-
+                // reply to context req
                 .s_qp_context_req_valid        (s_qp_context_req_valid & s_selector_context_reply_tx_eng[i]),
                 .s_qp_context_req_state        (s_qp_context_req_state),
                 .s_qp_context_req_rem_qpn      (s_qp_context_req_rem_qpn),
@@ -2417,7 +2504,7 @@ module RoCE_stack_wrapper #(
                 .s_qp_context_req_r_key        (s_qp_context_req_r_key),
                 .s_qp_context_req_rem_addr     (s_qp_context_req_rem_addr),
                 .s_qp_context_req_rem_ip_addr  (s_qp_context_req_rem_ip_addr),
-
+                // close qp in case of irreversible error, send it to qp state
                 .m_qp_close_valid  (qp_close_tx_eng_valid[i]),
                 .m_qp_close_ready  (qp_close_tx_eng_ready[i]),
                 .m_qp_close_loc_qpn(qp_close_loc_qpn_rem_psn_tx_eng[48*i+:24]),
@@ -2552,7 +2639,7 @@ module RoCE_stack_wrapper #(
                     .M_DATA_WIDTH(OUT_DATA_WIDTH),
                     .IS_ASYNC(ASYNC_OUTPUT),
                     .FIFO_DEPTH(8192-OUT_DATA_WIDTH/8),
-                    .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0),
+                    .RAM_PIPELINE(ENABLE_TIMING_OUT_OPT_REGS ? 1 : 0),
                     .FRAME_FIFO(N_ROCE_TX_ENGINES > 1),
                     .PAUSE_ENABLE(0)
                 ) RoCE_realign_frame_fifo_instance (
@@ -2791,11 +2878,11 @@ module RoCE_stack_wrapper #(
             localparam HISTO_DEPTH = 2048;
             localparam HISTO_DATA_WIDTH = 28;
 
-            reg [3 :0] latency_inst_valid_pipes;
-            reg [31:0] latency_inst_pipes [3:0];
+            (* shreg_extract = "no" *) reg [3 :0] latency_inst_valid_pipes;
+            (* shreg_extract = "no" *) reg [31:0] latency_inst_pipes [3:0];
 
-            reg [3 :0] adj_ack_time_inst_valid_pipes;
-            reg [31:0] adj_ack_time_inst_pipes [3:0];
+            (* shreg_extract = "no" *) reg [3 :0] adj_ack_time_inst_valid_pipes;
+            (* shreg_extract = "no" *) reg [31:0] adj_ack_time_inst_pipes [3:0];
 
             reg [32 : 0] read_histo_counter;
 

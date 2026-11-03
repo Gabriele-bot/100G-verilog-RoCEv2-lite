@@ -93,7 +93,11 @@ module qpn_fifo_init #
             for (i = 0; i < MAX_QUEUE_PAIRS_FIFO; i = i + 1) begin
                 qpn_mem[i] <= BASE_QPN_FIFO + i;
             end
-            fifo_wr_ptr_reg <= (MAX_QUEUE_PAIRS_FIFO_WIDTH+1)'(MAX_QUEUE_PAIRS_FIFO); // initialize fifo full
+            // old
+            //fifo_wr_ptr_reg <= (MAX_QUEUE_PAIRS_FIFO_WIDTH+1)'(MAX_QUEUE_PAIRS_FIFO); // initialize fifo full
+            // TODO address case with non power of 2 number of qp per tx engine. Now I dont know how this thing behaves...
+            // Temp fix tho allow non power of 2 QP, works only with TX engine == 1
+            fifo_wr_ptr_reg <= MAX_QUEUE_PAIRS_FIFO[MAX_QUEUE_PAIRS_FIFO_WIDTH:0];
         end else begin
             fifo_wr_ptr_reg <= fifo_wr_ptr_next;
         end

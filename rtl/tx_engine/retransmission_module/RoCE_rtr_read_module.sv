@@ -19,8 +19,8 @@ module RoCE_rtr_read_module #(
     input wire flow_ctrl_pause, // halt timeout counter when pause is active
 
     /*
-     * RoCE RX ACKed PSNs
-     */
+    RoCE RX ACKed PSNs
+    */
     input  wire         s_roce_rx_aeth_valid,
     output wire         s_roce_rx_aeth_ready,
     input  wire [ 7 :0] s_roce_rx_aeth_syndrome,
@@ -28,15 +28,15 @@ module RoCE_rtr_read_module #(
     input  wire [ 23:0] s_roce_rx_aeth_dest_qp,
 
     /*
-     * RoCE RX CNP
-     */
+    RoCE RX CNP
+    */
     input  wire         s_roce_rx_cnp_valid,
     output wire         s_roce_rx_cnp_ready,
     input  wire [ 23:0] s_roce_rx_cnp_dest_qp,
 
     /*
-     * RoCE TX frame output
-     */
+    RoCE TX frame output
+    */
     // BTH
     output  wire         m_roce_bth_valid,
     input   wire         m_roce_bth_ready,
@@ -84,15 +84,15 @@ module RoCE_rtr_read_module #(
     output  wire                       m_roce_payload_axis_tlast,
     output  wire                       m_roce_payload_axis_tuser,
     /*
-     * DMA Read command
-     */
+    DMA Read command
+    */
     output wire [BUFFER_ADDR_WIDTH-1:0] m_axis_dma_read_desc_addr,
     output wire [12:0]                  m_axis_dma_read_desc_len,
     output wire                         m_axis_dma_read_desc_valid,
     input wire                          m_axis_dma_read_desc_ready,
     /*
-     * DMA Read status
-     */
+    DMA Read status (not used for now)
+    */
     input wire [12:0]                  s_axis_dma_read_desc_status_len,
     input wire [3 :0]                  s_axis_dma_read_desc_status_error,
     input wire                         s_axis_dma_read_desc_status_valid,
@@ -104,14 +104,16 @@ module RoCE_rtr_read_module #(
     input  wire                       s_dma_read_axis_tlast,
     input  wire                       s_dma_read_axis_tuser,
 
-    /*HEADER RAM read */
+    /*
+    HEADER RAM read 
+    */
     output wire                         hdr_ram_re,
     output wire [HEADER_ADDR_WIDTH-1:0] hdr_ram_addr,
     input  wire [175:0]                 hdr_ram_data,
     input  wire                         hdr_ram_data_valid,
     /*
-     Read table interfaces
-     */
+    Read table interfaces
+    */
     output wire                       m_rd_table_we,
     output wire [MAX_QPS_WIDTH-1:0]   m_rd_table_qpn, // used as address
     output wire [24-1:0]              m_rd_table_psn,
@@ -120,8 +122,8 @@ module RoCE_rtr_read_module #(
     output wire [MAX_QPS_WIDTH-1:0]    s_rd_table_qpn, // used as address
     input  wire [24-1:0]               s_rd_table_psn,
     /*
-     Write table interface
-     */
+    Write table interface
+    */
     output wire                        s_wr_table_re,
     output wire [MAX_QPS_WIDTH-1:0]    s_wr_table_qpn, // used as address
     input  wire [24-1:0]               s_wr_table_psn,
@@ -141,7 +143,7 @@ module RoCE_rtr_read_module #(
     /*
     Open QP interface, needed only to store dest qp and dest ip address
     // TODO add reset counter and other qp related values upon opening
-     */
+    */
     input  wire         s_qp_open_valid,
     input  wire [23:0]  s_qp_open_loc_qpn,
     input  wire [23:0]  s_qp_open_rem_qpn,
@@ -156,7 +158,9 @@ module RoCE_rtr_read_module #(
     input wire [2 :0] rnr_retry_count,
     input wire [31:0] timeout_period,
 
-    // dcqcn
+    /*
+    DCQCN
+    */
     input wire        dcqcn_en,
     input wire [9:0]  dcqcn_par_g,
     input wire [9:0]  dcqcn_alpha_min,
@@ -280,7 +284,11 @@ module RoCE_rtr_read_module #(
 
     reg transmission_complete_reg, transmission_complete_next;
 
-    reg [31:0] timeout_counter [MAX_QPS - 1 : 0];
+    reg [31:0] timeout_counter     [MAX_QPS - 1 : 0];
+    reg [31:0]         timeout_ctr_dec_reg      [MAX_QPS - 1 : 0]; // pre-computed (timeout_counter[i] - MAX_QPS)
+    reg [MAX_QPS-1:0] timeout_ctr_near_zero_reg; // pre-computed (timeout_counter[i] < 2*MAX_QPS), one bit per QP
+    reg [31:0]         rnr_ctr_dec_reg          [MAX_QPS - 1 : 0]; // pre-computed (rnr_counter_reg[i] - MAX_QPS)
+    reg [MAX_QPS-1:0] rnr_ctr_near_zero_reg; // pre-computed (rnr_counter_reg[i] < 2*MAX_QPS), one bit per QP
     reg [31:0] rnr_counter_reg [MAX_QPS - 1 : 0] = '{default:0};
     reg [MAX_QPS_WIDTH-1:0] round_robin_qpn_timeout_reg;
     reg [MAX_QPS-1:0] qp_transmission_complete_reg, qp_transmission_complete_next;
@@ -777,8 +785,13 @@ module RoCE_rtr_read_module #(
                     end else begin
                         dma_read_desc_len_next  =  hdr_ram_data[RAM_UDP_LEN_OFFSET+:13] - 12 - 8;
                     end
-                    dma_read_desc_addr_next[BUFFER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0]  =  ((s_rd_table_psn + 1) << memory_steps);
-                    dma_read_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: MAX_QPS_WIDTH] =  round_robin_qpn_reg[MAX_QPS_WIDTH-1:0];
+                    if (MAX_QPS == 1) begin
+                        dma_read_desc_addr_next[BUFFER_ADDR_WIDTH-1:0]  =  ((s_rd_table_psn + 1) << memory_steps);
+                    end else begin
+                        dma_read_desc_addr_next[BUFFER_ADDR_WIDTH-MAX_QPS_WIDTH-1:0]  =  ((s_rd_table_psn + 1) << memory_steps);
+                        dma_read_desc_addr_next[BUFFER_ADDR_WIDTH-1 -: MAX_QPS_WIDTH] =  round_robin_qpn_reg[MAX_QPS_WIDTH-1:0];
+                    end
+
 
                     // now update read pointer
                     m_rd_table_we_next = 1'b1;
@@ -868,6 +881,19 @@ module RoCE_rtr_read_module #(
                 state_next = state_cached_reg;
             end
         endcase
+    end
+
+    /* 
+    Pre-compute register for every QP every cycle.
+    */
+    always @(posedge clk) begin : timeout_ctr_precompute
+        int pre_i;
+        for (pre_i = 0; pre_i < MAX_QPS; pre_i = pre_i + 1) begin
+            timeout_ctr_dec_reg[pre_i]         <= timeout_counter[pre_i]  - MAX_QPS;
+            timeout_ctr_near_zero_reg[pre_i]   <= (timeout_counter[pre_i]  < 2*MAX_QPS);
+            rnr_ctr_dec_reg[pre_i]             <= rnr_counter_reg[pre_i]  - MAX_QPS;
+            rnr_ctr_near_zero_reg[pre_i]       <= (rnr_counter_reg[pre_i]  < 2*MAX_QPS);
+        end
     end
 
     always @(posedge clk) begin
@@ -1031,17 +1057,29 @@ module RoCE_rtr_read_module #(
 
             if (s_qp_open_valid) begin
                 if (s_qp_open_loc_qpn >= BASE_LOC_QPN) begin
-                    cached_dest_ip_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= s_qp_open_rem_ip_addr;
-                    cached_rem_qpn_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= s_qp_open_rem_qpn;
-                    cached_r_key_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]   <= s_qp_open_r_key;
-
-                    // reset counters for that qp
-                    retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]           <= 'd0;
-                    rnr_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]       <= 'd0;
-                    total_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]     <= 'd0;
-                    total_rnr_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 'd0;
-                    total_psn_seq_errors_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]    <= 'd0;
-                    total_timeout_errors_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]    <= 'd0;
+                    if (MAX_QPS == 1) begin
+                        cached_dest_ip_reg[0] <= s_qp_open_rem_ip_addr;
+                        cached_rem_qpn_reg[0] <= s_qp_open_rem_qpn;
+                        cached_r_key_reg  [0] <= s_qp_open_r_key;
+                        // reset counters for that qp
+                        retry_counter_reg          [0] <= 'd0;
+                        rnr_retry_counter_reg      [0] <= 'd0;
+                        total_retry_counter_reg    [0] <= 'd0;
+                        total_rnr_retry_counter_reg[0] <= 'd0;
+                        total_psn_seq_errors_reg   [0] <= 'd0;
+                        total_timeout_errors_reg   [0] <= 'd0;
+                    end else begin
+                        cached_dest_ip_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= s_qp_open_rem_ip_addr;
+                        cached_rem_qpn_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= s_qp_open_rem_qpn;
+                        cached_r_key_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]   <= s_qp_open_r_key;
+                        // reset counters for that qp
+                        retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]           <= 'd0;
+                        rnr_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]       <= 'd0;
+                        total_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]     <= 'd0;
+                        total_rnr_retry_counter_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]] <= 'd0;
+                        total_psn_seq_errors_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]    <= 'd0;
+                        total_timeout_errors_reg[s_qp_open_loc_qpn[MAX_QPS_WIDTH-1:0]]    <= 'd0;
+                    end
                 end
             end
 
@@ -1061,14 +1099,14 @@ module RoCE_rtr_read_module #(
                     qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b0;
                     qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                 end else begin
-                    if (rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS < MAX_QPS || rnr_counter_reg[round_robin_qpn_timeout_reg] == 0) begin
+                    if (rnr_ctr_near_zero_reg[round_robin_qpn_timeout_reg]) begin
                         // RNR wait finished, deassert rnr wait bit and assert rnr wait done
                         rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg];
                         qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
                         qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b1;
                     end else begin
                         // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
-                        rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_counter_reg[round_robin_qpn_timeout_reg] - MAX_QPS;
+                        rnr_counter_reg[round_robin_qpn_timeout_reg]      <= rnr_ctr_dec_reg[round_robin_qpn_timeout_reg];
                         qp_rnr_wait_reg[round_robin_qpn_timeout_reg]      <= 1'b1;
                         qp_rnr_wait_done_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                     end
@@ -1091,7 +1129,7 @@ module RoCE_rtr_read_module #(
 
             // decode rx ACKs and timemout counter logic
             s_roce_rx_aeth_ready_reg <= 1'b0;
-            if (s_roce_rx_aeth_valid && (s_roce_rx_aeth_dest_qp == round_robin_qpn_timeout_reg + BASE_LOC_QPN)) begin // process ack
+            if (s_roce_rx_aeth_valid && (s_roce_rx_aeth_dest_qp == round_robin_qpn_timeout_reg + BASE_LOC_QPN && ~s_roce_rx_aeth_ready_reg)) begin // process ack
                 s_roce_rx_aeth_ready_reg <= 1'b1;
                 qp_timed_out_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                 case(s_roce_rx_aeth_syndrome[6:5])
@@ -1125,7 +1163,7 @@ module RoCE_rtr_read_module #(
                     end
                     2'b10:begin // reserved, should not happen (ignore)
                         if (!flow_ctrl_pause_reg) begin
-                            timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_counter[round_robin_qpn_timeout_reg] - MAX_QPS;
+                            timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_ctr_dec_reg[round_robin_qpn_timeout_reg];
                         end
                         qp_psn_error_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                         qp_rnr_wait_reg[round_robin_qpn_timeout_reg]  <= 1'b0;
@@ -1159,13 +1197,13 @@ module RoCE_rtr_read_module #(
                     end
                     default: begin
                         if (!flow_ctrl_pause_reg) begin
-                            timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_counter[round_robin_qpn_timeout_reg] - MAX_QPS;
+                            timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_ctr_dec_reg[round_robin_qpn_timeout_reg];
                         end
                         qp_psn_error_reg[round_robin_qpn_timeout_reg] <= 1'b0;
                         qp_rnr_wait_reg[round_robin_qpn_timeout_reg]  <= 1'b0;
                     end
                 endcase
-            end else if (timeout_counter[round_robin_qpn_timeout_reg] - MAX_QPS < MAX_QPS) begin
+            end else if (timeout_ctr_near_zero_reg[round_robin_qpn_timeout_reg]) begin
                 if (qp_started_retrans_reg[round_robin_qpn_timeout_reg]) begin
                     // retransmision started, refresh counter and deassert flag
                     timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_period;
@@ -1175,7 +1213,6 @@ module RoCE_rtr_read_module #(
                     timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_counter[round_robin_qpn_timeout_reg];
                     qp_timed_out_reg[round_robin_qpn_timeout_reg] <= 1'b1;
                 end
-
             end else begin
                 if (qp_transmission_complete_reg[round_robin_qpn_timeout_reg]) begin // sub optimal way of reading qp_transmission_complete_reg registers (1 bit per QP)
                 // transmission complete, dont reduce counter
@@ -1183,7 +1220,7 @@ module RoCE_rtr_read_module #(
                 end else begin
                     // reduce counter by MAX_QPS (clock cycles required for a complete sweep)
                     if (!flow_ctrl_pause_reg) begin
-                        timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_counter[round_robin_qpn_timeout_reg] - MAX_QPS;
+                        timeout_counter[round_robin_qpn_timeout_reg]  <= timeout_ctr_dec_reg[round_robin_qpn_timeout_reg];
                     end
                 end
                 qp_timed_out_reg[round_robin_qpn_timeout_reg] <= 1'b0;
@@ -1403,7 +1440,7 @@ module RoCE_rtr_read_module #(
                 .DEST_ENABLE (0),
                 .LAST_ENABLE (0),
                 .USER_ENABLE (0),
-                .RAM_PIPELINE(0) // enable RAM PIPELINE only for > 333MHz freqs
+                .RAM_PIPELINE(0)
             ) hdr_fifo (
                 .clk(clk),
                 .rst(rst),
@@ -1435,8 +1472,6 @@ module RoCE_rtr_read_module #(
     endgenerate
 
 
-
-
     generate
         if (RD_AXIS_DATAMOVER_FIFO_DEPTH > 0) begin
             axis_fifo #(
@@ -1448,7 +1483,7 @@ module RoCE_rtr_read_module #(
                 .DEST_ENABLE (0),
                 .USER_ENABLE (1),
                 .USER_WIDTH  (1),
-                .RAM_PIPELINE(0), // enable RAM PIPELINE only for > 333MHz freqs
+                .RAM_PIPELINE(0),
                 .FRAME_FIFO  (0)
             ) dma_read_payload_axis_fifo (
                 .clk(clk),

@@ -95,6 +95,7 @@ module udp_RoCE_connection_manager #(
      * QP state table interface
      */
     output wire        cm_qp_valid,
+    input  wire        cm_qp_ready,
     output wire [2:0 ] cm_qp_req_type,
     output wire [31:0] cm_qp_r_key,
     output wire [23:0] cm_qp_rem_qpn,
@@ -114,6 +115,10 @@ module udp_RoCE_connection_manager #(
     input wire [23:0] cm_qp_status_loc_psn,
     input wire [31:0] cm_qp_status_rem_ip_addr,
     input wire [63:0] cm_qp_status_rem_addr,
+
+    input  wire        s_cm_next_qp_available_valid,
+    output wire        s_cm_next_qp_available_ready,
+    input  wire [23:0] s_cm_next_qp_available_qpn,
 
     /*
      * TX meta parameters
@@ -219,26 +224,12 @@ module udp_RoCE_connection_manager #(
 
     reg qp_close_req_reg, qp_close_req_next;
 
-    reg s_qpn_fifo_valid_reg, s_qpn_fifo_valid_next;
-    reg s_qpn_fifo_ready_reg, s_qpn_fifo_ready_next;
-    reg m_qpn_fifo_valid_reg, m_qpn_fifo_valid_next;
-    reg m_qpn_fifo_ready_reg, m_qpn_fifo_ready_next;
+    reg s_cm_next_qp_available_ready_reg, s_cm_next_qp_available_ready_next;
 
-    wire s_qpn_fifo_valid, s_qpn_fifo_ready;
-    wire m_qpn_fifo_valid, m_qpn_fifo_ready;
-
-    reg [23:0] s_qpn_reg, s_qpn_next;
-
-
-    wire [23:0] s_qpn;
-    wire [23:0] m_qpn;
 
     wire busy_rx, busy_tx;
 
-    assign s_qpn_fifo_valid = s_qpn_fifo_valid_reg;
-    assign m_qpn_fifo_ready = m_qpn_fifo_ready_reg;
-
-    assign s_qpn = s_qpn_reg;
+    assign s_cm_next_qp_available_ready = s_cm_next_qp_available_ready_reg;
 
 
     udp_RoCE_connection_manager_rx #(
@@ -346,21 +337,6 @@ module udp_RoCE_connection_manager #(
         .cfg_udp_source_port(cfg_udp_source_port)
     );
 
-
-    qpn_fifo_init #(
-        .MAX_QUEUE_PAIRS_FIFO(N_QUEUE_PAIRS),
-        .BASE_QPN_FIFO(256)
-    ) qpn_fifo_init_instance (
-        .clk(clk),
-        .rst(rst),
-        .s_qpn_fifo_valid(s_qpn_fifo_valid),
-        .s_qpn_fifo_ready(s_qpn_fifo_ready),
-        .s_qpn           (s_qpn),
-        .m_qpn_fifo_valid(m_qpn_fifo_valid),
-        .m_qpn_fifo_ready(m_qpn_fifo_ready),
-        .m_qpn           (m_qpn)
-    );
-
     generate
         if (MODULE_DIRECTION == "Slave") begin
 
@@ -373,12 +349,9 @@ module udp_RoCE_connection_manager #(
 
             always @* begin
 
-                m_qpn_fifo_ready_next = 1'b0;
-                s_qpn_fifo_valid_next = 1'b0;
+                s_cm_next_qp_available_ready_next = 1'b0;
 
                 qp_close_req_next = 1'b0;
-
-                s_qpn_next = s_qpn_reg;
 
                 qp_info_valid_next     = qp_info_valid_reg && !s_qp_info_ready;
                 qp_info_ack_valid_next = qp_info_ack_valid_reg && (qp_info_valid_reg && !s_qp_info_ready);
@@ -400,7 +373,7 @@ module udp_RoCE_connection_manager #(
 
                 udp_dest_port_next          = udp_dest_port_reg;
 
-                cm_qp_valid_next = 1'b0;
+                cm_qp_valid_next = cm_qp_valid_reg  & !cm_qp_ready;
 
                 cm_qp_req_type_next    = cm_qp_req_type_reg;
                 cm_qp_r_key_next       = cm_qp_r_key_reg;
@@ -419,13 +392,11 @@ module udp_RoCE_connection_manager #(
                             case(m_qp_info_req_type)
                                 REQ_OPEN_QP: begin
 
-                                    if (m_qpn_fifo_valid) begin // QP available
-                                        m_qpn_fifo_ready_next = 1'b1;
+                                    if (s_cm_next_qp_available_valid) begin // QP available
 
                                         qp_info_req_type_next = REQ_OPEN_QP;
                                         // Swap loc with rem
                                         qp_info_loc_r_key_next     = 32'd0;
-                                        qp_info_loc_qpn_next       = m_qpn;
                                         qp_info_loc_psn_next       = 24'd0;
                                         qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
                                         qp_info_loc_base_addr_next = 64'd0;
@@ -444,18 +415,36 @@ module udp_RoCE_connection_manager #(
                                         cm_qp_req_type_next      = REQ_OPEN_QP;
                                         cm_qp_r_key_next         = m_qp_info_loc_r_key;
                                         cm_qp_rem_qpn_next       = m_qp_info_loc_qpn;
-                                        cm_qp_loc_qpn_next       = m_qpn;
                                         cm_qp_rem_psn_next       = m_qp_info_loc_psn;
                                         cm_qp_loc_psn_next       = 24'd0;
                                         cm_qp_rem_ip_addr_next   = m_qp_info_loc_ip_addr;
                                         cm_qp_rem_base_addr_next = m_qp_info_loc_base_addr;
 
-                                        state_next = STATE_MODIFY_QP;
+                                        if (m_qp_info_rem_qpn == 24'd0) begin // no qp selected, CM will open the first available one
+                                            cm_qp_loc_qpn_next                = s_cm_next_qp_available_qpn;
+                                            qp_info_loc_qpn_next              = s_cm_next_qp_available_qpn;
+                                            state_next = STATE_MODIFY_QP;
+                                        end else if (m_qp_info_rem_qpn >= 24'd256 && m_qp_info_rem_qpn < (24'd256+N_QUEUE_PAIRS)) begin // try to open the selected qp
+                                            cm_qp_loc_qpn_next       = m_qp_info_rem_qpn;
+                                            qp_info_loc_qpn_next     = m_qp_info_rem_qpn;
+                                            state_next = STATE_MODIFY_QP;
+                                        end else begin // something went wrong
+                                            cm_qp_valid_next = 1'b0; // do not forward the request to the QP state
+
+                                            qp_info_loc_r_key_next     = 32'd0;
+                                            qp_info_loc_qpn_next       = m_qp_info_rem_qpn;
+                                            qp_info_loc_psn_next       = 24'h0F_0E0D;
+                                            qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
+                                            qp_info_loc_base_addr_next = 64'd0;
+                                            $display("[%t] Something went wrong, rem_qpn=(%0d)\n", $time, m_qp_info_rem_qpn);
+                                            qp_info_ack_type_next = ACK_ERROR;
+                                            state_next = STATE_SEND_ERROR;
+                                        end
                                     end else begin
                                         // Swap loc with rem
                                         qp_info_loc_r_key_next     = 32'd0;
-                                        qp_info_loc_qpn_next       = 24'hCAFE_DEAD_BEEF;
-                                        qp_info_loc_psn_next       = 24'h0F0F_0E0E_0D0D;
+                                        qp_info_loc_qpn_next       = 24'hDE_CAFE;
+                                        qp_info_loc_psn_next       = 24'h0F_0E0D;
                                         qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
                                         qp_info_loc_base_addr_next = 64'd0;
 
@@ -546,8 +535,8 @@ module udp_RoCE_connection_manager #(
                                         // Try to close a QP that is not in the suitable range
                                         // Swap loc with rem
                                         qp_info_loc_r_key_next     = 32'd0;
-                                        qp_info_loc_qpn_next       = 24'hCAFE_DEAD_BEEF;
-                                        qp_info_loc_psn_next       = 24'h0F0F_0E0E_0D0D;
+                                        qp_info_loc_qpn_next       = 24'h0F_BEEF;
+                                        qp_info_loc_psn_next       = 24'h0D_0D0D;
                                         qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
                                         qp_info_loc_base_addr_next = 64'd0;
 
@@ -577,29 +566,21 @@ module udp_RoCE_connection_manager #(
                     STATE_MODIFY_QP: begin
                         qp_close_req_next = qp_close_req_reg;
                         if (cm_qp_status_valid) begin
+                            if (cm_qp_req_type_reg == REQ_OPEN_QP) begin // pop the qpn from the available axis reg anyways, a new one will be extracted
+                                s_cm_next_qp_available_ready_next = 1'b1; // pop only if open qp
+                            end
                             if (cm_qp_status == 2'b00) begin
                                 qp_info_valid_next     = 1'b1;
                                 qp_info_ack_valid_next = 1'b1;
+
                                 qp_info_ack_type_next = ACK_ACK;
-                                if (qp_close_req_reg && s_qpn_fifo_ready) begin
-                                    // succesfully closed QP
-                                    s_qpn_next = cm_qp_loc_qpn_reg;
-                                    s_qpn_fifo_valid_next = 1'b1;
-                                    state_next = STATE_IDLE;
-                                end else if (qp_close_req_reg && ~s_qpn_fifo_ready)  begin
-                                    // Falied to close QP
-                                    qp_info_valid_next     = 1'b0;
-                                    qp_info_ack_valid_next = 1'b0;
-                                    qp_info_ack_type_next = ACK_ERROR;
-                                    state_next = STATE_SEND_ERROR;
-                                end else if (~qp_close_req_reg) begin
-                                    state_next = STATE_IDLE;
-                                end
+                                state_next = STATE_IDLE;
                             end else begin
                                 // Failed to open/modify, QP in the wrong state
+
                                 qp_info_valid_next     = 1'b0;
                                 qp_info_ack_valid_next = 1'b0;
-                                
+
                                 qp_info_ack_type_next = ACK_ERROR;
                                 state_next = STATE_SEND_ERROR;
                             end
@@ -654,12 +635,9 @@ module udp_RoCE_connection_manager #(
 
             always @* begin
 
-                m_qpn_fifo_ready_next = 1'b0;
-                s_qpn_fifo_valid_next = 1'b0;
+                s_cm_next_qp_available_ready_next = 1'b0;
 
                 qp_close_req_next = 1'b0;
-
-                s_qpn_next = s_qpn_reg;
 
                 cm_qp_master_status_valid_next   = 1'b0;
                 cm_qp_master_status_next         = 'd0;
@@ -705,16 +683,16 @@ module udp_RoCE_connection_manager #(
                         if (cm_qp_master_req_valid && !cm_qp_master_req_valid_reg) begin //rising edge
                             case(cm_qp_master_req_type)
                                 REQ_OPEN_QP: begin
-                                    if (m_qpn_fifo_valid) begin // QP available
-                                        m_qpn_fifo_ready_next = 1'b1;
-                                        $display("[%t] FETCHING QPN FROM THE POOL, (%0d)\n", $time, m_qpn);
+                                    if (s_cm_next_qp_available_valid) begin // QP available
+                                        s_cm_next_qp_available_ready_next = 1'b1;
+                                        $display("[%t] FETCHING QPN FROM THE POOL, (%0d)\n", $time, s_cm_next_qp_available_qpn);
                                         // send local values
                                         qp_info_valid_next     = 1'b1;
 
                                         qp_info_req_type_next = REQ_OPEN_QP;
                                         // Swap loc with rem
                                         qp_info_loc_r_key_next     = 32'd0;
-                                        qp_info_loc_qpn_next       = m_qpn;
+                                        qp_info_loc_qpn_next       = s_cm_next_qp_available_qpn;
                                         qp_info_loc_psn_next       = 24'd0;
                                         qp_info_loc_ip_addr_next   = cfg_loc_ip_addr;
                                         qp_info_loc_base_addr_next = 64'd0;
@@ -818,15 +796,8 @@ module udp_RoCE_connection_manager #(
                                     state_next = STATE_MODIFY_QP;
                                 end else begin // server didn't send a proper ack packet
                                     case(qp_info_req_type_reg)
-                                        REQ_OPEN_QP:begin // put back the loc qpn to the avaiable ones
-                                            if (s_qpn_fifo_ready) begin // put QPN back to the pool
-                                                s_qpn_next = qp_info_loc_qpn_reg;
-                                                $display("[%t] GOT BAD ACK REPLY, put QPN (%0d) back to the pool\n", $time, qp_info_loc_qpn_reg);
-                                                state_next = STATE_IDLE;
-                                            end else begin
-                                                //error
-                                                state_next = STATE_IDLE;
-                                            end
+                                        REQ_OPEN_QP:begin
+                                            state_next = STATE_IDLE;
                                         end
                                         REQ_CLOSE_QP: begin
                                             //error
@@ -849,15 +820,6 @@ module udp_RoCE_connection_manager #(
                                 $display("[%t] TRIGGERED CM REQUEST RETRANSMISSION\n", $time);
                                 state_next = STATE_WAIT_REM_RPY;
                             end else begin
-                                if (qp_info_req_type_reg == REQ_OPEN_QP) begin // put back the loc qpn to the avaiable ones
-                                    if (s_qpn_fifo_ready) begin // put QPN back to the pool
-                                        s_qpn_next = qp_info_loc_qpn_reg;
-                                        s_qpn_fifo_valid_next = 1'b1;
-                                        $display("[%t] TIMEOUT, put QPN (%0d) back to the pool\n", $time, qp_info_loc_qpn_reg);
-                                    end else begin
-                                        //errors?
-                                    end
-                                end
                                 cm_qp_master_status_valid_next   = 1'b1;
                                 cm_qp_master_status_next         = CM_ERROR_TIMEOUT;
                                 cm_qp_master_status_loc_qpn_next = cm_qp_loc_qpn_reg;
@@ -870,13 +832,6 @@ module udp_RoCE_connection_manager #(
                     STATE_MODIFY_QP: begin
                         if (cm_qp_status_valid) begin
                             if (cm_qp_status == 2'b00) begin //succesfully modify local qp
-                                if (cm_qp_req_type_reg == REQ_CLOSE_QP) begin
-                                    if (s_qpn_fifo_ready) begin // put closed local QPN back to the pool
-                                        s_qpn_next            = cm_qp_loc_qpn_reg;
-                                        s_qpn_fifo_valid_next = 1'b1;
-                                        $display("[%t] SUCCESFULLY CLOSED QP, put QPN (%0d) back to the pool\n", $time, cm_qp_loc_qpn_reg);
-                                    end
-                                end
                                 cm_qp_master_status_valid_next   = 1'b1;
                                 cm_qp_master_status_next         = CM_STATUS_OK;
                                 cm_qp_master_status_loc_qpn_next = cm_qp_loc_qpn_reg;
@@ -949,10 +904,7 @@ module udp_RoCE_connection_manager #(
     always @(posedge clk) begin
         if (rst)begin
 
-            m_qpn_fifo_ready_reg <= 1'b0;
-
-            s_qpn_fifo_valid_reg <= 1'b0;
-            s_qpn_reg            <= 0;
+            s_cm_next_qp_available_ready_reg <= 1'b0;
 
             qp_close_req_reg <= 1'b0;
 
@@ -986,10 +938,8 @@ module udp_RoCE_connection_manager #(
 
         end else begin
 
-            m_qpn_fifo_ready_reg <= m_qpn_fifo_ready_next;
+            s_cm_next_qp_available_ready_reg <= s_cm_next_qp_available_ready_next;
 
-            s_qpn_fifo_valid_reg <= s_qpn_fifo_valid_next;
-            s_qpn_reg            <= s_qpn_next;
 
             qp_close_req_reg <= qp_close_req_next;
 

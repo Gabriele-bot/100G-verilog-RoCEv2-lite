@@ -40,7 +40,11 @@ module axi_ram_mod #
     // Width of wstrb (width of data bus in words)
     parameter STRB_WIDTH = (DATA_WIDTH/8),
     // Width of ID signal
-    parameter ID_WIDTH = 8
+    parameter ID_WIDTH = 8,
+    // ram read latency
+    parameter READ_LATENCY = 2,
+    // RAM style
+    parameter RAM_STYLE = "auto"
 )
 (
     input  wire                   clk,
@@ -86,11 +90,6 @@ module axi_ram_mod #
     parameter VALID_ADDR_WIDTH = ADDR_WIDTH - $clog2(STRB_WIDTH);
     parameter WORD_WIDTH = STRB_WIDTH;
     parameter WORD_SIZE = DATA_WIDTH/WORD_WIDTH;
-
-    parameter BIGGEST_MEM_ADDR_WIDTH  = 14 + $clog2(STRB_WIDTH);
-    parameter VALID_ADDR_WIDTH_SINGLE = (ADDR_WIDTH > BIGGEST_MEM_ADDR_WIDTH) ?  BIGGEST_MEM_ADDR_WIDTH - $clog2(STRB_WIDTH) : ADDR_WIDTH - $clog2(STRB_WIDTH);
-    parameter N_RAMS                  = (ADDR_WIDTH > BIGGEST_MEM_ADDR_WIDTH) ?  2**(ADDR_WIDTH-BIGGEST_MEM_ADDR_WIDTH) : 1;
-    parameter N_RAMS_WIDTH            = (ADDR_WIDTH > BIGGEST_MEM_ADDR_WIDTH) ?  ADDR_WIDTH-BIGGEST_MEM_ADDR_WIDTH : 1;
 
     // bus width assertions
     initial begin
@@ -141,14 +140,16 @@ module axi_ram_mod #
     reg [DATA_WIDTH-1:0] s_axi_rdata_reg = {DATA_WIDTH{1'b0}}, s_axi_rdata_next;
     reg s_axi_rlast_reg = 1'b0, s_axi_rlast_next;
     reg s_axi_rvalid_reg = 1'b0, s_axi_rvalid_next;
-    //reg [ID_WIDTH-1:0] s_axi_rid_pipe_reg = {ID_WIDTH{1'b0}};
-    //reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg = {DATA_WIDTH{1'b0}};
-    //reg s_axi_rlast_pipe_reg = 1'b0;
-    //reg s_axi_rvalid_pipe_reg = 1'b0;
-    reg [ID_WIDTH-1:0] s_axi_rid_pipe_reg [1:0];
-    reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg [1:0];
-    reg [1:0] s_axi_rlast_pipe_reg = 1'b0;
-    reg [1:0] s_axi_rvalid_pipe_reg = 1'b0;
+
+
+    reg [ID_WIDTH-1:0]     ram_rid_pipe_reg   [READ_LATENCY-1:0];
+    reg [READ_LATENCY-1:0] ram_rlast_pipe_reg = 'd0;
+    reg [READ_LATENCY-1:0] ram_rvalid_pipe_reg = 'd0;
+
+    reg [ID_WIDTH-1:0]   s_axi_rid_pipe_reg [READ_LATENCY-1:0];
+    reg [DATA_WIDTH-1:0] s_axi_rdata_pipe_reg [READ_LATENCY-1:0];
+    reg [READ_LATENCY-1:0] s_axi_rlast_pipe_reg = 'd0;
+    reg [READ_LATENCY-1:0] s_axi_rvalid_pipe_reg = 'd0;
 
 
     wire [VALID_ADDR_WIDTH-1:0] s_axi_awaddr_valid = s_axi_awaddr >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
@@ -156,88 +157,27 @@ module axi_ram_mod #
     wire [VALID_ADDR_WIDTH-1:0] read_addr_valid = read_addr_reg >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
     wire [VALID_ADDR_WIDTH-1:0] write_addr_valid = write_addr_reg >> (ADDR_WIDTH - VALID_ADDR_WIDTH);
 
+    wire [DATA_WIDTH-1:0] ramout;
 
-    wire [DATA_WIDTH -1 : 0] ramout_single [N_RAMS-1:0];
-    wire [DATA_WIDTH -1 : 0] ramout;
-    wire [DATA_WIDTH -1 : 0] din;
-    wire [STRB_WIDTH -1 : 0] strb;
-    wire [VALID_ADDR_WIDTH_SINGLE -1 : 0] waddr;
-    wire [VALID_ADDR_WIDTH_SINGLE -1 : 0] raddr;
-    wire ena;
-    wire ren [N_RAMS-1:0];
-    wire wen [N_RAMS-1:0];
+    simple_dpram #(
+        .ADDR_WIDTH(VALID_ADDR_WIDTH),
+        .DATA_WIDTH(DATA_WIDTH),
+        .STRB_WIDTH(STRB_WIDTH),
+        .NPIPES    (READ_LATENCY+2),
+        .STYLE     (RAM_STYLE)
+    ) ram_instance (
+        .clk(clk),
+        .rst(rst),
+        .waddr(write_addr_valid),
+        .raddr(read_addr_valid),
+        .din(s_axi_wdata),
+        .dout(ramout),
+        .strb(s_axi_wstrb),
+        .ena(1'b1),
+        .ren(mem_rd_en),
+        .wen(mem_wr_en)
+    );
 
-    reg [N_RAMS_WIDTH-1:0] ram_sel_shreg [2:0];
-
-    // output logic
-    reg                  temp_s_axi_rvalid_next, temp_s_axi_rvalid_reg;
-    reg [DATA_WIDTH-1:0] temp_s_axi_rdata_reg;
-    reg [ID_WIDTH  -1:0] temp_s_axi_rid_reg;
-    reg                  temp_s_axi_rlast_reg;
-    wire s_axi_rready_int_early;
-    reg store_axi_int_to_output;
-    reg store_axi_int_to_temp;
-    reg store_axi_temp_to_output;
-
-    reg  s_axi_rready_int_reg;
-    wire s_axi_rvalid_int;
-    wire [DATA_WIDTH-1:0] s_axi_rdata_int;
-    wire [ID_WIDTH  -1:0] s_axi_rid_int;
-    wire s_axi_rlast_int;
-
-    reg                  s_axi_rvalid_next_out, s_axi_rvalid_reg_out;
-    reg [DATA_WIDTH-1:0] s_axi_rdata_reg_out;
-    reg [ID_WIDTH  -1:0] s_axi_rid_reg_out;
-    reg                  s_axi_rlast_reg_out;
-
-    integer i, j;
-
-    assign s_axi_rvalid_int = s_axi_rvalid_pipe_reg[0];
-    assign s_axi_rdata_int  = ramout;
-    assign s_axi_rid_int    = s_axi_rid_pipe_reg[0];
-    assign s_axi_rlast_int  = s_axi_rlast_pipe_reg[0];
-
-
-    assign waddr = write_addr_valid[VALID_ADDR_WIDTH_SINGLE -1 : 0];
-    assign raddr = read_addr_valid[VALID_ADDR_WIDTH_SINGLE -1 : 0];
-    assign din   = s_axi_wdata;
-    assign strb  = s_axi_wstrb;
-    assign ena   = 1'b1;
-
-    for(genvar k = 0; k < N_RAMS; k = k + 1) begin
-        assign wen[k]   = mem_wr_en && (write_addr_valid >> VALID_ADDR_WIDTH_SINGLE == k);
-        assign ren[k]   = mem_rd_en && (read_addr_valid  >> VALID_ADDR_WIDTH_SINGLE == k);
-
-        simple_dpram #(
-            .ADDR_WIDTH(VALID_ADDR_WIDTH_SINGLE),
-            .DATA_WIDTH(DATA_WIDTH),
-            .STRB_WIDTH(STRB_WIDTH),
-            .NPIPES(0),
-            .STYLE("ultra")
-        ) test_ith_ram_instance (
-            .clk(clk),
-            .rst(rst),
-            .waddr(waddr),
-            .raddr(raddr),
-            .din(din),
-            .dout(ramout_single[k]),
-            .strb(strb),
-            .ena(ena),
-            .ren(ren[k]),
-            .wen(wen[k])
-        );
-    end
-
-    always @(posedge clk) begin
-        ram_sel_shreg[0] <= read_addr_valid >> VALID_ADDR_WIDTH_SINGLE;
-
-        for(i = 1; i < 3; i = i + 1) begin
-            ram_sel_shreg[i] <= ram_sel_shreg[i-1];
-        end
-    end
-
-    assign ramout = ramout_single[ram_sel_shreg[1]];
-    
 
     assign s_axi_awready = s_axi_awready_reg;
     assign s_axi_wready = s_axi_wready_reg;
@@ -245,18 +185,9 @@ module axi_ram_mod #
     assign s_axi_bresp = 2'b00;
     assign s_axi_bvalid = s_axi_bvalid_reg;
     assign s_axi_arready = s_axi_arready_reg;
-    assign s_axi_rid    = s_axi_rid_reg_out;
-    assign s_axi_rdata  = s_axi_rdata_reg_out;
     assign s_axi_rresp  = 2'b00;
-    assign s_axi_rlast  = s_axi_rlast_reg_out;
-    assign s_axi_rvalid = s_axi_rvalid_reg_out;
 
-    initial begin
-        for(i = 0; i < 2; i = i + 1) begin
-            ram_sel_shreg[i] <= {N_RAMS_WIDTH{1'b0}};
-        end
-    end
-    
+
 
     always @* begin
         write_state_next = WRITE_STATE_IDLE;
@@ -359,9 +290,10 @@ module axi_ram_mod #
 
         mem_rd_en = 1'b0;
 
-        s_axi_rid_next = s_axi_rid_reg;
-        s_axi_rlast_next = s_axi_rlast_reg;
-        s_axi_rvalid_next = s_axi_rvalid_reg && !(s_axi_rready || !s_axi_rvalid_pipe_reg[0]);
+        s_axi_rid_next = ram_rid_pipe_reg[0];
+        s_axi_rlast_next = ram_rlast_pipe_reg[0];
+        //s_axi_rvalid_next = ram_rvalid_pipe_reg[0] && !(s_axi_rready || !(|s_axi_rvalid_pipe_reg)); // deassert if ready or all output pipes are empty
+        s_axi_rvalid_next = 1'b0;
 
         read_id_next = read_id_reg;
         read_addr_next = read_addr_reg;
@@ -389,7 +321,8 @@ module axi_ram_mod #
                 end
             end
             READ_STATE_BURST: begin
-                if (s_axi_rready || (!s_axi_rvalid_pipe_reg[0]) || !s_axi_rvalid_reg) begin
+                //if (s_axi_rready || !ram_rvalid_pipe_reg[0]) begin 
+                if (s_axi_rready) begin
                     mem_rd_en = 1'b1;
                     s_axi_rvalid_next = 1'b1;
                     s_axi_rid_next = read_id_reg;
@@ -421,96 +354,64 @@ module axi_ram_mod #
         read_burst_reg <= read_burst_next;
 
         s_axi_arready_reg <= s_axi_arready_next;
-        s_axi_rid_reg     <= s_axi_rid_next;
-        s_axi_rlast_reg   <= s_axi_rlast_next;
-        s_axi_rvalid_reg  <= s_axi_rvalid_next;
 
-        s_axi_rid_pipe_reg[0]       <= s_axi_rid_reg;
-        s_axi_rlast_pipe_reg[0]     <= s_axi_rlast_reg;
-        s_axi_rvalid_pipe_reg[0]    <= s_axi_rvalid_reg;
+        // just pipe the signals to be aligned with the ram
+        ram_rid_pipe_reg <= {ram_rid_pipe_reg[READ_LATENCY-2:0], s_axi_rid_next};
+        ram_rlast_pipe_reg <= {ram_rlast_pipe_reg[READ_LATENCY-2:0], s_axi_rlast_next};
+        ram_rvalid_pipe_reg <= {ram_rvalid_pipe_reg[READ_LATENCY-2:0], s_axi_rvalid_next};
 
 
         if (rst) begin
             read_state_reg <= READ_STATE_IDLE;
 
-            s_axi_arready_reg <= 1'b0;
-            s_axi_rvalid_reg <= 1'b0;
-            s_axi_rvalid_pipe_reg <= 2'b00;
+            ram_rlast_pipe_reg <= 'd0;
+            ram_rvalid_pipe_reg <= 'd0;
+
+            s_axi_arready_reg     <= 'd0;
+
+            s_axi_rvalid_reg      <= 'd0;
         end
     end
 
-    always @* begin
-        s_axi_rdata_reg = ramout;
-    end
+    axis_fifo #(
+        .DEPTH       (READ_LATENCY+1), // to absorb rready deassertion
+        .DATA_WIDTH  (DATA_WIDTH),
+        .KEEP_ENABLE (0),
+        .ID_ENABLE   (1),
+        .ID_WIDTH    (ID_WIDTH),
+        .DEST_ENABLE (0),
+        .USER_ENABLE (0),
+        .RAM_PIPELINE(1),
+        .FRAME_FIFO  (0)
+    ) read_channel_axis_fifo (
+        .clk(clk),
+        .rst(rst),
 
-    
+        // AXI input
+        .s_axis_tdata (ramout),
+        .s_axis_tvalid(ram_rvalid_pipe_reg[READ_LATENCY-1]),
+        .s_axis_tready(), // this fifo should never go full
+        .s_axis_tlast (ram_rlast_pipe_reg[READ_LATENCY-1]),
+        .s_axis_tid   (ram_rid_pipe_reg[READ_LATENCY-1]),
+        .s_axis_tkeep (0),
+        .s_axis_tuser (0),
+        .s_axis_tdest (0),
 
+        // AXI output
+        .m_axis_tdata (s_axi_rdata),
+        .m_axis_tvalid(s_axi_rvalid),
+        .m_axis_tready(s_axi_rready),
+        .m_axis_tlast (s_axi_rlast),
+        .m_axis_tid   (s_axi_rid),
 
-    // enable ready input next cycle if output is ready or if both output registers are empty
-    assign s_axi_rready_int_early = s_axi_rready || (!temp_s_axi_rvalid_reg && !s_axi_rvalid_reg_out);
-    // enable ready input next cycle if output is ready or the temp reg will not be filled on the next cycle (output reg empty or no input)
+        // Status
+        .status_overflow  (),
+        .status_bad_frame (),
+        .status_good_frame()
+    );
 
-    always @* begin
-        // transfer sink ready state to source
-        s_axi_rvalid_next_out  = s_axi_rvalid_reg_out;
-        temp_s_axi_rvalid_next = temp_s_axi_rvalid_reg;
-
-        store_axi_int_to_output = 1'b0;
-        store_axi_int_to_temp = 1'b0;
-        store_axi_temp_to_output = 1'b0;
-
-        if (s_axi_rready_int_reg) begin
-            // input is ready
-            if (s_axi_rready || !s_axi_rvalid_reg_out) begin
-                // output is ready or currently not valid, transfer data to output
-                s_axi_rvalid_next_out = s_axi_rvalid_int;
-                store_axi_int_to_output = 1'b1;
-            end else begin
-                // output is not ready, store input in temp
-                temp_s_axi_rvalid_next = s_axi_rvalid_int;
-                store_axi_int_to_temp  = 1'b1;
-            end
-        end else if (s_axi_rready) begin
-            // input is not ready, but output is ready
-            s_axi_rvalid_next_out = temp_s_axi_rvalid_reg;
-            temp_s_axi_rvalid_next = 1'b0;
-            store_axi_temp_to_output = 1'b1;
-        end
-    end
-
-    always @(posedge clk) begin
-        s_axi_rvalid_reg_out <= s_axi_rvalid_next_out;
-        s_axi_rready_int_reg <= s_axi_rready_int_early;
-        temp_s_axi_rvalid_reg <= temp_s_axi_rvalid_next;
-
-        // datapath
-        if (store_axi_int_to_output) begin
-            s_axi_rdata_reg_out <= s_axi_rdata_int;
-            s_axi_rid_reg_out   <= s_axi_rid_int;
-            s_axi_rlast_reg_out <= s_axi_rlast_int;
-
-
-        end else if (store_axi_temp_to_output) begin
-            s_axi_rdata_reg_out <= temp_s_axi_rdata_reg;
-            s_axi_rid_reg_out   <= temp_s_axi_rid_reg;
-            s_axi_rlast_reg_out <= temp_s_axi_rlast_reg;
-
-        end
-
-        if (store_axi_int_to_temp) begin
-            temp_s_axi_rdata_reg <= s_axi_rdata_int;
-            temp_s_axi_rid_reg   <= s_axi_rid_int;
-            temp_s_axi_rlast_reg <= s_axi_rlast_int;
-
-        end
-
-        if (rst) begin
-            s_axi_rvalid_reg_out <= 1'b0;
-            s_axi_rready_int_reg <= 1'b0;
-            temp_s_axi_rvalid_reg <= 1'b0;
-        end
-    end
 
 endmodule
 
 `resetall
+

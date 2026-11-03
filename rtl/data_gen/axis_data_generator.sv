@@ -55,7 +55,7 @@ module axis_data_generator #(
     reg [31:0] word_counter;
 
     reg [33:0] word_counter_out;
-    reg [31:0] tot_word_ctr;
+    reg [33:0] tot_word_ctr;
 
     reg [KEEP_WIDTH - 1 : 0] tkeep_reg;
     reg                       tlast_reg;
@@ -109,7 +109,7 @@ module axis_data_generator #(
         if (rst) begin
             word_counter      <= 32'd0;
             word_counter_out  <= 34'd0;
-            tot_word_ctr      <= 32'd0;
+            tot_word_ctr      <= 34'd0;
             length_reg        <= 32'd0;
             tkeep_reg         <= {KEEP_WIDTH{1'b0}};
             tlast_reg         <= 1'b0;

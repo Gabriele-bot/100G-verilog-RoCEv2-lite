@@ -1,7 +1,7 @@
 `resetall `timescale 1ns / 1ps `default_nettype none
 
 /*
- * AXI4-Stream RoCEv2 ICRC inserter (512 bit datapath)
+ * AXI4-Stream RoCEv2 ICRC inserter
  */
 module axis_RoCE_icrc_insert #
   (

@@ -17,12 +17,12 @@ module network_wrapper_roce_generic #(
     parameter RETRANSMISSION_ADDR_BUFFER_WIDTH = 23,
     parameter HEADER_CHECKSUM_PIPELINED = 1,
     parameter IP_PAYLOAD_FIFO_CHECKSUM  = 1,
+    parameter EN_DCQCN_LOGIC            = 1,
     parameter RX_FIFO_REGS = 2,
     parameter TX_FIFO_REGS = 2,
     parameter ENABLE_PFC = 0,
     parameter DEBUG = 0,
-    // Register to achieve better timings, enable them if you want to trade some flops with better timing
-    parameter ENABLE_TIMING_OPT_REGS = 0
+    parameter CONST_PMTU_4096 = 0
 ) (
     input wire clk_stack,
     input wire rst_stack,
@@ -52,6 +52,8 @@ module network_wrapper_roce_generic #(
     output wire                            s_axis_tready [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tlast  [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tuser  [N_QUEUE_PAIRS-1:0],
+
+    output wire [N_QUEUE_PAIRS-1:0]        qp_buffer_almost_full,
 
     /*
      * Ethernet: AXIS
@@ -195,6 +197,12 @@ module network_wrapper_roce_generic #(
             $error("Error: Must have at least 1 QUEUE PAIR per TX engine (instance %m)");
             $finish;
         end
+        // simple check for now
+        // TODO think about how to address this. Maybe balance the QPs? 
+        if (N_QUEUE_PAIRS % N_ROCE_TX_ENGINES  != 0) begin
+            $error("Error: N_QUEUE_PAIRS must be multiple of N_ROCE_TX_ENGINES (instance %m)");
+            $finish;
+        end
     end
 
     import RoCE_params::*; // Imports RoCE parameters
@@ -307,7 +315,7 @@ module network_wrapper_roce_generic #(
         ctrl_local_mac_address_reg <= ctrl_local_mac_address;
         ctrl_local_ip_reg          <= ctrl_local_ip;
         ctrl_clear_arp_cache_reg   <= ctrl_clear_arp_cache;
-        ctrl_pmtu_reg              <= ctrl_pmtu;
+        ctrl_pmtu_reg              <= CONST_PMTU_4096 ? 3'd4 : ctrl_pmtu;
         ctrl_RoCE_udp_port_reg     <= ctrl_RoCE_udp_port;
         ctrl_priority_tag_reg      <= ctrl_priority_tag;
         ctrl_retry_timeout_reg     <= ctrl_retry_timeout;
@@ -506,7 +514,7 @@ module network_wrapper_roce_generic #(
             assign pfc_pause_ack = 8'hFF;
         end
 
-        if (ENABLE_TIMING_OPT_REGS) begin
+        if (STACK_CLK_PERIOD < 3) begin // freq greater that 333 MHz
             // RX
             axis_register #(
                 .DATA_WIDTH(STACK_DATA_WIDTH),
@@ -597,7 +605,7 @@ module network_wrapper_roce_generic #(
         .IP_PAYLOAD_FIFO_CHECKSUM  (IP_PAYLOAD_FIFO_CHECKSUM),
         .ARP_ICMP_DATA_WIDTH       (32),
         .ROCE_ICRC_INSERTER        (1),
-        .ENABLE_TIMING_OPT_REGS    (ENABLE_TIMING_OPT_REGS)
+        .ENABLE_TIMING_OPT_REGS    (STACK_CLK_PERIOD < 3)
     ) udp_complete_opt_instance (
         .clk(clk_stack),
         .rst(rst_stack),
@@ -691,8 +699,10 @@ module network_wrapper_roce_generic #(
         .TARGET_SPEED                    (TARGET_SPEED), // in Gbps
         .RETRANSMISSION_ADDR_BUFFER_WIDTH(RETRANSMISSION_ADDR_BUFFER_WIDTH),
         .N_ROCE_TX_ENGINES               (N_ROCE_TX_ENGINES),
-        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS), // must be a power of two
-        .ENABLE_TIMING_OPT_REGS          (ENABLE_TIMING_OPT_REGS)
+        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS),
+        .EN_DCQCN_LOGIC                  (EN_DCQCN_LOGIC),
+        .ENABLE_TIMING_OUT_OPT_REGS      (STACK_CLK_PERIOD < 3),
+        .CONST_PMTU_4096                 (CONST_PMTU_4096)
     ) RoCE_stack_wrapper_instance (
         .clk_stack(clk_stack),
         .rst_stack(rst_stack),
@@ -717,6 +727,8 @@ module network_wrapper_roce_generic #(
         .s_axis_tready            (s_axis_tready),
         .s_axis_tlast             (s_axis_tlast),
         .s_axis_tuser             (s_axis_tuser),
+
+        .qp_buffer_almost_full(qp_buffer_almost_full),
 
         // clk stack domain
         .s_udp_hdr_valid          (s_rx_udp_hdr_valid),

@@ -14,10 +14,12 @@ module RoCE_tx_engine_wrapper #(
     parameter N_QUEUE_PAIRS                    = 2,
     parameter EN_DCQCN_LOGIC                   = 1,
     parameter BASE_LOC_QPN                     = 256,
+    parameter ENABLE_RATE_LIM                  = 0, // limit the rate when the buffer occupancy is too high (per QP)
     parameter real TARGET_SPEED                = 98.05,
     parameter DEBUG                            = 0,
     // Register to achieve better timings, enable them if you want to trade some flops with better timings
-    parameter ENABLE_TIMING_OPT_REGS           = 0
+    parameter ENABLE_TIMING_OPT_REGS           = 0,
+    parameter CONST_PMTU_4096 = 0
 ) (
 
     input wire clk,
@@ -58,6 +60,8 @@ module RoCE_tx_engine_wrapper #(
     output wire                            s_axis_tready [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tlast  [N_QUEUE_PAIRS-1:0],
     input  wire                            s_axis_tuser  [N_QUEUE_PAIRS-1:0],
+
+    output wire [N_QUEUE_PAIRS-1:0] qp_buffer_almost_full,
 
     /*
      * RoCE TX frame output
@@ -515,7 +519,7 @@ module RoCE_tx_engine_wrapper #(
                 .LOCAL_QPN             (BASE_LOC_QPN+i),
                 .REFRESH_CACHE_TICKS   (REFRESH_CACHE_TICKS),
                 .TARGET_RATE           (TARGET_SPEED/N_QUEUE_PAIRS),
-                .ENABLE_RATE_LIM       (0),
+                .ENABLE_RATE_LIM       (ENABLE_RATE_LIM),
                 .ENABLE_TIMING_OPT_REGS(ENABLE_TIMING_OPT_REGS)
             ) RoCE_tx_queue_instance (
                 .clk(clk),
@@ -632,11 +636,11 @@ module RoCE_tx_engine_wrapper #(
                 .S_DATA_WIDTH(QP_CH_DATA_WIDTH),
                 .M_DATA_WIDTH(OUT_DATA_WIDTH),
                 .IS_ASYNC    (0),
-                .FIFO_DEPTH  (N_QUEUE_PAIRS > 1 ? 8192-(OUT_DATA_WIDTH/8) : (OUT_DATA_WIDTH/8)*4),
+                .FIFO_DEPTH  (N_QUEUE_PAIRS > 1 && QP_CH_DATA_WIDTH != OUT_DATA_WIDTH ? 8192-(OUT_DATA_WIDTH/8) : (OUT_DATA_WIDTH/8)*4),
                 .RAM_PIPELINE(ENABLE_TIMING_OPT_REGS ? 1 : 0),
-                .FRAME_FIFO  (N_QUEUE_PAIRS > 1),
+                .FRAME_FIFO  (N_QUEUE_PAIRS > 1 && QP_CH_DATA_WIDTH != OUT_DATA_WIDTH), // no need frame fifo when the in/out data widths match
                 .PAUSE_ENABLE(1),
-                .FRAME_PAUSE (N_QUEUE_PAIRS > 1)
+                .FRAME_PAUSE (N_QUEUE_PAIRS > 1 && QP_CH_DATA_WIDTH != OUT_DATA_WIDTH)
             ) RoCE_realign_frame_fifo_instance (
                 .s_clk(clk),
                 .s_rst(rst | rst_tx_engine),
@@ -819,7 +823,7 @@ module RoCE_tx_engine_wrapper #(
 
 
 
-    RoCE_retransmission_module_v2 #(
+    RoCE_retransmission_module #(
         .DATA_WIDTH                  (OUT_DATA_WIDTH),
         .BUFFER_ADDR_WIDTH           (RETRANSMISSION_ADDR_BUFFER_WIDTH), // total buffer, all QPs
         .BASE_LOC_QPN                (BASE_LOC_QPN),
@@ -830,8 +834,9 @@ module RoCE_tx_engine_wrapper #(
         .RD_CMD_FIFO_DEPTH           (4),
         .WR_AXIS_DATAMOVER_FIFO_DEPTH(0),
         .RD_AXIS_DATAMOVER_FIFO_DEPTH(4*OUT_DATA_WIDTH/8),
-        .OUTPUT_AXI_FIFO_DEPTH       (0)
-    ) RoCE_retransmission_module_v2_instance (
+        .OUTPUT_AXI_FIFO_DEPTH       (0),
+        .CONST_PMTU_4096             (CONST_PMTU_4096)
+    ) RoCE_retransmission_module_instance (
         .clk(clk),
         .rst(rst),
         .flow_ctrl_pause             (flow_ctrl_pause),
@@ -1031,6 +1036,8 @@ module RoCE_tx_engine_wrapper #(
         .max_value_out(psn_diff_max),
         .max_value_out_valid()
     );
+
+    assign qp_buffer_almost_full = throttle_qp;
 
     generate
         if (DEBUG) begin

@@ -213,15 +213,7 @@ module axis_mask_fields_icrc #(
             temp_m_axis_tvalid_reg <= 1'b0;
         end
     end
-    /*
-  assign m_axis_tdata  = m_axis_tdata_reg;
-  assign m_axis_tkeep  = m_axis_tkeep_reg;
-  assign m_axis_tvalid = m_axis_tvalid_reg;
-  //assign s_axis_tready = m_axis_tready_int;
-  assign s_axis_tready = s_axis_tready_reg;
-  assign m_axis_tlast  = m_axis_tlast_reg;
-  assign m_axis_tuser  = m_axis_tuser_reg;
-*/
+    
 endmodule
 
 `resetall
