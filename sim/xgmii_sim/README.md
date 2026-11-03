@@ -8,7 +8,7 @@ Change them as required
 - `VIVADO_PATH`: VIVADO installation path, default is `/tools/Xilinx/Vivado/2022.2`
 ## Compile the HDL modules
 ```
-make verilog-ethernet crc-pkg RoCE-stack simlog SIMULATOR=VIVADO VIVADO_PATH=<Your-vivado-path>
+make verilog-ethernet crc-pkg xpm RoCE-stack simlog SIMULATOR=VIVADO VIVADO_PATH=<Your-vivado-path>
 ```
 ## Open the TAP device tapdev
 ```
@@ -25,6 +25,8 @@ sudo ifconfig tap0 22.1.212.21 mtu 4200
 ```
 make sim SIMULATOR=VIVADO
 ```
+Start the sim (free running).
+
 # VM setup
 Vitrual machine(s) with SoftRocE are available in the `roce-x11` folder. *REMEBER* to bridge the tap device to the vm and give it a different IP. 
 ```

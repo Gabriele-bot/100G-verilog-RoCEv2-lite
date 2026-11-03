@@ -4,6 +4,7 @@ utils/generic_arb_mux.v
 utils/generic_mux.v
 utils/dcmac_pad.v
 utils/RoCE_dcqcn.sv
+utils/RoCE_arb_mux.sv
 utils/AXIseg_2_AXIs/axis_2_axi_seg.sv
 utils/AXIseg_2_AXIs/axis_2_axi_seg_simple.sv
 utils/AXIseg_2_AXIs/axis_2_axi_seg_input_ctrl.sv

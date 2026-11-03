@@ -3,13 +3,12 @@ TARGET_TB = tb
 TARGET_DPI = tb_svdpi
 BUILD_DIR = work
 SIMULATOR ?= VIVADO
+SPEED_PRESET ?= 400
 MAIN_DIR ?= ../..
 LICENCE_SERVER ?=  
 
-TARGET_TAP_PID_FILE = tapdev.pid
 
-
-ETH_MODULES     = eth_modules.txt
+ETH_MODULES  = eth_modules.txt
 ROCE_MODULES = roce_modules.txt
 
 ETH_VERILOG_DIR = $(MAIN_DIR)/lib/eth
@@ -50,7 +49,7 @@ endif
 VIVADO_PATH ?= /tools/Xilinx/Vivado/2022.2
 
 XILINX  = $(VIVADO_PATH)/data/vhdl/src/unisims
-XPM     = $(VIVADO_PATH)/data/ip/xpm/
+XPM     = $(VIVADO_PATH)/data/ip/xpm
 XPM_MEM = $(VIVADO_PATH)/data/ip/xpm/xpm_memory/hdl
 CC = gcc -lrt
 CFLAGS = -Wall -O -lrt
@@ -83,8 +82,8 @@ dirs:
 
 xpm: dirs
 	$(VLOG) -work glbl $(XILINX)/../../../verilog/src/glbl.v
-	$(VHD) -work work $(XPM)/xpm_VCOMP.vhd
 	$(VLOG) -work work -sv $(XPM)/xpm_fifo/hdl/xpm_fifo.sv
+	$(VHD) -work work $(XPM)/xpm_VCOMP.vhd
 	$(VLOG) -work work -sv $(XPM)/xpm_cdc/hdl/xpm_cdc.sv
 	$(VLOG) -work work -sv $(XPM_MEM)/xpm_memory.sv
 
@@ -108,7 +107,7 @@ crc-pkg: verilog-ethernet
 	$(VHD)  -work work -2008 $(CRC32_DIR)/CRC32/CRC32_D512_matrix.vhd
 	$(VHD)  -work work -2008 $(CRC32_DIR)/Experimental/CRC32_matrix_pipeline.vhd
 	
-RoCE-stack: crc-pkg
+RoCE-stack: crc-pkg xpm
 	$(info Using simulator: $(SIMULATOR))
 	$(call compile_modules, $(ROCE_DIR), $(ROCE_MODULES))
 
@@ -120,7 +119,7 @@ simlog: dirs xpm
 	$(VLOG) -work work $(VLOG_SV_OPT) $(ROCE_DIR_SIM)/tb.sv
 
 ifeq ($(SIMULATOR), VIVADO)
-	xelab work.tb glbl.glbl -sv_lib dpi -debug typical
+	xelab -generic_top "SPEED_PRESET=$(SPEED_PRESET)" work.tb glbl.glbl -sv_lib dpi -debug typical
 else
 	$(VLOG) -work work $(VLOG_SV_OPT) $(ROCE_DIR_SIM)/tb.sv
 endif
@@ -131,9 +130,9 @@ tap: tapdev
 	
 sim: 
 ifeq ($(SIMULATOR), VIVADO)
-	$(VSIM) $(VOPTARGS) work.$(TARGET_TB)#glbl.glbl -gui
+	$(VSIM) $(VOPTARGS) work.$(TARGET_TB)#glbl.glbl 
 else
-	$(VSIM) $(VOPTARGS) work.$(TARGET_TB) 
+	$(VSIM) $(VOPTARGS) -gSPEED_PRESET=$(SPEED_PRESET) -c work.$(TARGET_TB) glbl.glbl
 endif
 
 

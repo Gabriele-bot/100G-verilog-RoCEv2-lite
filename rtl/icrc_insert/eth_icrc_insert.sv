@@ -1,3 +1,5 @@
+`resetall `timescale 1ns / 1ps `default_nettype none
+
 module eth_icrc_insert #
   (
     parameter DATA_WIDTH             = 256,

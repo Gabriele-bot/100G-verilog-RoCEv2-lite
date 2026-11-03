@@ -2,10 +2,15 @@
 `timescale 1ns / 1ps
 
 module tb #(
-    parameter SPEED_PRESET = 400,
-    parameter max_recvpkt = 100000,
-    parameter nPreamble = 8,
-    parameter nIFG = 12
+    parameter SPEED_PRESET            = 400,
+    parameter STACK_DATAPATH_WIDTH    = SPEED_PRESET  == 400 ? 1024 : SPEED_PRESET == 100 ? 512 : SPEED_PRESET == 25 ? 64 :  SPEED_PRESET == 10 ? 32 : 64,
+    parameter ROCE_ENG_DATAPATH_WIDTH = STACK_DATAPATH_WIDTH,
+    parameter N_TX_ROCE_ENGINES       = SPEED_PRESET  == 400 ? 2 : 1,
+    parameter N_QUEUE_PAIRS           = (SPEED_PRESET  == 400 | SPEED_PRESET == 100)? 8 : 1,
+    parameter BUFFER_WIDTH            = 20,
+    parameter max_recvpkt             = 100000,  
+    parameter nPreamble               = 8,
+    parameter nIFG                    = 12
 )();
 
     import "DPI-C" context function int shared_mem_init();
@@ -22,27 +27,23 @@ module tb #(
     parameter SIM_MAC_FREQ = SIM_MAC_SPEED*1000.0/SIM_MAC_DATAPATH_WIDTH; //in MHz 
 
     // MAC to simulate
-    parameter MAC_SPEED = 100;
-    parameter MAC_DATAPATH_WIDTH = 512;
+    parameter MAC_SPEED = SPEED_PRESET;
+    parameter MAC_DATAPATH_WIDTH = SPEED_PRESET  == 400 ? 1024 : SPEED_PRESET == 100 ? 512 : (SPEED_PRESET ==25 | SPEED_PRESET == 10) ? 64 : 64;
     parameter MAC_FREQ = MAC_SPEED*1000.0/MAC_DATAPATH_WIDTH; //in MHz 
 
     // stack to simulate, with effective throughput, 
-    parameter STACK_DATAPATH_WIDTH = 512;
-    parameter STACK_FREQ  = 322;
+    parameter STACK_FREQ  = SPEED_PRESET  == 400 ? 411.076 : SPEED_PRESET == 100 ? 240.00 : SPEED_PRESET == 25 ? 390.625 :  SPEED_PRESET == 10 ? 312.5 : 300.00;
     parameter STACK_SPEED = STACK_DATAPATH_WIDTH*STACK_FREQ/1000.0;
 
-    // roce engine to simulate, with effective throughput, 
-    parameter ROCE_ENG_DATAPATH_WIDTH = 512;
-    parameter ROCE_ENG_FREQ  = 322;
-    parameter N_TX_ROCE_ENGINES = 1;
-    parameter N_QUEUE_PAIRS = 8;
-
+    // roce engine to simulate, with effective throughput
+    parameter ROCE_ENG_FREQ  = SPEED_PRESET  == 400 ? 274.055 : SPEED_PRESET == 100 ? 240.00 : SPEED_PRESET == 25 ? 390.625 :  SPEED_PRESET == 10 ? 312.5 : 300.00;
+    
     // now we need do reduce/increase the mac frequency to match the speed of the simulation MAC
     // eg for a 100G MAC it has to go 10 times slower than the sim MAC
     localparam SCALE_UP_FACT       = MAC_SPEED/SIM_MAC_SPEED;
 
-    parameter MAC_FREQ_REAL   = MAC_FREQ/SCALE_UP_FACT;
-    parameter STACK_FREQ_REAL = STACK_FREQ/SCALE_UP_FACT;
+    parameter MAC_FREQ_REAL      = MAC_FREQ/SCALE_UP_FACT;
+    parameter STACK_FREQ_REAL    = STACK_FREQ/SCALE_UP_FACT;
     parameter ROCE_ENG_FREQ_REAL = ROCE_ENG_FREQ/SCALE_UP_FACT;
 
     // in ns
@@ -125,16 +126,17 @@ module tb #(
 
 
     top #(
-        .MAC_PERIOD(MAC_PERIOD),
-        .STACK_PERIOD(STACK_PERIOD),
-        .ROCE_ENG_PERIOD(ROCE_ENG_PERIOD),
-        .MAC_DATA_WIDTH(MAC_DATAPATH_WIDTH),
-        .STACK_DATA_WIDTH(STACK_DATAPATH_WIDTH),
-        .ROCE_ENG_DATA_WIDTH(ROCE_ENG_DATAPATH_WIDTH),
-        .QP_CH_DATA_WIDTH(ROCE_ENG_DATAPATH_WIDTH),
-        .N_ROCE_TX_ENGINES(N_TX_ROCE_ENGINES),
-        .N_QUEUE_PAIRS(N_QUEUE_PAIRS),
-        .MAC_AXI_SEG_INPUT(0)
+        .MAC_PERIOD                      (MAC_PERIOD),
+        .STACK_PERIOD                    (STACK_PERIOD),
+        .ROCE_ENG_PERIOD                 (ROCE_ENG_PERIOD),
+        .MAC_DATA_WIDTH                  (MAC_DATAPATH_WIDTH),
+        .STACK_DATA_WIDTH                (STACK_DATAPATH_WIDTH),
+        .ROCE_ENG_DATA_WIDTH             (ROCE_ENG_DATAPATH_WIDTH),
+        .QP_CH_DATA_WIDTH                (ROCE_ENG_DATAPATH_WIDTH),
+        .N_ROCE_TX_ENGINES               (N_TX_ROCE_ENGINES),
+        .RETRANSMISSION_ADDR_BUFFER_WIDTH(BUFFER_WIDTH),
+        .N_QUEUE_PAIRS                   (N_QUEUE_PAIRS),
+        .MAC_AXI_SEG_INPUT               (SPEED_PRESET == 400)
     ) top0 (
         .clk_mac_sim(clk_mac_sim),
         .clk_mac(clk_mac),
