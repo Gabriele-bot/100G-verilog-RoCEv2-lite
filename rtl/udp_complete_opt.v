@@ -394,7 +394,7 @@ module udp_complete_opt #(
   wire                    m_eth_payload_axis_tvalid;
   wire                    m_eth_payload_axis_tready;
   wire                    m_eth_payload_axis_tlast;
-  wire [             1:0] m_eth_payload_axis_tuser;
+  wire                    m_eth_payload_axis_tuser;
 
   // Stack eth_axis_tx output
   wire [  DATA_WIDTH-1:0] m_stack_axis_tdata;
@@ -1600,17 +1600,15 @@ module udp_complete_opt #(
   generate
     if (ROCE_ICRC_INSERTER) begin
 
-      wire [  DATA_WIDTH-1:0] m_eth_payload_reg_axis_tdata;
-      wire [  KEEP_WIDTH-1:0] m_eth_payload_reg_axis_tkeep;
-      wire                    m_eth_payload_reg_axis_tvalid;
-      wire                    m_eth_payload_reg_axis_tready;
-      wire                    m_eth_payload_reg_axis_tlast;
-      wire [             1:0] m_eth_payload_reg_axis_tuser;
-
-      /*
-       * ICRC insertion, only if is RoCE packet
-       */
-      eth_hdr_fifo eth_hdr_fifo_icrc_instance (
+      eth_icrc_insert #(
+        .DATA_WIDTH            (DATA_WIDTH),
+        .KEEP_ENABLE           (KEEP_ENABLE),
+        .KEEP_WIDTH            (KEEP_WIDTH),
+        .CRC_COMP_TYPE         (1),
+        .ENABLE_TIMING_OPT_REGS(ENABLE_TIMING_OPT_REGS),
+        .N_PIPE                (6)
+      ) eth_icrc_insert_instance (
+        
         .clk(clk),
         .rst(rst),
 
@@ -1620,22 +1618,6 @@ module udp_complete_opt #(
         .s_eth_src_mac  (tx_eth_src_mac),
         .s_eth_type     (tx_eth_type),
 
-        .m_eth_hdr_valid(m_eth_hdr_valid),
-        .m_eth_hdr_ready(m_eth_hdr_ready),
-        .m_eth_dest_mac (m_eth_dest_mac),
-        .m_eth_src_mac  (m_eth_src_mac),
-        .m_eth_type     (m_eth_type)
-      );
-
-
-      // Insert ICRC
-      axis_RoCE_icrc_insert #(
-        .DATA_WIDTH(DATA_WIDTH),
-        .N_PIPE    (6)
-      ) axis_RoCE_icrc_insert_instance (
-        .clk(clk),
-        .rst(rst),
-
         .s_eth_payload_axis_tdata (tx_eth_payload_axis_tdata),
         .s_eth_payload_axis_tkeep (tx_eth_payload_axis_tkeep),
         .s_eth_payload_axis_tvalid(tx_eth_payload_axis_tvalid),
@@ -1643,53 +1625,22 @@ module udp_complete_opt #(
         .s_eth_payload_axis_tlast (tx_eth_payload_axis_tlast),
         .s_eth_payload_axis_tuser (tx_eth_payload_axis_tuser),
 
-        .m_eth_payload_axis_tdata (m_eth_payload_reg_axis_tdata),
-        .m_eth_payload_axis_tkeep (m_eth_payload_reg_axis_tkeep),
-        .m_eth_payload_axis_tvalid(m_eth_payload_reg_axis_tvalid),
-        .m_eth_payload_axis_tready(m_eth_payload_reg_axis_tready),
-        .m_eth_payload_axis_tlast (m_eth_payload_reg_axis_tlast),
-        .m_eth_payload_axis_tuser (m_eth_payload_reg_axis_tuser),
-        .busy                     ()
+        .m_eth_hdr_valid(m_eth_hdr_valid),
+        .m_eth_hdr_ready(m_eth_hdr_ready),
+        .m_eth_dest_mac (m_eth_dest_mac),
+        .m_eth_src_mac  (m_eth_src_mac),
+        .m_eth_type     (m_eth_type),
+
+        .m_eth_payload_axis_tdata (m_eth_payload_axis_tdata),
+        .m_eth_payload_axis_tkeep (m_eth_payload_axis_tkeep),
+        .m_eth_payload_axis_tvalid(m_eth_payload_axis_tvalid),
+        .m_eth_payload_axis_tready(m_eth_payload_axis_tready),
+        .m_eth_payload_axis_tlast (m_eth_payload_axis_tlast),
+        .m_eth_payload_axis_tuser (m_eth_payload_axis_tuser),
+
+        .busy()
       );
 
-      if (ENABLE_TIMING_OPT_REGS) begin
-        axis_register #(
-          .DATA_WIDTH(DATA_WIDTH),
-          .KEEP_ENABLE(KEEP_ENABLE),
-          .KEEP_WIDTH(KEEP_WIDTH),
-          .ID_ENABLE(0),
-          .DEST_ENABLE(0),
-          .USER_ENABLE(1),
-          .USER_WIDTH(1),
-          .REG_TYPE(2)
-        ) axis_register_icrc_out_inst (
-          .clk(clk),
-          .rst(rst),
-
-          .s_axis_tdata (m_eth_payload_reg_axis_tdata),
-          .s_axis_tkeep (m_eth_payload_reg_axis_tkeep),
-          .s_axis_tvalid(m_eth_payload_reg_axis_tvalid),
-          .s_axis_tready(m_eth_payload_reg_axis_tready),
-          .s_axis_tlast (m_eth_payload_reg_axis_tlast),
-          .s_axis_tuser (m_eth_payload_reg_axis_tuser),
-          .s_axis_tid   (0),
-          .s_axis_tdest (0),
-
-          .m_axis_tdata (m_eth_payload_axis_tdata),
-          .m_axis_tkeep (m_eth_payload_axis_tkeep),
-          .m_axis_tvalid(m_eth_payload_axis_tvalid),
-          .m_axis_tready(m_eth_payload_axis_tready),
-          .m_axis_tlast (m_eth_payload_axis_tlast),
-          .m_axis_tuser (m_eth_payload_axis_tuser)
-        );
-      end else begin
-        assign m_eth_payload_axis_tdata      = m_eth_payload_reg_axis_tdata;
-        assign m_eth_payload_axis_tkeep      = m_eth_payload_reg_axis_tkeep;
-        assign m_eth_payload_axis_tvalid     = m_eth_payload_reg_axis_tvalid;
-        assign m_eth_payload_reg_axis_tready = m_eth_payload_axis_tready; 
-        assign m_eth_payload_axis_tlast      = m_eth_payload_reg_axis_tlast;
-        assign m_eth_payload_axis_tuser      = m_eth_payload_reg_axis_tuser;
-      end
     end else begin
 
       assign m_eth_hdr_valid            = tx_eth_hdr_valid;
@@ -1703,7 +1654,7 @@ module udp_complete_opt #(
       assign m_eth_payload_axis_tvalid  = tx_eth_payload_axis_tvalid;
       assign tx_eth_payload_axis_tready = m_eth_payload_axis_tready;
       assign m_eth_payload_axis_tlast   = tx_eth_payload_axis_tlast;
-      assign m_eth_payload_axis_tuser   = tx_eth_payload_axis_tuser;
+      assign m_eth_payload_axis_tuser   = tx_eth_payload_axis_tuser[0];
 
 
     end

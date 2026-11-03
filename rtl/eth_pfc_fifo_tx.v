@@ -74,7 +74,7 @@ module eth_pfc_fifo_tx#
     reg  pause_req_fifo;
     wire pause_ack_fifo;
 
-    always @(clk) begin
+    always @(posedge clk) begin
         priority_tag_reg <= priority_tag;
         pause_req_fifo   <= pause_req[priority_tag_reg];
         case (priority_tag_reg)

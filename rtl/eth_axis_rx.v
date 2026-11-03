@@ -39,7 +39,10 @@ module eth_axis_rx #
     // If disabled, tkeep assumed to be 1'b1
     parameter KEEP_ENABLE = (DATA_WIDTH>8),
     // tkeep signal width (words per cycle)
-    parameter KEEP_WIDTH = (DATA_WIDTH/8)
+    parameter KEEP_WIDTH = (DATA_WIDTH/8),
+    // D1q header parsing
+    // enable Dot1q field (IEEE 802.1Q)
+    parameter ENABLE_DOT1Q_HEADER = 0
 )
 (
     input  wire                  clk,
@@ -87,15 +90,13 @@ module eth_axis_rx #
 
     parameter CYCLE_COUNT = (HDR_SIZE+BYTE_LANES-1)/BYTE_LANES;
 
-    //parameter PTR_WIDTH = $clog2(CYCLE_COUNT);
-
     parameter OFFSET = HDR_SIZE % BYTE_LANES;
 
     parameter HDR_SIZE_DOT1Q = 18;
 
     parameter CYCLE_COUNT_DOT1Q = (HDR_SIZE_DOT1Q+BYTE_LANES-1)/BYTE_LANES;
 
-    parameter PTR_WIDTH = $clog2(CYCLE_COUNT_DOT1Q);
+    parameter PTR_WIDTH = ENABLE_DOT1Q_HEADER ? $clog2(CYCLE_COUNT_DOT1Q) : $clog2(CYCLE_COUNT);
 
     parameter OFFSET_DOT1Q = HDR_SIZE_DOT1Q % BYTE_LANES;
 
@@ -268,7 +269,7 @@ with the payload in a separate AXI stream.
         m_eth_pcp_next = m_eth_pcp_reg;
         m_eth_dei_next = m_eth_dei_reg;
         m_eth_vid_next = m_eth_vid_reg;
-        
+
 
         error_header_early_termination_next = 1'b0;
 
@@ -302,17 +303,19 @@ with the payload in a separate AXI stream.
                 `_HEADER_FIELD_(9,  m_eth_src_mac_next[2*8 +: 8])
                 `_HEADER_FIELD_(10, m_eth_src_mac_next[1*8 +: 8])
                 `_HEADER_FIELD_(11, m_eth_src_mac_next[0*8 +: 8])
-                `_HEADER_FIELD_(12, m_eth_tpid_next[1*8 +: 8])
-                `_HEADER_FIELD_(13, m_eth_tpid_next[0*8 +: 8])
-                `_HEADER_FIELD_(12, m_eth_type_next[1*8 +: 8])
-                `_HEADER_FIELD_(13, m_eth_type_next[0*8 +: 8])
-                `_HEADER_FIELD_(14, {m_eth_pcp_next, m_eth_dei_next, m_eth_vid_next[11:8]})
-                `_HEADER_FIELD_(15, m_eth_vid_next[0*8 +: 8])
-                `_HEADER_FIELD_(16, m_eth_type_dot1q_next[1*8 +: 8])
-                `_HEADER_FIELD_(17, m_eth_type_dot1q_next[0*8 +: 8])
-                
-                    
-                if (m_eth_tpid_next == 16'h8100) begin
+                if (ENABLE_DOT1Q_HEADER) begin
+                    `_HEADER_FIELD_(12, m_eth_type_next[1*8 +: 8])
+                    `_HEADER_FIELD_(13, m_eth_type_next[0*8 +: 8])
+                    `_HEADER_FIELD_(14, {m_eth_pcp_next, m_eth_dei_next, m_eth_vid_next[11:8]})
+                    `_HEADER_FIELD_(15, m_eth_vid_next[0*8 +: 8])
+                    `_HEADER_FIELD_(16, m_eth_type_dot1q_next[1*8 +: 8])
+                    `_HEADER_FIELD_(17, m_eth_type_dot1q_next[0*8 +: 8])
+                end else begin
+                    `_HEADER_FIELD_(12, m_eth_type_next[1*8 +: 8])
+                    `_HEADER_FIELD_(13, m_eth_type_next[0*8 +: 8])
+                end
+
+                if (m_eth_tpid_next == 16'h8100 && ENABLE_DOT1Q_HEADER) begin
 
                     if (ptr_reg == 17/BYTE_LANES && (!KEEP_ENABLE || s_axis_tkeep[17%BYTE_LANES])) begin
                         if (!shift_axis_tlast) begin
@@ -326,13 +329,13 @@ with the payload in a separate AXI stream.
                     m_eth_pcp_next = 3'd0;
                     m_eth_dei_next = 1'b0;
                     m_eth_vid_next = 12'd0;
-                    
+                    read_eth_payload_dot1q_next = 1'b0;
+
                     if (ptr_reg == 13/BYTE_LANES && (!KEEP_ENABLE || s_axis_tkeep[13%BYTE_LANES])) begin
                         if (!shift_axis_tlast) begin
                             m_eth_hdr_valid_next = 1'b1;
                             read_eth_header_next = 1'b0;
                             read_eth_payload_next = 1'b1;
-                            read_eth_payload_dot1q_next = 1'b0;
                         end
                     end
                 end
@@ -382,7 +385,7 @@ with the payload in a separate AXI stream.
                 read_eth_header_next = 1'b1;
                 read_eth_payload_dot1q_next = 1'b0;
             end
-            
+
         end
     end
 
